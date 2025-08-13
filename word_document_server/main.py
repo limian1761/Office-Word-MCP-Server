@@ -300,31 +300,6 @@ def register_tools():
     def convert_to_pdf(filename: str, output_filename: Optional[str] = None):
         """Convert a Word document to PDF format."""
         return extended_document_tools.convert_to_pdf(filename, output_filename)
-    
-    # 新增段落读取工具
-    @mcp.tool()
-    def get_all_paragraphs(filename: str):
-        """一次性获取所有段落内容，返回包含所有段落详细信息的JSON"""
-        from word_document_server.tools.document_tools import get_all_paragraphs_tool
-        return get_all_paragraphs_tool(filename)
-    
-    @mcp.tool()
-    def get_paragraphs_by_range(filename: str, start_index: int = 0, end_index: Optional[int] = None):
-        """获取指定段落范围的内容，支持起始和结束索引"""
-        from word_document_server.tools.document_tools import get_paragraphs_by_range_tool
-        return get_paragraphs_by_range_tool(filename, start_index, end_index)
-    
-    @mcp.tool()
-    def get_paragraphs_by_page(filename: str, page_number: int = 1, page_size: int = 100):
-        """分页获取段落内容，支持页码和每页数量"""
-        from word_document_server.tools.document_tools import get_paragraphs_by_page_tool
-        return get_paragraphs_by_page_tool(filename, page_number, page_size)
-    
-    @mcp.tool()
-    def analyze_paragraph_distribution(filename: str):
-        """分析段落分布情况，返回统计信息"""
-        from word_document_server.tools.document_tools import analyze_paragraph_distribution_tool
-        return analyze_paragraph_distribution_tool(filename)
 
     @mcp.tool()
     def replace_paragraph_block_below_header(filename: str, header_text: str, new_paragraphs: list, detect_block_end_fn=None):
