@@ -16,8 +16,12 @@ from word_document_server.tools import (
     format_tools,
     protection_tools,
     footnote_tools,
-    extended_document_tools
+    extended_document_tools,
+    comment_tools
 )
+from word_document_server.tools.content_tools import replace_paragraph_block_below_header_tool
+from word_document_server.tools.content_tools import replace_block_between_manual_anchors_tool
+
 def get_transport_config():
     """
     Get transport configuration from environment variables.
@@ -28,7 +32,7 @@ def get_transport_config():
     # Default configuration
     config = {
         'transport': 'stdio',  # Default to stdio for backward compatibility
-        'host': '127.0.0.1',
+        'host': '0.0.0.0',
         'port': 8000,
         'path': '/mcp',
         'sse_path': '/sse'
@@ -118,17 +122,21 @@ def register_tools():
         return document_tools.get_document_xml_tool(filename)
     
     @mcp.tool()
-    def insert_header_near_text(filename: str, target_text: str, header_title: str, position: str = 'after', header_style: str = 'Heading 1'):
-        """Insert a header (with specified style) before or after the first paragraph containing target_text. Args: filename (str), target_text (str), header_title (str), position ('before' or 'after'), header_style (str, default 'Heading 1')."""
-        return document_tools.insert_header_near_text_tool(filename, target_text, header_title, position, header_style)
+    def insert_header_near_text(filename: str, target_text: str = None, header_title: str = None, position: str = 'after', header_style: str = 'Heading 1', target_paragraph_index: int = None):
+        """Insert a header (with specified style) before or after the target paragraph. Specify by text or paragraph index. Args: filename (str), target_text (str, optional), header_title (str), position ('before' or 'after'), header_style (str, default 'Heading 1'), target_paragraph_index (int, optional)."""
+        return content_tools.insert_header_near_text_tool(filename, target_text, header_title, position, header_style, target_paragraph_index)
     
     @mcp.tool()
-    def insert_line_or_paragraph_near_text(filename: str, target_text: str, line_text: str, position: str = 'after', line_style: Optional[str] = None):
+    def insert_line_or_paragraph_near_text(filename: str, target_text: str = None, line_text: str = None, position: str = 'after', line_style: str = None, target_paragraph_index: int = None):
         """
-        Insert a new line or paragraph (with specified or matched style) before or after the first paragraph containing target_text.
-        Args: filename (str), target_text (str), line_text (str), position ('before' or 'after'), line_style (str, optional).
+        Insert a new line or paragraph (with specified or matched style) before or after the target paragraph. Specify by text or paragraph index. Args: filename (str), target_text (str, optional), line_text (str), position ('before' or 'after'), line_style (str, optional), target_paragraph_index (int, optional).
         """
-        return document_tools.insert_line_or_paragraph_near_text_tool(filename, target_text, line_text, position, line_style)
+        return content_tools.insert_line_or_paragraph_near_text_tool(filename, target_text, line_text, position, line_style, target_paragraph_index)
+    
+    @mcp.tool()
+    def insert_numbered_list_near_text(filename: str, target_text: str = None, list_items: list = None, position: str = 'after', target_paragraph_index: int = None):
+        """Insert a numbered list before or after the target paragraph. Specify by text or paragraph index. Args: filename (str), target_text (str, optional), list_items (list of str), position ('before' or 'after'), target_paragraph_index (int, optional)."""
+        return content_tools.insert_numbered_list_near_text_tool(filename, target_text, list_items, position, target_paragraph_index)
     # Content tools (paragraphs, headings, tables, etc.)
     @mcp.tool()
     def add_paragraph(filename: str, text: str, style: Optional[str] = None):
@@ -191,6 +199,57 @@ def register_tools():
                     border_style: Optional[str] = None, shading: Optional[List[List[str]]] = None):
         """Format a table with borders, shading, and structure."""
         return format_tools.format_table(filename, table_index, has_header_row, border_style, shading)
+    
+    # New table cell shading tools
+    @mcp.tool()
+    def set_table_cell_shading(filename: str, table_index: int, row_index: int, 
+                              col_index: int, fill_color: str, pattern: str = "clear"):
+        """Apply shading/filling to a specific table cell."""
+        return format_tools.set_table_cell_shading(filename, table_index, row_index, col_index, fill_color, pattern)
+    
+    @mcp.tool()
+    def apply_table_alternating_rows(filename: str, table_index: int, 
+                                   color1: str = "FFFFFF", color2: str = "F2F2F2"):
+        """Apply alternating row colors to a table for better readability."""
+        return format_tools.apply_table_alternating_rows(filename, table_index, color1, color2)
+    
+    @mcp.tool()
+    def highlight_table_header(filename: str, table_index: int, 
+                             header_color: str = "4472C4", text_color: str = "FFFFFF"):
+        """Apply special highlighting to table header row."""
+        return format_tools.highlight_table_header(filename, table_index, header_color, text_color)
+    
+    # Cell merging tools
+    @mcp.tool()
+    def merge_table_cells(filename: str, table_index: int, start_row: int, start_col: int, 
+                        end_row: int, end_col: int):
+        """Merge cells in a rectangular area of a table."""
+        return format_tools.merge_table_cells(filename, table_index, start_row, start_col, end_row, end_col)
+    
+    @mcp.tool()
+    def merge_table_cells_horizontal(filename: str, table_index: int, row_index: int, 
+                                   start_col: int, end_col: int):
+        """Merge cells horizontally in a single row."""
+        return format_tools.merge_table_cells_horizontal(filename, table_index, row_index, start_col, end_col)
+    
+    @mcp.tool()
+    def merge_table_cells_vertical(filename: str, table_index: int, col_index: int, 
+                                 start_row: int, end_row: int):
+        """Merge cells vertically in a single column."""
+        return format_tools.merge_table_cells_vertical(filename, table_index, col_index, start_row, end_row)
+    
+    # Cell alignment tools
+    @mcp.tool()
+    def set_table_cell_alignment(filename: str, table_index: int, row_index: int, col_index: int,
+                               horizontal: str = "left", vertical: str = "top"):
+        """Set text alignment for a specific table cell."""
+        return format_tools.set_table_cell_alignment(filename, table_index, row_index, col_index, horizontal, vertical)
+    
+    @mcp.tool()
+    def set_table_alignment_all(filename: str, table_index: int, 
+                              horizontal: str = "left", vertical: str = "top"):
+        """Set text alignment for all cells in a table."""
+        return format_tools.set_table_alignment_all(filename, table_index, horizontal, vertical)
     
     # Protection tools
     @mcp.tool()
@@ -266,6 +325,74 @@ def register_tools():
         """分析段落分布情况，返回统计信息"""
         from word_document_server.tools.document_tools import analyze_paragraph_distribution_tool
         return analyze_paragraph_distribution_tool(filename)
+
+    @mcp.tool()
+    def replace_paragraph_block_below_header(filename: str, header_text: str, new_paragraphs: list, detect_block_end_fn=None):
+        """Reemplaza el bloque de párrafos debajo de un encabezado, evitando modificar TOC."""
+        return replace_paragraph_block_below_header_tool(filename, header_text, new_paragraphs, detect_block_end_fn)
+
+    @mcp.tool()
+    def replace_block_between_manual_anchors(filename: str, start_anchor_text: str, new_paragraphs: list, end_anchor_text: str = None, match_fn=None, new_paragraph_style: str = None):
+        """Replace all content between start_anchor_text and end_anchor_text (or next logical header if not provided)."""
+        return replace_block_between_manual_anchors_tool(filename, start_anchor_text, new_paragraphs, end_anchor_text, match_fn, new_paragraph_style)
+
+    # Comment tools
+    @mcp.tool()
+    def get_all_comments(filename: str):
+        """Extract all comments from a Word document."""
+        return comment_tools.get_all_comments(filename)
+    
+    @mcp.tool()
+    def get_comments_by_author(filename: str, author: str):
+        """Extract comments from a specific author in a Word document."""
+        return comment_tools.get_comments_by_author(filename, author)
+    
+    @mcp.tool()
+    def get_comments_for_paragraph(filename: str, paragraph_index: int):
+        """Extract comments for a specific paragraph in a Word document."""
+        return comment_tools.get_comments_for_paragraph(filename, paragraph_index)
+    # New table column width tools
+    @mcp.tool()
+    def set_table_column_width(filename: str, table_index: int, col_index: int, 
+                              width: float, width_type: str = "points"):
+        """Set the width of a specific table column."""
+        return format_tools.set_table_column_width(filename, table_index, col_index, width, width_type)
+
+    @mcp.tool()
+    def set_table_column_widths(filename: str, table_index: int, widths: list, 
+                               width_type: str = "points"):
+        """Set the widths of multiple table columns."""
+        return format_tools.set_table_column_widths(filename, table_index, widths, width_type)
+
+    @mcp.tool()
+    def set_table_width(filename: str, table_index: int, width: float, 
+                       width_type: str = "points"):
+        """Set the overall width of a table."""
+        return format_tools.set_table_width(filename, table_index, width, width_type)
+
+    @mcp.tool()
+    def auto_fit_table_columns(filename: str, table_index: int):
+        """Set table columns to auto-fit based on content."""
+        return format_tools.auto_fit_table_columns(filename, table_index)
+
+    # New table cell text formatting and padding tools
+    @mcp.tool()
+    def format_table_cell_text(filename: str, table_index: int, row_index: int, col_index: int,
+                               text_content: str = None, bold: bool = None, italic: bool = None,
+                               underline: bool = None, color: str = None, font_size: int = None,
+                               font_name: str = None):
+        """Format text within a specific table cell."""
+        return format_tools.format_table_cell_text(filename, table_index, row_index, col_index,
+                                                   text_content, bold, italic, underline, color, font_size, font_name)
+
+    @mcp.tool()
+    def set_table_cell_padding(filename: str, table_index: int, row_index: int, col_index: int,
+                               top: float = None, bottom: float = None, left: float = None, 
+                               right: float = None, unit: str = "points"):
+        """Set padding/margins for a specific table cell."""
+        return format_tools.set_table_cell_padding(filename, table_index, row_index, col_index,
+                                                   top, bottom, left, right, unit)
+
 
 
 def run_server():

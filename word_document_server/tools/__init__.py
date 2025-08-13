@@ -35,3 +35,8 @@ from word_document_server.tools.footnote_tools import (
     add_footnote_to_document, add_endnote_to_document,
     convert_footnotes_to_endnotes_in_document, customize_footnote_style
 )
+
+# Comment tools
+from word_document_server.tools.comment_tools import (
+    get_all_comments, get_comments_by_author, get_comments_for_paragraph
+)

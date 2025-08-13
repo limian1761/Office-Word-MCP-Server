@@ -48,6 +48,9 @@ The server features a modular architecture that separates concerns into core fun
 - Add footnotes and endnotes to documents
 - Convert footnotes to endnotes
 - Customize footnote and endnote styling
+- Create professional table layouts for technical documentation
+- Design callout boxes and formatted content for instructional materials
+- Build structured data tables for business reports with consistent styling
 
 ### Rich Text Formatting
 
@@ -55,6 +58,9 @@ The server features a modular architecture that separates concerns into core fun
 - Change text color and font properties
 - Apply custom styles to text elements
 - Search and replace text throughout documents
+- Individual cell text formatting within tables
+- Multiple formatting combinations for enhanced visual appeal
+- Font customization with family and size control
 
 ### Table Formatting
 
@@ -62,6 +68,17 @@ The server features a modular architecture that separates concerns into core fun
 - Create header rows with distinct formatting
 - Apply cell shading and custom borders
 - Structure tables for better readability
+- Individual cell background shading with color support
+- Alternating row colors for improved readability
+- Enhanced header row highlighting with custom colors
+- Cell text formatting with bold, italic, underline, color, font size, and font family
+- Comprehensive color support with named colors and hex color codes
+- Cell padding management with independent control of all sides
+- Cell alignment (horizontal and vertical positioning)
+- Cell merging (horizontal, vertical, and rectangular areas)
+- Column width management with multiple units (points, percentage, auto-fit)
+- Auto-fit capabilities for dynamic column sizing
+- Professional callout table support with icon cells and styled content
 
 ### Advanced Document Manipulation
 
@@ -69,6 +86,8 @@ The server features a modular architecture that separates concerns into core fun
 - Create custom document styles
 - Apply consistent formatting throughout documents
 - Format specific ranges of text with detailed control
+- Flexible padding units with support for points and percentage-based measurements
+- Clear, readable table presentation with proper alignment and spacing
 
 ### Document Protection
 
@@ -76,6 +95,13 @@ The server features a modular architecture that separates concerns into core fun
 - Implement restricted editing with editable sections
 - Add digital signatures to documents
 - Verify document authenticity and integrity
+
+### Comment Extraction
+
+- Extract all comments from a document
+- Filter comments by author
+- Get comments for specific paragraphs
+- Access comment metadata (author, date, text)
 
 ## Installation
 
@@ -168,6 +194,15 @@ Once configured, you can ask Claude to perform operations like:
 - "Search and replace all instances of 'old term' with 'new term'"
 - "Create a custom style for section headings"
 - "Apply formatting to the table in my document"
+- "Extract all comments from my document"
+- "Show me all comments by John Doe"
+- "Get comments for paragraph 3"
+- "Make the text in table cell (1,2) bold and blue with 14pt font"
+- "Add 10 points of padding to all sides of the header cells"
+- "Create a callout table with a blue checkmark icon and white text"
+- "Set the first column width to 50 points and auto-fit the remaining columns"
+- "Apply alternating row colors to make the table more readable"
+
 
 ## API Reference
 
@@ -217,6 +252,46 @@ create_custom_style(filename, style_name, bold=None, italic=None,
 ```python
 format_table(filename, table_index, has_header_row=None,
              border_style=None, shading=None)
+set_table_cell_shading(filename, table_index, row_index, col_index, 
+                      fill_color, pattern="clear")
+apply_table_alternating_rows(filename, table_index, 
+                            color1="FFFFFF", color2="F2F2F2")
+highlight_table_header(filename, table_index, 
+                      header_color="4472C4", text_color="FFFFFF")
+
+# Cell merging tools
+merge_table_cells(filename, table_index, start_row, start_col, end_row, end_col)
+merge_table_cells_horizontal(filename, table_index, row_index, start_col, end_col)
+merge_table_cells_vertical(filename, table_index, col_index, start_row, end_row)
+
+# Cell alignment tools
+set_table_cell_alignment(filename, table_index, row_index, col_index,
+                        horizontal="left", vertical="top")
+set_table_alignment_all(filename, table_index, 
+                       horizontal="left", vertical="top")
+
+# Cell text formatting tools
+format_table_cell_text(filename, table_index, row_index, col_index,
+                      text_content=None, bold=None, italic=None, underline=None,
+                      color=None, font_size=None, font_name=None)
+
+# Cell padding tools
+set_table_cell_padding(filename, table_index, row_index, col_index,
+                      top=None, bottom=None, left=None, right=None, unit="points")
+
+# Column width management
+set_table_column_width(filename, table_index, col_index, width, width_type="points")
+set_table_column_widths(filename, table_index, widths, width_type="points")
+set_table_width(filename, table_index, width, width_type="points")
+auto_fit_table_columns(filename, table_index)
+```
+
+### Comment Extraction
+
+```python
+get_all_comments(filename)
+get_comments_by_author(filename, author)
+get_comments_for_paragraph(filename, paragraph_index)
 ```
 
 ## Troubleshooting
@@ -239,6 +314,14 @@ format_table(filename, table_index, has_header_row=None,
    - Use absolute paths for image files
    - Verify image format compatibility (JPEG, PNG recommended)
    - Check image file size and permissions
+
+4. **Table Formatting Issues**
+
+   - **Cell index errors**: Ensure row and column indices are within table bounds (0-based indexing)
+   - **Color format problems**: Use hex colors without '#' prefix (e.g., "FF0000" for red) or standard color names
+   - **Padding unit confusion**: Specify "points" or "percent" explicitly when setting cell padding
+   - **Column width conflicts**: Auto-fit may override manual column width settings
+   - **Text formatting persistence**: Apply cell text formatting after setting cell content for best results
 
 ### Debugging
 
