@@ -6,6 +6,7 @@ Supports multiple transports: stdio, sse, and streamable-http using standalone F
 
 import os
 import sys
+from typing import Optional, List, Any
 # Set required environment variable for FastMCP 2.8.1+
 os.environ.setdefault('FASTMCP_LOG_LEVEL', 'INFO')
 from fastmcp import FastMCP
@@ -82,12 +83,12 @@ def register_tools():
     
     # Document tools (create, copy, info, etc.)
     @mcp.tool()
-    def create_document(filename: str, title: str = None, author: str = None):
+    def create_document(filename: str, title: Optional[str] = None, author: Optional[str] = None):
         """Create a new Word document with optional metadata."""
         return document_tools.create_document(filename, title, author)
     
     @mcp.tool()
-    def copy_document(source_filename: str, destination_filename: str = None):
+    def copy_document(source_filename: str, destination_filename: Optional[str] = None):
         """Create a copy of a Word document."""
         return document_tools.copy_document(source_filename, destination_filename)
     
@@ -122,7 +123,7 @@ def register_tools():
         return document_tools.insert_header_near_text_tool(filename, target_text, header_title, position, header_style)
     
     @mcp.tool()
-    def insert_line_or_paragraph_near_text(filename: str, target_text: str, line_text: str, position: str = 'after', line_style: str = None):
+    def insert_line_or_paragraph_near_text(filename: str, target_text: str, line_text: str, position: str = 'after', line_style: Optional[str] = None):
         """
         Insert a new line or paragraph (with specified or matched style) before or after the first paragraph containing target_text.
         Args: filename (str), target_text (str), line_text (str), position ('before' or 'after'), line_style (str, optional).
@@ -130,7 +131,7 @@ def register_tools():
         return document_tools.insert_line_or_paragraph_near_text_tool(filename, target_text, line_text, position, line_style)
     # Content tools (paragraphs, headings, tables, etc.)
     @mcp.tool()
-    def add_paragraph(filename: str, text: str, style: str = None):
+    def add_paragraph(filename: str, text: str, style: Optional[str] = None):
         """Add a paragraph to a Word document."""
         return content_tools.add_paragraph(filename, text, style)
     
@@ -145,7 +146,7 @@ def register_tools():
         return content_tools.add_picture(filename, image_path, width)
     
     @mcp.tool()
-    def add_table(filename: str, rows: int, cols: int, data: list = None):
+    def add_table(filename: str, rows: int, cols: int, data: Optional[List[List[str]]] = None):
         """Add a table to a Word document."""
         return content_tools.add_table(filename, rows, cols, data)
     
@@ -166,10 +167,10 @@ def register_tools():
     
     # Format tools (styling, text formatting, etc.)
     @mcp.tool()
-    def create_custom_style(filename: str, style_name: str, bold: bool = None, 
-                          italic: bool = None, font_size: int = None, 
-                          font_name: str = None, color: str = None, 
-                          base_style: str = None):
+    def create_custom_style(filename: str, style_name: str, bold: Optional[bool] = None,
+                          italic: Optional[bool] = None, font_size: Optional[int] = None,
+                          font_name: Optional[str] = None, color: Optional[str] = None,
+                          base_style: Optional[str] = None):
         """Create a custom style in the document."""
         return format_tools.create_custom_style(
             filename, style_name, bold, italic, font_size, font_name, color, base_style
@@ -177,8 +178,8 @@ def register_tools():
     
     @mcp.tool()
     def format_text(filename: str, paragraph_index: int, start_pos: int, end_pos: int,
-                   bold: bool = None, italic: bool = None, underline: bool = None,
-                   color: str = None, font_size: int = None, font_name: str = None):
+                   bold: Optional[bool] = None, italic: Optional[bool] = None, underline: Optional[bool] = None,
+                   color: Optional[str] = None, font_size: Optional[int] = None, font_name: Optional[str] = None):
         """Format a specific range of text within a paragraph."""
         return format_tools.format_text(
             filename, paragraph_index, start_pos, end_pos, bold, italic, 
@@ -186,8 +187,8 @@ def register_tools():
         )
     
     @mcp.tool()
-    def format_table(filename: str, table_index: int, has_header_row: bool = None,
-                    border_style: str = None, shading: list = None):
+    def format_table(filename: str, table_index: int, has_header_row: Optional[bool] = None,
+                    border_style: Optional[str] = None, shading: Optional[List[List[str]]] = None):
         """Format a table with borders, shading, and structure."""
         return format_tools.format_table(filename, table_index, has_header_row, border_style, shading)
     
@@ -215,8 +216,8 @@ def register_tools():
     
     @mcp.tool()
     def customize_footnote_style(filename: str, numbering_format: str = "1, 2, 3",
-                                start_number: int = 1, font_name: str = None,
-                                font_size: int = None):
+                                start_number: int = 1, font_name: Optional[str] = None,
+                                font_size: Optional[int] = None):
         """Customize footnote numbering and formatting in a Word document."""
         return footnote_tools.customize_footnote_style(
             filename, numbering_format, start_number, font_name, font_size
@@ -237,9 +238,34 @@ def register_tools():
         )
     
     @mcp.tool()
-    def convert_to_pdf(filename: str, output_filename: str = None):
+    def convert_to_pdf(filename: str, output_filename: Optional[str] = None):
         """Convert a Word document to PDF format."""
         return extended_document_tools.convert_to_pdf(filename, output_filename)
+    
+    # 新增段落读取工具
+    @mcp.tool()
+    def get_all_paragraphs(filename: str):
+        """一次性获取所有段落内容，返回包含所有段落详细信息的JSON"""
+        from word_document_server.tools.document_tools import get_all_paragraphs_tool
+        return get_all_paragraphs_tool(filename)
+    
+    @mcp.tool()
+    def get_paragraphs_by_range(filename: str, start_index: int = 0, end_index: Optional[int] = None):
+        """获取指定段落范围的内容，支持起始和结束索引"""
+        from word_document_server.tools.document_tools import get_paragraphs_by_range_tool
+        return get_paragraphs_by_range_tool(filename, start_index, end_index)
+    
+    @mcp.tool()
+    def get_paragraphs_by_page(filename: str, page_number: int = 1, page_size: int = 100):
+        """分页获取段落内容，支持页码和每页数量"""
+        from word_document_server.tools.document_tools import get_paragraphs_by_page_tool
+        return get_paragraphs_by_page_tool(filename, page_number, page_size)
+    
+    @mcp.tool()
+    def analyze_paragraph_distribution(filename: str):
+        """分析段落分布情况，返回统计信息"""
+        from word_document_server.tools.document_tools import analyze_paragraph_distribution_tool
+        return analyze_paragraph_distribution_tool(filename)
 
 
 def run_server():

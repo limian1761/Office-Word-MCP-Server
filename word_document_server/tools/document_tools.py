@@ -7,7 +7,11 @@ from typing import Dict, List, Optional, Any
 from docx import Document
 
 from word_document_server.utils.file_utils import check_file_writeable, ensure_docx_extension, create_document_copy
-from word_document_server.utils.document_utils import get_document_properties, extract_document_text, get_document_structure, get_document_xml, insert_header_near_text, insert_line_or_paragraph_near_text
+from word_document_server.utils.document_utils import (
+    get_document_properties, extract_document_text, get_document_structure, 
+    get_all_paragraphs, get_paragraphs_by_range, get_paragraphs_by_page, 
+    analyze_paragraph_distribution
+)
 from word_document_server.core.styles import ensure_heading_style, ensure_table_style
 
 
@@ -65,15 +69,18 @@ async def get_document_info(filename: str) -> str:
         return f"Failed to get document info: {str(e)}"
 
 
-async def get_document_text(filename: str) -> str:
+async def get_document_text(filename: str, max_chars: Optional[int] = None, 
+                           include_tables: bool = True) -> str:
     """Extract all text from a Word document.
     
     Args:
         filename: Path to the Word document
+        max_chars: Maximum characters to return (None for no limit)
+        include_tables: Whether to include table content in the extracted text
     """
     filename = ensure_docx_extension(filename)
     
-    return extract_document_text(filename)
+    return extract_document_text(filename, max_chars=max_chars, include_tables=include_tables)
 
 
 async def get_document_outline(filename: str) -> str:
@@ -219,8 +226,100 @@ async def insert_header_near_text_tool(filename: str, target_text: str, header_t
     return insert_header_near_text(filename, target_text, header_title, position, header_style)
 
 
-async def insert_line_or_paragraph_near_text_tool(filename: str, target_text: str, line_text: str, position: str = 'after', line_style: str = None) -> str:
+async def insert_line_or_paragraph_near_text_tool(filename: str, target_text: str, line_text: str, position: str = 'after', line_style: Optional[str] = None) -> str:
     """
     Insert a new line or paragraph (with specified or matched style) before or after the first paragraph containing target_text.
     """
     return insert_line_or_paragraph_near_text(filename, target_text, line_text, position, line_style)
+
+
+async def get_all_paragraphs_tool(filename: str) -> str:
+    """
+    一次性获取所有段落内容
+    
+    Args:
+        filename: Word文档路径
+    
+    Returns:
+        包含所有段落信息的JSON字符串
+    """
+    filename = ensure_docx_extension(filename)
+    
+    if not os.path.exists(filename):
+        return f"Document {filename} does not exist"
+    
+    try:
+        result = get_all_paragraphs(filename)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Failed to get all paragraphs: {str(e)}"
+
+
+async def get_paragraphs_by_range_tool(filename: str, start_index: int = 0, end_index: Optional[int] = None) -> str:
+    """
+    获取指定段落范围的内容
+    
+    Args:
+        filename: Word文档路径
+        start_index: 起始段落索引（包含）
+        end_index: 结束段落索引（不包含），None表示到最后
+    
+    Returns:
+        包含指定范围段落信息的JSON字符串
+    """
+    filename = ensure_docx_extension(filename)
+    
+    if not os.path.exists(filename):
+        return f"Document {filename} does not exist"
+    
+    try:
+        result = get_paragraphs_by_range(filename, start_index, end_index)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Failed to get paragraphs by range: {str(e)}"
+
+
+async def get_paragraphs_by_page_tool(filename: str, page_number: int = 1, page_size: int = 100) -> str:
+    """
+    分页获取段落内容
+    
+    Args:
+        filename: Word文档路径
+        page_number: 页码（从1开始）
+        page_size: 每页段落数量
+    
+    Returns:
+        包含分页段落信息的JSON字符串
+    """
+    filename = ensure_docx_extension(filename)
+    
+    if not os.path.exists(filename):
+        return f"Document {filename} does not exist"
+    
+    try:
+        result = get_paragraphs_by_page(filename, page_number, page_size)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Failed to get paragraphs by page: {str(e)}"
+
+
+async def analyze_paragraph_distribution_tool(filename: str) -> str:
+    """
+    分析段落分布情况
+    
+    Args:
+        filename: Word文档路径
+    
+    Returns:
+        段落统计分析信息的JSON字符串
+    """
+    filename = ensure_docx_extension(filename)
+    
+    if not os.path.exists(filename):
+        return f"Document {filename} does not exist"
+    
+    try:
+        result = analyze_paragraph_distribution(filename)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Failed to analyze paragraph distribution: {str(e)}"
