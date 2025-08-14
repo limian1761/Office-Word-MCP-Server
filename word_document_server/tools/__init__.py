@@ -15,7 +15,7 @@ from word_document_server.tools.document_tools import (
 # Content tools
 from word_document_server.tools.content_tools import (
     add_heading, add_paragraph, add_table, add_picture,
-    add_page_break, add_table_of_contents, delete_paragraph,
+    add_page_break, delete_paragraph,
     search_and_replace
 )
 
@@ -26,8 +26,7 @@ from word_document_server.tools.format_tools import (
 
 # Protection tools
 from word_document_server.tools.protection_tools import (
-    protect_document, add_restricted_editing,
-    add_digital_signature, verify_document
+    protect_document, unprotect_document, verify_document
 )
 
 # Footnote tools
@@ -40,3 +39,17 @@ from word_document_server.tools.footnote_tools import (
 from word_document_server.tools.comment_tools import (
     get_all_comments, get_comments_by_author, get_comments_for_paragraph
 )
+
+# COM Document tools (Windows only)
+try:
+    from word_document_server.tools.com_document_tools import (
+        get_document_properties_com_tool,
+        get_all_paragraphs_com_tool,
+        get_paragraphs_by_range_com_tool,
+        get_paragraphs_by_page_com_tool,
+        analyze_paragraph_distribution_com_tool,
+        check_com_availability_tool
+    )
+except ImportError:
+    # COM tools not available on non-Windows platforms
+    pass

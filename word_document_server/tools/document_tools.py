@@ -1,325 +1,265 @@
 """
-Document creation and manipulation tools for Word Document Server.
+Document creation and manipulation tools for Word Document Server using COM.
 """
 import os
 import json
 from typing import Dict, List, Optional, Any
-from docx import Document
-
+from word_document_server.utils import com_utils
 from word_document_server.utils.file_utils import check_file_writeable, ensure_docx_extension, create_document_copy
-from word_document_server.utils.document_utils import (
-    get_document_properties, extract_document_text, get_document_structure, 
-    get_all_paragraphs, get_paragraphs_by_range, get_paragraphs_by_page, 
-    analyze_paragraph_distribution
-)
-from word_document_server.core.styles import ensure_heading_style, ensure_table_style
 
-
-async def create_document(filename: str, title: Optional[str] = None, author: Optional[str] = None) -> str:
-    """Create a new Word document with optional metadata.
-    
-    Args:
-        filename: Name of the document to create (with or without .docx extension)
-        title: Optional title for the document metadata
-        author: Optional author for the document metadata
-    """
-    filename = ensure_docx_extension(filename)
-    
-    # Check if file is writeable
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot create document: {error_message}"
+async def create_document(title: Optional[str] = None, author: Optional[str] = None) -> str:
+    """Create a new Word document with optional metadata using COM."""
+    # Check if there's an active document
+    active_doc = com_utils.get_active_document()
+    if active_doc is not None:
+        # Use the active document instead of creating a new one
+        doc = active_doc
+    else:
+        return "No active document found"
     
     try:
-        doc = Document()
-        
-        # Set properties if provided
         if title:
-            doc.core_properties.title = title
+            doc.BuiltInDocumentProperties("Title").Value = title
         if author:
-            doc.core_properties.author = author
-        
-        # Ensure necessary styles exist
-        ensure_heading_style(doc)
-        ensure_table_style(doc)
-        
-        # Save the document
-        doc.save(filename)
-        
-        return f"Document {filename} created successfully"
+            doc.BuiltInDocumentProperties("Author").Value = author
+        doc.Save()
+        return f"Document {doc.Name} created successfully"
     except Exception as e:
         return f"Failed to create document: {str(e)}"
 
-
-async def get_document_info(filename: str) -> str:
-    """Get information about a Word document.
-    
-    Args:
-        filename: Path to the Word document
-    """
-    filename = ensure_docx_extension(filename)
-    
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
+async def get_document_info() -> str:
+    """Get information about a Word document using COM."""
+    # Check if there's an active document
+    active_doc = com_utils.get_active_document()
+    if active_doc is not None:
+        # Use the active document
+        doc = active_doc
+    else:
+        return "No active document found"
     
     try:
-        properties = get_document_properties(filename)
+        properties = {
+            "Title": doc.BuiltInDocumentProperties("Title").Value,
+            "Author": doc.BuiltInDocumentProperties("Author").Value,
+            "Subject": doc.BuiltInDocumentProperties("Subject").Value,
+            "Keywords": doc.BuiltInDocumentProperties("Keywords").Value,
+            "Comments": doc.BuiltInDocumentProperties("Comments").Value,
+            "Last saved by": doc.BuiltInDocumentProperties("Last author").Value,
+            "Revision number": doc.BuiltInDocumentProperties("Revision number").Value,
+            "Word count": doc.Words.Count,
+            "Paragraph count": doc.Paragraphs.Count,
+            "Page count": doc.ComputeStatistics(2), # wdStatisticPages = 2
+        }
         return json.dumps(properties, indent=2)
     except Exception as e:
         return f"Failed to get document info: {str(e)}"
 
-
-async def get_document_text(filename: str, max_chars: Optional[int] = None, 
+async def get_document_text(max_chars: Optional[int] = None, 
                            include_tables: bool = True) -> str:
-    """Extract all text from a Word document.
-    
-    Args:
-        filename: Path to the Word document
-        max_chars: Maximum characters to return (None for no limit)
-        include_tables: Whether to include table content in the extracted text
-    """
-    filename = ensure_docx_extension(filename)
-    
-    return extract_document_text(filename, max_chars=max_chars, include_tables=include_tables)
-
-
-async def get_document_outline(filename: str) -> str:
-    """Get the structure of a Word document.
-    
-    Args:
-        filename: Path to the Word document
-    """
-    filename = ensure_docx_extension(filename)
-    
-    structure = get_document_structure(filename)
-    return json.dumps(structure, indent=2)
-
-
-async def list_available_documents(directory: str = ".") -> str:
-    """List all .docx files in the specified directory.
-    
-    Args:
-        directory: Directory to search for Word documents
-    """
+    """Extract all text from a Word document using COM."""
+    # Check if there's an active document
+    active_doc = com_utils.get_active_document()
+    if active_doc is not None:
+        # Use the active document
+        doc = active_doc
+    else:
+        return "No active document found"
+        
     try:
-        if not os.path.exists(directory):
-            return f"Directory {directory} does not exist"
-        
-        docx_files = [f for f in os.listdir(directory) if f.endswith('.docx')]
-        
-        if not docx_files:
-            return f"No Word documents found in {directory}"
-        
-        result = f"Found {len(docx_files)} Word documents in {directory}:\n"
-        for file in docx_files:
-            file_path = os.path.join(directory, file)
-            size = os.path.getsize(file_path) / 1024  # KB
-            result += f"- {file} ({size:.2f} KB)\n"
-        
-        return result
+        text = doc.Content.Text
+        if max_chars and len(text) > max_chars:
+            text = text[:max_chars] + "..."
+        return text
     except Exception as e:
-        return f"Failed to list documents: {str(e)}"
+        return f"Failed to extract text: {str(e)}"
 
 
-async def copy_document(source_filename: str, destination_filename: Optional[str] = None) -> str:
-    """Create a copy of a Word document.
+async def get_document_outline() -> str:
+    """Get the structure of a Word document using COM."""
+    # Check if there's an active document
+    active_doc = com_utils.get_active_document()
+    if active_doc is not None:
+        # Use the active document
+        doc = active_doc
+    else:
+        return "No active document found"
     
-    Args:
-        source_filename: Path to the source document
-        destination_filename: Optional path for the copy. If not provided, a default name will be generated.
-    """
-    source_filename = ensure_docx_extension(source_filename)
+    try:
+        structure = []
+        for p in doc.Paragraphs:
+            style_name = p.Style.NameLocal
+            if style_name.startswith("Heading"):
+                try:
+                    level = int(style_name.split()[-1])
+                    structure.append({"level": level, "text": p.Range.Text.strip()})
+                except (ValueError, IndexError):
+                    continue # Ignore malformed heading styles
+        return json.dumps(structure, indent=2)
+    except Exception as e:
+        return f"Failed to get document outline: {str(e)}"
+
+
+async def copy_document(destination_filename: Optional[str] = None) -> str:
+    """Create a copy of a Word document using COM."""
+    # Check if there's an active document
+    active_doc = com_utils.get_active_document()
+    if active_doc is not None:
+        # Use the active document as source
+        doc = active_doc
+    else:
+        return "No active document found"
     
     if destination_filename:
         destination_filename = ensure_docx_extension(destination_filename)
-    
-    success, message, new_path = create_document_copy(source_filename, destination_filename)
-    if success:
-        return message
     else:
-        return f"Failed to copy document: {message}"
+        base, ext = os.path.splitext(doc.FullName)
+        destination_filename = f"{base}_copy{ext}"
 
-
-async def merge_documents(target_filename: str, source_filenames: List[str], add_page_breaks: bool = True) -> str:
-    """Merge multiple Word documents into a single document.
-    
-    Args:
-        target_filename: Path to the target document (will be created or overwritten)
-        source_filenames: List of paths to source documents to merge
-        add_page_breaks: If True, add page breaks between documents
-    """
-    from word_document_server.core.tables import copy_table
-    
-    target_filename = ensure_docx_extension(target_filename)
-    
-    # Check if target file is writeable
-    is_writeable, error_message = check_file_writeable(target_filename)
+    is_writeable, error_message = check_file_writeable(destination_filename)
     if not is_writeable:
-        return f"Cannot create target document: {error_message}"
-    
-    # Validate all source documents exist
-    missing_files = []
-    for filename in source_filenames:
-        doc_filename = ensure_docx_extension(filename)
-        if not os.path.exists(doc_filename):
-            missing_files.append(doc_filename)
-    
-    if missing_files:
-        return f"Cannot merge documents. The following source files do not exist: {', '.join(missing_files)}"
-    
+        return f"Cannot create copy: {error_message}"
+
     try:
-        # Create a new document for the merged result
-        target_doc = Document()
+        doc.SaveAs(os.path.abspath(destination_filename))
+        return f"Document copied to {destination_filename}"
+    except Exception as e:
+        return f"Failed to copy document: {str(e)}"}]}}}
+
+async def merge_documents(source_filenames: List[str], add_page_breaks: bool = True) -> str:
+    """Merge multiple Word documents into a single document using COM."""
+    # 检查是否有活动文档，这里不需要活动文档，直接创建新文档作为目标文档
+    # 检查源文件是否存在
+    missing_files = [f for f in source_filenames if not os.path.exists(ensure_docx_extension(f))]
+    if missing_files:
+        return f"Cannot merge. The following source files do not exist: {', '.join(missing_files)}"
+
+    target_doc = None
+    try:
+        app = com_utils.get_word_app()
+        target_doc = app.Documents.Add()
         
-        # Process each source document
         for i, filename in enumerate(source_filenames):
-            doc_filename = ensure_docx_extension(filename)
-            source_doc = Document(doc_filename)
+            if i > 0 and add_page_breaks:
+                target_doc.Content.InsertBreak(7)  # wdPageBreak = 7
             
-            # Add page break between documents (except before the first one)
-            if add_page_breaks and i > 0:
-                target_doc.add_page_break()
-            
-            # Copy all paragraphs
-            for paragraph in source_doc.paragraphs:
-                # Create a new paragraph with the same text and style
-                new_paragraph = target_doc.add_paragraph(paragraph.text)
-                new_paragraph.style = target_doc.styles['Normal']  # Default style
-                
-                # Try to match the style if possible
-                try:
-                    if paragraph.style and paragraph.style.name in target_doc.styles:
-                        new_paragraph.style = target_doc.styles[paragraph.style.name]
-                except:
-                    pass
-                
-                # Copy run formatting
-                for i, run in enumerate(paragraph.runs):
-                    if i < len(new_paragraph.runs):
-                        new_run = new_paragraph.runs[i]
-                        # Copy basic formatting
-                        new_run.bold = run.bold
-                        new_run.italic = run.italic
-                        new_run.underline = run.underline
-                        # Font size if specified
-                        if run.font.size:
-                            new_run.font.size = run.font.size
-            
-            # Copy all tables
-            for table in source_doc.tables:
-                copy_table(table, target_doc)
-        
-        # Save the merged document
-        target_doc.save(target_filename)
+            # 在文档末尾插入文件
+            target_doc.Content.InsertFile(os.path.abspath(ensure_docx_extension(filename)))
+
+        # 生成目标文件名，基于第一个源文件名
+        base, ext = os.path.splitext(source_filenames[0])
+        target_filename = f"{base}_merged{ext}"
+        target_doc.SaveAs(os.path.abspath(target_filename))
         return f"Successfully merged {len(source_filenames)} documents into {target_filename}"
     except Exception as e:
         return f"Failed to merge documents: {str(e)}"
+    finally:
+        if target_doc:
+            target_doc.Close(SaveChanges=0)
 
 
-async def get_document_xml_tool(filename: str) -> str:
-    """Get the raw XML structure of a Word document."""
-    return get_document_xml(filename)
-
-
-async def insert_header_near_text_tool(filename: str, target_text: str, header_title: str, position: str = 'after', header_style: str = 'Heading 1') -> str:
-    """Insert a header (with specified style) before or after the first paragraph containing target_text."""
-    return insert_header_near_text(filename, target_text, header_title, position, header_style)
-
-
-async def insert_line_or_paragraph_near_text_tool(filename: str, target_text: str, line_text: str, position: str = 'after', line_style: Optional[str] = None) -> str:
-    """
-    Insert a new line or paragraph (with specified or matched style) before or after the first paragraph containing target_text.
-    """
-    return insert_line_or_paragraph_near_text(filename, target_text, line_text, position, line_style)
-
-
-async def get_all_paragraphs_tool(filename: str) -> str:
-    """
-    一次性获取所有段落内容
-    
-    Args:
-        filename: Word文档路径
-    
-    Returns:
-        包含所有段落信息的JSON字符串
-    """
-    filename = ensure_docx_extension(filename)
-    
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
+async def get_document_xml_tool() -> str:
+    """Get the raw XML structure of a Word document using COM."""
+    # Check if there's an active document
+    active_doc = com_utils.get_active_document()
+    if active_doc is not None:
+        # Use the active document
+        doc = active_doc
+    else:
+        return "No active document found"
     
     try:
-        result = get_all_paragraphs(filename)
-        return json.dumps(result, indent=2, ensure_ascii=False)
+        return doc.WordOpenXML
+    except Exception as e:
+        return f"Failed to get document XML: {str(e)}"
+    finally:
+        # No need to close the active document
+        pass
+
+async def get_all_paragraphs_tool() -> str:
+    """Gets all paragraph content, returning a JSON with paragraph details."""
+    # Check if there's an active document
+    active_doc = com_utils.get_active_document()
+    if active_doc is not None:
+        # Use the active document
+        doc = active_doc
+    else:
+        return "No active document found"
+    
+    try:
+        paragraphs = []
+        for i, p in enumerate(doc.Paragraphs):
+            paragraphs.append({
+                "index": i,
+                "text": p.Range.Text.strip(),
+                "style": p.Style.NameLocal
+            })
+        return json.dumps(paragraphs, indent=2, ensure_ascii=False)
     except Exception as e:
         return f"Failed to get all paragraphs: {str(e)}"
+    finally:
+        # No need to close the active document
+        pass
 
-
-async def get_paragraphs_by_range_tool(filename: str, start_index: int = 0, end_index: Optional[int] = None) -> str:
-    """
-    获取指定段落范围的内容
-    
-    Args:
-        filename: Word文档路径
-        start_index: 起始段落索引（包含）
-        end_index: 结束段落索引（不包含），None表示到最后
-    
-    Returns:
-        包含指定范围段落信息的JSON字符串
-    """
-    filename = ensure_docx_extension(filename)
-    
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
+async def get_paragraphs_by_range_tool(start_index: int = 0, end_index: Optional[int] = None) -> str:
+    """Gets content of a specified paragraph range."""
+    # Check if there's an active document
+    active_doc = com_utils.get_active_document()
+    if active_doc is not None:
+        # Use the active document
+        doc = active_doc
+    else:
+        return "No active document found"
     
     try:
-        result = get_paragraphs_by_range(filename, start_index, end_index)
-        return json.dumps(result, indent=2, ensure_ascii=False)
+        para_count = doc.Paragraphs.Count
+        if end_index is None:
+            end_index = para_count
+        
+        start_index = max(0, start_index)
+        end_index = min(end_index, para_count)
+
+        paragraphs = []
+        for i in range(start_index, end_index):
+            p = doc.Paragraphs(i + 1) # COM is 1-based
+            paragraphs.append({
+                "index": i,
+                "text": p.Range.Text.strip(),
+                "style": p.Style.NameLocal
+            })
+        return json.dumps(paragraphs, indent=2, ensure_ascii=False)
     except Exception as e:
         return f"Failed to get paragraphs by range: {str(e)}"
+    finally:
+        # No need to close the active document
+        pass
 
+async def get_paragraphs_by_page_tool(page_number: int = 1, page_size: int = 100) -> str:
+    """Paginates through paragraph content."""
+    start_index = (page_number - 1) * page_size
+    end_index = start_index + page_size
+    return await get_paragraphs_by_range_tool(start_index, end_index)
 
-async def get_paragraphs_by_page_tool(filename: str, page_number: int = 1, page_size: int = 100) -> str:
-    """
-    分页获取段落内容
-    
-    Args:
-        filename: Word文档路径
-        page_number: 页码（从1开始）
-        page_size: 每页段落数量
-    
-    Returns:
-        包含分页段落信息的JSON字符串
-    """
-    filename = ensure_docx_extension(filename)
-    
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
+async def analyze_paragraph_distribution_tool() -> str:
+    """Analyzes paragraph distribution and returns statistics."""
+    # Check if there's an active document
+    active_doc = com_utils.get_active_document()
+    if active_doc is not None:
+        # Use the active document
+        doc = active_doc
+    else:
+        return "No active document found"
     
     try:
-        result = get_paragraphs_by_page(filename, page_number, page_size)
-        return json.dumps(result, indent=2, ensure_ascii=False)
-    except Exception as e:
-        return f"Failed to get paragraphs by page: {str(e)}"
-
-
-async def analyze_paragraph_distribution_tool(filename: str) -> str:
-    """
-    分析段落分布情况
-    
-    Args:
-        filename: Word文档路径
-    
-    Returns:
-        段落统计分析信息的JSON字符串
-    """
-    filename = ensure_docx_extension(filename)
-    
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-    
-    try:
-        result = analyze_paragraph_distribution(filename)
-        return json.dumps(result, indent=2, ensure_ascii=False)
+        stats = {
+            "total_paragraphs": doc.Paragraphs.Count,
+            "style_distribution": {}
+        }
+        for p in doc.Paragraphs:
+            style = p.Style.NameLocal
+            stats["style_distribution"][style] = stats["style_distribution"].get(style, 0) + 1
+        return json.dumps(stats, indent=2, ensure_ascii=False)
     except Exception as e:
         return f"Failed to analyze paragraph distribution: {str(e)}"
+    finally:
+        # No need to close the active document
+        pass
