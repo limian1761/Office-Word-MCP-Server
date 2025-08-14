@@ -135,26 +135,26 @@ def register_tools():
             return f"Failed to set active document: {str(e)}"
     
     @mcp.tool()
-    def get_document_xml(filename: str):
+    def get_document_xml():
         """Get the raw XML structure of a Word document."""
-        return document_tools.get_document_xml_tool(filename)
+        return document_tools.get_document_xml_tool()
     
     @mcp.tool("add_header")
-    def insert_header_near_text(filename: str, target_text: str = None, header_title: str = None, position: str = 'after', header_style: str = 'Heading 1', target_paragraph_index: int = None):
-        """Insert a header (with specified style) before or after the target paragraph. Specify by text or paragraph index. Args: filename (str), target_text (str, optional), header_title (str), position ('before' or 'after'), header_style (str, default 'Heading 1'), target_paragraph_index (int, optional)."""
-        return content_tools.insert_header_near_text_tool(filename, target_text, header_title, position, header_style, target_paragraph_index)
+    def insert_header_near_text(target_text: str = None, header_title: str = None, position: str = 'after', header_style: str = 'Heading 1', target_paragraph_index: int = None):
+        """Insert a header (with specified style) before or after the target paragraph. Specify by text or paragraph index. Args: target_text (str, optional), header_title (str), position ('before' or 'after'), header_style (str, default 'Heading 1'), target_paragraph_index (int, optional)."""
+        return content_tools.insert_header_near_text_tool(target_text, header_title, position, header_style, target_paragraph_index)
     
     @mcp.tool("add_line")
-    def insert_line_or_paragraph_near_text(filename: str, target_text: str = None, line_text: str = None, position: str = 'after', line_style: str = None, target_paragraph_index: int = None):
+    def insert_line_or_paragraph_near_text(target_text: str = None, line_text: str = None, position: str = 'after', line_style: str = None, target_paragraph_index: int = None):
         """
-        Insert a new line or paragraph (with specified or matched style) before or after the target paragraph. Specify by text or paragraph index. Args: filename (str), target_text (str, optional), line_text (str), position ('before' or 'after'), line_style (str, optional), target_paragraph_index (int, optional).
+        Insert a new line or paragraph (with specified or matched style) before or after the target paragraph. Specify by text or paragraph index. Args: target_text (str, optional), line_text (str), position ('before' or 'after'), line_style (str, optional), target_paragraph_index (int, optional).
         """
-        return content_tools.insert_line_or_paragraph_near_text_tool(filename, target_text, line_text, position, line_style, target_paragraph_index)
+        return content_tools.insert_line_or_paragraph_near_text_tool(target_text, line_text, position, line_style, target_paragraph_index)
     
     @mcp.tool("add_list")
-    def insert_numbered_list_near_text(filename: str, target_text: str = None, list_items: list = None, position: str = 'after', target_paragraph_index: int = None):
-        """Insert a numbered list before or after the target paragraph. Specify by text or paragraph index. Args: filename (str), target_text (str, optional), list_items (list of str), position ('before' or 'after'), target_paragraph_index (int, optional)."""
-        return content_tools.insert_numbered_list_near_text_tool(filename, target_text, list_items, position, target_paragraph_index)
+    def insert_numbered_list_near_text(target_text: str = None, list_items: list = None, position: str = 'after', target_paragraph_index: int = None):
+        """Insert a numbered list before or after the target paragraph. Specify by text or paragraph index. Args: target_text (str, optional), list_items (list of str), position ('before' or 'after'), target_paragraph_index (int, optional)."""
+        return content_tools.insert_numbered_list_near_text_tool(target_text, list_items, position, target_paragraph_index)
     # Content tools (paragraphs, headings, tables, etc.)
 
     @mcp.tool(name="add_para")

@@ -20,22 +20,17 @@ def hex_to_bgr(hex_color):
     b = int(hex_color[4:6], 16)
     return (b << 16) | (g << 8) | r
 
-async def format_text(filename: str, paragraph_index: int, start_pos: int, end_pos: int, 
+async def format_text(paragraph_index: int, start_pos: int, end_pos: int, 
                      bold: Optional[bool] = None, italic: Optional[bool] = None, 
                      underline: Optional[bool] = None, color: Optional[str] = None,
                      font_size: Optional[int] = None, font_name: Optional[str] = None) -> str:
     """Format a specific range of text within a paragraph using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if paragraph_index < 0 or paragraph_index >= doc.Paragraphs.Count:
             return f"Invalid paragraph index. Document has {doc.Paragraphs.Count} paragraphs."
 
@@ -77,22 +72,17 @@ async def format_text(filename: str, paragraph_index: int, start_pos: int, end_p
         if doc:
             doc.Close(SaveChanges=0)
 
-async def create_custom_style(filename: str, style_name: str, 
+async def create_custom_style(style_name: str, 
                              bold: Optional[bool] = None, italic: Optional[bool] = None,
                              font_size: Optional[int] = None, font_name: Optional[str] = None,
                              color: Optional[str] = None, base_style: Optional[str] = None) -> str:
     """Create a custom style in the document using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         # wdStyleTypeParagraph = 1
         style = doc.Styles.Add(Name=style_name, Type=1)
         font = style.Font
@@ -123,22 +113,17 @@ async def create_custom_style(filename: str, style_name: str,
         if doc:
             doc.Close(SaveChanges=0)
 
-async def format_table(filename: str, table_index: int, 
+async def format_table(table_index: int, 
                       has_header_row: Optional[bool] = None,
                       border_style: Optional[str] = None,
                       shading: Optional[List[List[str]]] = None) -> str:
     """Format a table with borders, shading, and structure using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
@@ -171,20 +156,15 @@ async def format_table(filename: str, table_index: int,
 # The remaining table formatting functions are complex and will be implemented
 # based on user needs. For now, they return a "not implemented" message.
 
-async def set_table_cell_shading(filename: str, table_index: int, row_index: int, 
+async def set_table_cell_shading(table_index: int, row_index: int, 
                                 col_index: int, fill_color: str, pattern: str = "clear") -> str:
     """Apply shading/filling to a specific table cell using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
@@ -208,16 +188,14 @@ async def set_table_cell_shading(filename: str, table_index: int, row_index: int
         if doc:
             doc.Close(SaveChanges=0)
 
-async def apply_table_alternating_rows(filename: str, table_index: int, 
+async def apply_table_alternating_rows(table_index: int, 
                                      color1: str = "FFFFFF", color2: str = "F2F2F2") -> str:
     """Apply alternating row colors to a table for better readability using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
+    doc = None
+    try:
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
 
     doc = None
     try:
@@ -245,20 +223,15 @@ async def apply_table_alternating_rows(filename: str, table_index: int,
         if doc:
             doc.Close(SaveChanges=0)
 
-async def highlight_table_header(filename: str, table_index: int, 
+async def highlight_table_header(table_index: int, 
                                header_color: str = "4472C4", text_color: str = "FFFFFF") -> str:
     """Apply special highlighting to table header row using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
@@ -278,23 +251,18 @@ async def highlight_table_header(filename: str, table_index: int,
     except Exception as e:
         return f"Failed to highlight table header: {str(e)}"
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def merge_table_cells(filename: str, table_index: int, start_row: int, start_col: int, 
+async def merge_table_cells(table_index: int, start_row: int, start_col: int, 
                           end_row: int, end_col: int) -> str:
     """Merge cells in a rectangular area of a table using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
@@ -320,33 +288,28 @@ async def merge_table_cells(filename: str, table_index: int, start_row: int, sta
     except Exception as e:
         return f"Failed to merge cells: {str(e)}"
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def merge_table_cells_horizontal(filename: str, table_index: int, row_index: int, 
+async def merge_table_cells_horizontal(table_index: int, row_index: int, 
                                      start_col: int, end_col: int) -> str:
     """Merge cells horizontally in a single row using COM."""
-    return await merge_table_cells(filename, table_index, row_index, start_col, row_index, end_col)
+    return await merge_table_cells(table_index, row_index, start_col, row_index, end_col)
 
-async def merge_table_cells_vertical(filename: str, table_index: int, col_index: int, 
+async def merge_table_cells_vertical(table_index: int, col_index: int, 
                                    start_row: int, end_row: int) -> str:
     """Merge cells vertically in a single column using COM."""
-    return await merge_table_cells(filename, table_index, start_row, col_index, end_row, col_index)
+    return await merge_table_cells(table_index, start_row, col_index, end_row, col_index)
 
-async def set_table_cell_alignment(filename: str, table_index: int, row_index: int, col_index: int,
+async def set_table_cell_alignment(table_index: int, row_index: int, col_index: int,
                                  horizontal: str = "left", vertical: str = "top") -> str:
     """Set text alignment for a specific table cell using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
@@ -371,24 +334,19 @@ async def set_table_cell_alignment(filename: str, table_index: int, row_index: i
     except Exception as e:
         return f"Failed to set cell alignment: {str(e)}"
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
 
-async def set_table_alignment_all(filename: str, table_index: int, 
+async def set_table_alignment_all(table_index: int, 
                                 horizontal: str = "left", vertical: str = "top") -> str:
     """Set text alignment for all cells in a table using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
@@ -413,13 +371,17 @@ async def set_table_alignment_all(filename: str, table_index: int,
     except Exception as e:
         return f"Failed to set table alignment: {str(e)}"
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def set_table_column_width(filename: str, table_index: int, col_index: int, 
+async def set_table_column_width(table_index: int, col_index: int, 
                                 width: float, width_type: str = "points") -> str:
     """Set the width of a specific table column using COM."""
-    filename = ensure_docx_extension(filename)
+    doc = None
+    try:
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
     if not os.path.exists(filename):
         return f"Document {filename} does not exist"
 
@@ -459,23 +421,18 @@ async def set_table_column_width(filename: str, table_index: int, col_index: int
     except Exception as e:
         return f"Failed to set column width: {str(e)}"
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def set_table_column_widths(filename: str, table_index: int, widths: list, 
+async def set_table_column_widths(table_index: int, widths: list, 
                                  width_type: str = "points") -> str:
     """Set the widths of multiple table columns using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
@@ -485,29 +442,24 @@ async def set_table_column_widths(filename: str, table_index: int, widths: list,
             return f"Widths list has more items ({len(widths)}) than table has columns ({table.Columns.Count})."
 
         for i, width in enumerate(widths):
-            await set_table_column_width(filename, table_index, i, width, width_type)
+            await set_table_column_width(table_index, i, width, width_type)
         
         return f"Successfully set widths for {len(widths)} columns."
     except Exception as e:
         return f"Failed to set column widths: {str(e)}"
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def set_table_width(filename: str, table_index: int, width: float, 
+async def set_table_width(table_index: int, width: float, 
                          width_type: str = "points") -> str:
     """Set the overall width of a table using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
@@ -530,22 +482,17 @@ async def set_table_width(filename: str, table_index: int, width: float,
     except Exception as e:
         return f"Failed to set table width: {str(e)}"
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def auto_fit_table_columns(filename: str, table_index: int) -> str:
+async def auto_fit_table_columns(table_index: int) -> str:
     """Set table columns to auto-fit based on content using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
@@ -557,25 +504,20 @@ async def auto_fit_table_columns(filename: str, table_index: int) -> str:
     except Exception as e:
         return f"Failed to auto-fit table columns: {str(e)}"
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def format_table_cell_text(filename: str, table_index: int, row_index: int, col_index: int,
+async def format_table_cell_text(table_index: int, row_index: int, col_index: int,
                                  text_content: Optional[str] = None, bold: Optional[bool] = None, italic: Optional[bool] = None,
                                  underline: Optional[bool] = None, color: Optional[str] = None, font_size: Optional[int] = None,
                                  font_name: Optional[str] = None) -> str:
     """Format text within a specific table cell using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
@@ -612,24 +554,19 @@ async def format_table_cell_text(filename: str, table_index: int, row_index: int
     except Exception as e:
         return f"Failed to format cell text: {str(e)}"
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def set_table_cell_padding(filename: str, table_index: int, row_index: int, col_index: int,
+async def set_table_cell_padding(table_index: int, row_index: int, col_index: int,
                                  top: Optional[float] = None, bottom: Optional[float] = None, left: Optional[float] = None, 
                                  right: Optional[float] = None, unit: str = "points") -> str:
     """Set padding/margins for a specific table cell using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 

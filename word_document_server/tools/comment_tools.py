@@ -17,15 +17,14 @@ def _comment_to_dict(comment):
         "scope_text": comment.Scope.Text.strip(),
     }
 
-async def get_all_comments(filename: str) -> str:
+async def get_all_comments() -> str:
     """Extract all comments from a Word document using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return json.dumps({'success': False, 'error': f'Document {filename} does not exist'}, indent=2)
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return json.dumps({'success': False, 'error': 'No active document found'}, indent=2)
+
         comments_list = [_comment_to_dict(c) for c in doc.Comments]
         return json.dumps({
             'success': True,
@@ -38,17 +37,17 @@ async def get_all_comments(filename: str) -> str:
         if doc:
             doc.Close(SaveChanges=0)
 
-async def get_comments_by_author(filename: str, author: str) -> str:
+async def get_comments_by_author(author: str) -> str:
     """Extract comments from a specific author in a Word document using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return json.dumps({'success': False, 'error': f'Document {filename} does not exist'}, indent=2)
     if not author or not author.strip():
         return json.dumps({'success': False, 'error': 'Author name cannot be empty'}, indent=2)
 
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return json.dumps({'success': False, 'error': 'No active document found'}, indent=2)
+
         author_comments = [
             _comment_to_dict(c) for c in doc.Comments if c.Author.lower() == author.lower()
         ]
@@ -64,17 +63,17 @@ async def get_comments_by_author(filename: str, author: str) -> str:
         if doc:
             doc.Close(SaveChanges=0)
 
-async def get_comments_for_paragraph(filename: str, paragraph_index: int) -> str:
+async def get_comments_for_paragraph(paragraph_index: int) -> str:
     """Extract comments for a specific paragraph in a Word document using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return json.dumps({'success': False, 'error': f'Document {filename} does not exist'}, indent=2)
     if paragraph_index < 0:
         return json.dumps({'success': False, 'error': 'Paragraph index must be non-negative'}, indent=2)
 
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return json.dumps({'success': False, 'error': 'No active document found'}, indent=2)
+
         if paragraph_index >= doc.Paragraphs.Count:
             return json.dumps({
                 'success': False,

@@ -14,19 +14,14 @@ wdNoteNumberStyleUppercaseLetter = 4
 wdNoteNumberStyleLowercaseLetter = 5
 wdNoteNumberStyleSymbol = 9
 
-async def add_footnote_to_document(filename: str, paragraph_index: int, footnote_text: str) -> str:
+async def add_footnote_to_document(paragraph_index: int, footnote_text: str) -> str:
     """Add a footnote to a specific paragraph in a Word document using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if paragraph_index < 0 or paragraph_index >= doc.Paragraphs.Count:
             return f"Invalid paragraph index. Document has {doc.Paragraphs.Count} paragraphs."
 
@@ -39,26 +34,21 @@ async def add_footnote_to_document(filename: str, paragraph_index: int, footnote
         doc.Footnotes.Add(Range=p_range, Text=footnote_text)
         
         doc.Save()
-        return f"Footnote added to paragraph {paragraph_index} in {filename}"
+        return f"Footnote added to paragraph {paragraph_index}"
     except Exception as e:
         return f"Failed to add footnote: {str(e)}"
     finally:
         if doc:
             doc.Close(SaveChanges=0)
 
-async def add_endnote_to_document(filename: str, paragraph_index: int, endnote_text: str) -> str:
+async def add_endnote_to_document(paragraph_index: int, endnote_text: str) -> str:
     """Add an endnote to a specific paragraph in a Word document using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if paragraph_index < 0 or paragraph_index >= doc.Paragraphs.Count:
             return f"Invalid paragraph index. Document has {doc.Paragraphs.Count} paragraphs."
 
@@ -68,53 +58,43 @@ async def add_endnote_to_document(filename: str, paragraph_index: int, endnote_t
         doc.Endnotes.Add(Range=p_range, Text=endnote_text)
         
         doc.Save()
-        return f"Endnote added to paragraph {paragraph_index} in {filename}"
+        return f"Endnote added to paragraph {paragraph_index}"
     except Exception as e:
         return f"Failed to add endnote: {str(e)}"
     finally:
         if doc:
             doc.Close(SaveChanges=0)
 
-async def convert_footnotes_to_endnotes_in_document(filename: str) -> str:
+async def convert_footnotes_to_endnotes_in_document() -> str:
     """Convert all footnotes to endnotes in a Word document using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         if doc.Footnotes.Count == 0:
             return "No footnotes found to convert."
             
         doc.Footnotes.Convert()
         doc.Save()
-        return f"Converted {doc.Endnotes.Count} footnotes to endnotes in {filename}"
+        return f"Converted {doc.Endnotes.Count} footnotes to endnotes"
     except Exception as e:
         return f"Failed to convert footnotes to endnotes: {str(e)}"
     finally:
         if doc:
             doc.Close(SaveChanges=0)
 
-async def customize_footnote_style(filename: str, numbering_format: str = "1, 2, 3", 
+async def customize_footnote_style(numbering_format: str = "1, 2, 3", 
                                   start_number: int = 1, font_name: Optional[str] = None,
                                   font_size: Optional[int] = None) -> str:
     """Customize footnote numbering and formatting in a Word document using COM."""
-    filename = ensure_docx_extension(filename)
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
     doc = None
     try:
-        doc = com_utils.open_document(filename)
+        doc = com_utils.get_active_document()
+        if not doc:
+            return "No active document found."
+
         fn_options = doc.FootnoteOptions
         
         format_map = {
@@ -141,7 +121,7 @@ async def customize_footnote_style(filename: str, numbering_format: str = "1, 2,
             return "Could not find 'Footnote Text' style to customize."
 
         doc.Save()
-        return f"Footnote style and numbering customized in {filename}"
+        return f"Footnote style and numbering customized"
     except Exception as e:
         return f"Failed to customize footnote style: {str(e)}"
     finally:
