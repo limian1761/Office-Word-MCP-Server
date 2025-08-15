@@ -7,8 +7,8 @@ to clients through the Model Context Protocol.
 
 # Document tools
 from word_document_server.tools.document_tools import (
-    create_document, get_document_info, get_document_text, 
-    get_document_outline, list_available_documents, 
+    create_document, get_document_info, 
+    get_document_outline, list_opened_documents, 
     copy_document, merge_documents
 )
 
@@ -16,7 +16,8 @@ from word_document_server.tools.document_tools import (
 from word_document_server.tools.content_tools import (
     add_heading, add_paragraph, add_table, add_picture,
     add_page_break, delete_paragraph,
-    search_and_replace
+    search_and_replace, select_paragraphs, add_picture_caption,
+    add_paragraph_numbering
 )
 
 # Format tools
@@ -32,7 +33,7 @@ from word_document_server.tools.protection_tools import (
 # Footnote tools
 from word_document_server.tools.footnote_tools import (
     add_footnote_to_document, add_endnote_to_document,
-    convert_footnotes_to_endnotes_in_document, customize_footnote_style
+    convert_footnotes_to_endnotes, customize_footnote_style
 )
 
 # Comment tools

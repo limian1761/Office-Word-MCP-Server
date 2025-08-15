@@ -1,10 +1,13 @@
 """
-Protection tools for Word Document Server using COM.
+Protection tools for Word Document Server.
 """
 import os
 from typing import Optional
-from word_document_server.utils import com_utils
+from mcp.server.fastmcp.server import Context
+from word_document_server.app import app
+from word_document_server.utils.app_context import AppContext
 from word_document_server.utils.file_utils import check_file_writeable, ensure_docx_extension
+from word_document_server.utils.com_utils import handle_com_error
 
 # Word protection type constants
 wdNoProtection = -1
@@ -13,11 +16,14 @@ wdAllowOnlyFormFields = 2
 wdAllowOnlyRevisions = 0
 wdAllowOnlyReading = 3
 
-async def protect_document(password: str, protection_type: int = wdAllowOnlyReading) -> str:
-    """Add password protection to a Word document using COM."""
+@app.tool()
+async def protect_document(password: str, protection_type: int = wdAllowOnlyReading, context: Context = None) -> str:
+    """Add password protection to a Word document."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -25,16 +31,19 @@ async def protect_document(password: str, protection_type: int = wdAllowOnlyRead
         doc.Save()
         return f"Document protected successfully."
     except Exception as e:
-        return f"Failed to protect document: {str(e)}"
+        return handle_com_error(e)
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def unprotect_document(password: str) -> str:
-    """Remove password protection from a Word document using COM."""
+@app.tool()
+async def unprotect_document(password: str, context: Context = None) -> str:
+    """Remove password protection from a Word document."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -48,22 +57,26 @@ async def unprotect_document(password: str) -> str:
         # Check for incorrect password error (HRESULT: 0x800A141F)
         if hasattr(e, 'excepinfo') and e.excepinfo and e.excepinfo[5] == -2146823137:
              return f"Failed to unprotect document: Incorrect password."
-        return f"Failed to unprotect document: {str(e)}"
+        return handle_com_error(e)
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
+@app.tool()
 async def add_digital_signature(signer_name: str) -> str:
-    """Add a digital signature to a Word document using COM."""
+    """Add a digital signature to a Word document."""
     # This is a placeholder. Digital signatures with pywin32 are complex
     # and require access to the Windows Certificate Store.
-    return "Digital signature functionality is not yet fully implemented with COM."
+    return "Digital signature functionality is not yet fully implemented."
 
-async def verify_document(password: Optional[str] = None) -> str:
-    """Verify document protection status using COM."""
+@app.tool()
+async def verify_document(password: Optional[str] = None, context: Context = None) -> str:
+    """Verify document protection status."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -84,7 +97,7 @@ async def verify_document(password: Optional[str] = None) -> str:
     except Exception as e:
         if hasattr(e, 'excepinfo') and e.excepinfo and e.excepinfo[5] == -2146823137:
              return f"Failed to verify document: Incorrect password provided."
-        return f"Failed to verify document: {str(e)}"
+        return handle_com_error(e)
     finally:
         # No need to close the active document
         pass

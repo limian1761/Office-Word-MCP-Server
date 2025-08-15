@@ -1,12 +1,12 @@
 {
   "mcpServers": {
     "word-document-server": {
-      "command": "/Users/gongzhe/GitRepos/Office-Word-MCP-Server/.venv/bin/python",
+      "command": "C:\\Python313\\python.exe",
       "args": [
-        "/Users/gongzhe/GitRepos/Office-Word-MCP-Server/word_mcp_server.py"
+        "-m",
+        "word_document_server.main"
       ],
       "env": {
-        "PYTHONPATH": "/Users/gongzhe/GitRepos/Office-Word-MCP-Server",
         "MCP_TRANSPORT": "stdio"
       }
     }

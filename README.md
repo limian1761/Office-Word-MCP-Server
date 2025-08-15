@@ -129,6 +129,19 @@ cd Office-Word-MCP-Server
 pip install -r requirements.txt
 ```
 
+### Using uv for Development
+
+This project supports [uv](https://docs.astral.sh/uv/), a fast Python package installer and resolver, for managing dependencies:
+
+```bash
+# Clone the repository
+git clone https://github.com/GongRzhe/Office-Word-MCP-Server.git
+cd Office-Word-MCP-Server
+
+# Install dependencies with uv
+uv pip install -r requirements.txt
+```
+
 ### Using the Setup Script
 
 Alternatively, you can use the provided setup script which handles:
@@ -202,6 +215,16 @@ Once configured, you can ask Claude to perform operations like:
 - "Create a callout table with a blue checkmark icon and white text"
 - "Set the first column width to 50 points and auto-fit the remaining columns"
 - "Apply alternating row colors to make the table more readable"
+- "Add a paragraph at the beginning of my document"
+- "Insert a heading at position 5 in my document"
+- "Add a table after paragraph 3"
+- "Select the first 3 paragraphs of my document"
+- "Select paragraphs from index 2 to 5"
+- "Show me the outline of my document"
+- "Add a caption to the first picture in my document"
+- "Add a caption 'Sales Data Visualization' to picture 2"
+- "Add numbering to all paragraphs in my document"
+- "Add numbering to paragraphs 2 through 5"
 
 
 ## API Reference
@@ -211,9 +234,8 @@ Once configured, you can ask Claude to perform operations like:
 ```python
 create_document(filename, title=None, author=None)
 get_document_info(filename)
-get_document_text(filename)
 get_document_outline(filename)
-list_available_documents(directory=".")
+list_opened_documents()
 copy_document(source_filename, destination_filename=None)
 convert_to_pdf(filename, output_filename=None)
 ```
@@ -221,17 +243,19 @@ convert_to_pdf(filename, output_filename=None)
 ### Content Addition
 
 ```python
-add_heading(filename, text, level=1)
-add_paragraph(filename, text, style=None)
-add_table(filename, rows, cols, data=None)
-add_picture(filename, image_path, width=None)
-add_page_break(filename)
+add_heading(filename, text, level=1, paragraph_index=None)
+add_paragraph(filename, text, style=None, paragraph_index=None)
+add_table(filename, rows, cols, data=None, paragraph_index=None)
+add_picture(filename, image_path, width=None, paragraph_index=None)
+add_page_break(filename, paragraph_index=None)
+select_paragraphs(filename, start_index, end_index=None)
+add_picture_caption(filename, caption_text, picture_index=None, paragraph_index=None)
+add_paragraph_numbering(filename, start_index=0, end_index=None, style="Normal")
 ```
 
 ### Content Extraction
 
 ```python
-get_document_text(filename)
 get_paragraph_text_from_document(filename, paragraph_index)
 find_text_in_document(filename, text_to_find, match_case=True, whole_word=False)
 ```
@@ -350,7 +374,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - [Model Context Protocol](https://modelcontextprotocol.io/) for the protocol specification
 - [python-docx](https://python-docx.readthedocs.io/) for Word document manipulation
-- [FastMCP](https://github.com/modelcontextprotocol/python-sdk) for the Python MCP implementation
+- [MCP](https://github.com/modelcontextprotocol/python-sdk) for the Python MCP implementation
 
 ---
 

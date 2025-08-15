@@ -1,10 +1,12 @@
 """
-Comment extraction tools for Word Document Server using COM.
+Comment extraction tools for Word Document Server.
 """
 import os
 import json
-from word_document_server.utils import com_utils
-from word_document_server.utils.file_utils import ensure_docx_extension
+from mcp.server.fastmcp.server import Context
+from word_document_server.app import app
+from word_document_server.utils.app_context import AppContext
+from word_document_server.utils.com_utils import handle_com_error
 
 def _comment_to_dict(comment):
     """Helper to convert a COM comment object to a dictionary."""
@@ -17,14 +19,15 @@ def _comment_to_dict(comment):
         "scope_text": comment.Scope.Text.strip(),
     }
 
-async def get_all_comments() -> str:
-    """Extract all comments from a Word document using COM."""
-    doc = None
-    try:
-        doc = com_utils.get_active_document()
-        if not doc:
-            return json.dumps({'success': False, 'error': 'No active document found'}, indent=2)
+@app.tool()
+def get_all_comments(context: Context) -> str:
+    """Extract all comments from a Word document."""
+    app_context: AppContext = context.request_context.lifespan_context
+    doc = app_context.get_active_document()
+    if not doc:
+        return json.dumps({'success': False, 'error': 'No active document found'}, indent=2)
 
+    try:
         comments_list = [_comment_to_dict(c) for c in doc.Comments]
         return json.dumps({
             'success': True,
@@ -32,22 +35,20 @@ async def get_all_comments() -> str:
             'total_comments': len(comments_list)
         }, indent=2)
     except Exception as e:
-        return json.dumps({'success': False, 'error': f'Failed to extract comments: {str(e)}'}, indent=2)
-    finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        return json.dumps({'success': False, 'error': handle_com_error(e)}, indent=2)
 
-async def get_comments_by_author(author: str) -> str:
-    """Extract comments from a specific author in a Word document using COM."""
+@app.tool()
+def get_comments_by_author(context: Context, author: str) -> str:
+    """Extract comments from a specific author in a Word document."""
+    app_context: AppContext = context.request_context.lifespan_context
     if not author or not author.strip():
         return json.dumps({'success': False, 'error': 'Author name cannot be empty'}, indent=2)
 
-    doc = None
-    try:
-        doc = com_utils.get_active_document()
-        if not doc:
-            return json.dumps({'success': False, 'error': 'No active document found'}, indent=2)
+    doc = app_context.get_active_document()
+    if not doc:
+        return json.dumps({'success': False, 'error': 'No active document found'}, indent=2)
 
+    try:
         author_comments = [
             _comment_to_dict(c) for c in doc.Comments if c.Author.lower() == author.lower()
         ]
@@ -58,22 +59,20 @@ async def get_comments_by_author(author: str) -> str:
             'total_comments': len(author_comments)
         }, indent=2)
     except Exception as e:
-        return json.dumps({'success': False, 'error': f'Failed to extract comments: {str(e)}'}, indent=2)
-    finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        return json.dumps({'success': False, 'error': handle_com_error(e)}, indent=2)
 
-async def get_comments_for_paragraph(paragraph_index: int) -> str:
-    """Extract comments for a specific paragraph in a Word document using COM."""
+@app.tool()
+def get_comments_for_paragraph(context: Context, paragraph_index: int) -> str:
+    """Extract comments for a specific paragraph in a Word document."""
+    app_context: AppContext = context.request_context.lifespan_context
     if paragraph_index < 0:
         return json.dumps({'success': False, 'error': 'Paragraph index must be non-negative'}, indent=2)
 
-    doc = None
-    try:
-        doc = com_utils.get_active_document()
-        if not doc:
-            return json.dumps({'success': False, 'error': 'No active document found'}, indent=2)
+    doc = app_context.get_active_document()
+    if not doc:
+        return json.dumps({'success': False, 'error': 'No active document found'}, indent=2)
 
+    try:
         if paragraph_index >= doc.Paragraphs.Count:
             return json.dumps({
                 'success': False,
@@ -97,7 +96,4 @@ async def get_comments_for_paragraph(paragraph_index: int) -> str:
             'total_comments': len(para_comments)
         }, indent=2)
     except Exception as e:
-        return json.dumps({'success': False, 'error': f'Failed to extract comments: {str(e)}'}, indent=2)
-    finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        return json.dumps({'success': False, 'error': handle_com_error(e)}, indent=2)

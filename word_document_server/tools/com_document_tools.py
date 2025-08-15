@@ -8,14 +8,25 @@ import sys
 
 # 根据平台导入相应的工具
 if sys.platform == "win32":
-    from ..utils.com_document_utils import (
-        get_document_properties_com,
-        get_all_paragraphs_com,
-        get_paragraphs_by_range_com,
-        get_paragraphs_by_page_com,
-        analyze_paragraph_distribution_com,
-        is_com_available
-    )
+    # Define placeholder functions since com_document_utils doesn't exist
+    def get_document_properties_com(*args, **kwargs):
+        return {"error": "COM functionality not implemented"}
+    
+    def get_all_paragraphs_com(*args, **kwargs):
+        return {"error": "COM functionality not implemented"}
+    
+    def get_paragraphs_by_range_com(*args, **kwargs):
+        return {"error": "COM functionality not implemented"}
+    
+    def get_paragraphs_by_page_com(*args, **kwargs):
+        return {"error": "COM functionality not implemented"}
+    
+    def analyze_paragraph_distribution_com(*args, **kwargs):
+        return {"error": "COM functionality not implemented"}
+    
+    def is_com_available():
+        return False
+    
     from ..utils.com_utils import get_active_document
 else:
     # 非Windows平台的占位符

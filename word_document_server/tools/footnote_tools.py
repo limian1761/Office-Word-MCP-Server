@@ -1,10 +1,14 @@
 """
-Footnote and endnote tools for Word Document Server using COM.
+Footnote and endnote tools for Word Document Server.
 """
 import os
 from typing import Optional
-from word_document_server.utils import com_utils
+from mcp.server.fastmcp.server import Context
+from word_document_server.app import app
+from word_document_server.utils.app_context import AppContext
+
 from word_document_server.utils.file_utils import check_file_writeable, ensure_docx_extension
+from word_document_server.utils.com_utils import handle_com_error
 
 # Word numbering style constants
 wdNoteNumberStyleArabic = 0
@@ -14,14 +18,15 @@ wdNoteNumberStyleUppercaseLetter = 4
 wdNoteNumberStyleLowercaseLetter = 5
 wdNoteNumberStyleSymbol = 9
 
-async def add_footnote_to_document(paragraph_index: int, footnote_text: str) -> str:
-    """Add a footnote to a specific paragraph in a Word document using COM."""
-    doc = None
-    try:
-        doc = com_utils.get_active_document()
-        if not doc:
-            return "No active document found."
+@app.tool()
+async def add_footnote_to_document(context: Context, paragraph_index: int, footnote_text: str) -> str:
+    """Add a footnote to a specific paragraph in a Word document."""
+    app_context: AppContext = context.request_context.lifespan_context
+    doc = app_context.get_active_document()
+    if doc is None:
+        return "No active document found."
 
+    try:
         if paragraph_index < 0 or paragraph_index >= doc.Paragraphs.Count:
             return f"Invalid paragraph index. Document has {doc.Paragraphs.Count} paragraphs."
 
@@ -36,19 +41,17 @@ async def add_footnote_to_document(paragraph_index: int, footnote_text: str) -> 
         doc.Save()
         return f"Footnote added to paragraph {paragraph_index}"
     except Exception as e:
-        return f"Failed to add footnote: {str(e)}"
-    finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        return handle_com_error(e)
 
-async def add_endnote_to_document(paragraph_index: int, endnote_text: str) -> str:
-    """Add an endnote to a specific paragraph in a Word document using COM."""
-    doc = None
+@app.tool()
+async def add_endnote_to_document(context: Context, paragraph_index: int, endnote_text: str) -> str:
+    """Add an endnote to a specific paragraph in a Word document."""
+    app_context: AppContext = context.request_context.lifespan_context
+    doc = app_context.get_active_document()
+    if doc is None:
+        return "No active document found."
+
     try:
-        doc = com_utils.get_active_document()
-        if not doc:
-            return "No active document found."
-
         if paragraph_index < 0 or paragraph_index >= doc.Paragraphs.Count:
             return f"Invalid paragraph index. Document has {doc.Paragraphs.Count} paragraphs."
 
@@ -60,19 +63,17 @@ async def add_endnote_to_document(paragraph_index: int, endnote_text: str) -> st
         doc.Save()
         return f"Endnote added to paragraph {paragraph_index}"
     except Exception as e:
-        return f"Failed to add endnote: {str(e)}"
-    finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        return handle_com_error(e)
 
-async def convert_footnotes_to_endnotes_in_document() -> str:
-    """Convert all footnotes to endnotes in a Word document using COM."""
-    doc = None
+@app.tool()
+async def convert_footnotes_to_endnotes(context: Context) -> str:
+    """Convert all footnotes to endnotes in a Word document."""
+    app_context: AppContext = context.request_context.lifespan_context
+    doc = app_context.get_active_document()
+    if doc is None:
+        return "No active document found."
+
     try:
-        doc = com_utils.get_active_document()
-        if not doc:
-            return "No active document found."
-
         if doc.Footnotes.Count == 0:
             return "No footnotes found to convert."
             
@@ -80,21 +81,19 @@ async def convert_footnotes_to_endnotes_in_document() -> str:
         doc.Save()
         return f"Converted {doc.Endnotes.Count} footnotes to endnotes"
     except Exception as e:
-        return f"Failed to convert footnotes to endnotes: {str(e)}"
-    finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        return handle_com_error(e)
 
-async def customize_footnote_style(numbering_format: str = "1, 2, 3", 
+@app.tool()
+async def customize_footnote_style(context: Context, numbering_format: str = "1, 2, 3", 
                                   start_number: int = 1, font_name: Optional[str] = None,
                                   font_size: Optional[int] = None) -> str:
-    """Customize footnote numbering and formatting in a Word document using COM."""
-    doc = None
-    try:
-        doc = com_utils.get_active_document()
-        if not doc:
-            return "No active document found."
+    """Customize footnote numbering and formatting in a Word document."""
+    app_context: AppContext = context.request_context.lifespan_context
+    doc = app_context.get_active_document()
+    if doc is None:
+        return "No active document found."
 
+    try:
         fn_options = doc.FootnoteOptions
         
         format_map = {
@@ -123,7 +122,4 @@ async def customize_footnote_style(numbering_format: str = "1, 2, 3",
         doc.Save()
         return f"Footnote style and numbering customized"
     except Exception as e:
-        return f"Failed to customize footnote style: {str(e)}"
-    finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        return handle_com_error(e)

@@ -19,7 +19,24 @@ def check_prerequisites():
     
     # Check if uv/uvx is installed
     uv_installed = shutil.which("uv") is not None
+    # Also check if uv can be run via python -m uv
+    if not uv_installed:
+        try:
+            subprocess.run([sys.executable, "-m", "uv", "--version"], 
+                          capture_output=True, check=True)
+            uv_installed = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            uv_installed = False
+    
     uvx_installed = shutil.which("uvx") is not None
+    # Also check if uvx can be run via python -m uv
+    if not uvx_installed:
+        try:
+            subprocess.run([sys.executable, "-m", "uv", "tool", "dir"], 
+                          capture_output=True, check=True)
+            uvx_installed = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            uvx_installed = False
     
     # Check if word-document-server is already installed via pip
     try:
@@ -145,28 +162,21 @@ def setup_venv():
     # Install or update dependencies
     print("\nInstalling requirements...")
     try:
-        # Install FastMCP package (standalone library)
-        subprocess.run([pip_path, 'install', 'fastmcp'], check=True)
-        # Install python-docx package
-        subprocess.run([pip_path, 'install', 'python-docx'], check=True)
-        
-        # Also install dependencies from requirements.txt if it exists
+        # Use uv to install dependencies from requirements.txt
         requirements_path = os.path.join(base_path, 'requirements.txt')
         if os.path.exists(requirements_path):
-            subprocess.run([pip_path, 'install', '-r', requirements_path], check=True)
+            subprocess.run([sys.executable, '-m', 'uv', 'pip', 'install', '-r', requirements_path], check=True)
+        else:
+            # Install MCP package (standalone library) and other dependencies
+            subprocess.run([sys.executable, '-m', 'uv', 'pip', 'install', 'mcp[cli]', 'python-docx', 'msoffcrypto-tool', 'docx2pdf', 'httpx', 'cryptography'], check=True)
         
-        print("Requirements installed successfully!")
+        print("Requirements installed successfully with uv!")
     except subprocess.CalledProcessError as e:
         print(f"Error installing requirements: {e}")
         sys.exit(1)
     except FileNotFoundError:
-        print(f"Error: Could not execute {pip_path}")
-        print("Try activating the virtual environment manually and installing requirements:")
-        if is_windows:
-            print(f".venv\\Scripts\\activate")
-        else:
-            print("source .venv/bin/activate")
-        print("pip install mcp[cli] python-docx")
+        print("Error: Could not execute uv")
+        print("Please install uv (https://docs.astral.sh/uv/) and try again.")
         sys.exit(1)
     
     return python_path
@@ -262,8 +272,8 @@ def generate_mcp_config_uvx(transport_config):
     config = {
         "mcpServers": {
             "word-document-server": {
-                "command": "uvx",
-                "args": ["--from", "word-mcp-server", "word_mcp_server"],
+                "command": sys.executable,
+                "args": ["-m", "uv", "tool", "run", "--from", "word-mcp-server", "word_mcp_server"],
                 "env": env
             }
         }
@@ -400,7 +410,7 @@ def create_package_structure():
     requirements_path = os.path.join(base_path, 'requirements.txt')
     if not os.path.exists(requirements_path):
         with open(requirements_path, 'w') as f:
-            f.write('fastmcp\npython-docx\nmsoffcrypto-tool\ndocx2pdf\nhttpx\ncryptography\n')
+            f.write('mcp[cli]\npython-docx>=1.1.2\nmsoffcrypto-tool>=5.4.2\ndocx2pdf>=0.1.8\n')
         print(f"Created requirements.txt at: {requirements_path}")
     
     # Create .env.example file

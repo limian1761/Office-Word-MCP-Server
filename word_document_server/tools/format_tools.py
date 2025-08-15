@@ -1,10 +1,13 @@
 """
-Formatting tools for Word Document Server using COM.
+Formatting tools for Word Document Server.
 """
 import os
 from typing import List, Optional
-from word_document_server.utils import com_utils
-from word_document_server.utils.file_utils import check_file_writeable, ensure_docx_extension
+from mcp.server.fastmcp.server import Context
+
+from word_document_server.app import app
+from word_document_server.utils.app_context import AppContext
+from word_document_server.utils.com_utils import handle_com_error
 
 # Word color constants
 wdColorBlack = 0
@@ -20,32 +23,31 @@ def hex_to_bgr(hex_color):
     b = int(hex_color[4:6], 16)
     return (b << 16) | (g << 8) | r
 
-async def format_text(paragraph_index: int, start_pos: int, end_pos: int, 
-                     bold: Optional[bool] = None, italic: Optional[bool] = None, 
-                     underline: Optional[bool] = None, color: Optional[str] = None,
-                     font_size: Optional[int] = None, font_name: Optional[str] = None) -> str:
-    """Format a specific range of text within a paragraph using COM."""
+@app.tool()
+async def format_text(paragraph_index: int, start_pos: int, end_pos: int,
+                                 bold: Optional[bool] = None, italic: Optional[bool] = None,
+                                 underline: Optional[bool] = None, color: Optional[str] = None, font_size: Optional[int] = None,
+                                 font_name: Optional[str] = None, context: Context = None) -> str:
+    """Format a specific range of text within a paragraph."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
         if paragraph_index < 0 or paragraph_index >= doc.Paragraphs.Count:
             return f"Invalid paragraph index. Document has {doc.Paragraphs.Count} paragraphs."
 
-        # COM is 1-based for paragraphs
-        p = doc.Paragraphs(paragraph_index + 1)
-        # Character positions are 1-based in COM Range
-        text_len = len(p.Range.Text.rstrip('\r\n'))
-        if start_pos < 0 or end_pos > text_len or start_pos >= end_pos:
-            return f"Invalid text positions. Paragraph has {text_len} characters."
+        para = doc.Paragraphs(paragraph_index + 1)
+        para_range = para.Range
+        
+        if start_pos < 0 or end_pos > len(para_range.Text) or start_pos >= end_pos:
+            return "Invalid text range specified."
 
-        # Create a range for the target text
-        # The paragraph range includes the trailing paragraph mark, so we adjust
-        start_char = p.Range.Start + start_pos
-        end_char = p.Range.Start + end_pos
-        text_range = doc.Range(Start=start_char, End=end_char)
+        # Create a new range for the specified text
+        text_range = doc.Range(Start=para_range.Start + start_pos, End=para_range.Start + end_pos)
         
         font = text_range.Font
         if bold is not None:
@@ -65,103 +67,135 @@ async def format_text(paragraph_index: int, start_pos: int, end_pos: int,
             font.Name = font_name
             
         doc.Save()
-        return f"Text formatted successfully in paragraph {paragraph_index}."
+        return f"Text from position {start_pos} to {end_pos} in paragraph {paragraph_index} formatted successfully."
     except Exception as e:
-        return f"Failed to format text: {str(e)}"
+        return handle_com_error(e)
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def create_custom_style(style_name: str, 
-                             bold: Optional[bool] = None, italic: Optional[bool] = None,
-                             font_size: Optional[int] = None, font_name: Optional[str] = None,
-                             color: Optional[str] = None, base_style: Optional[str] = None) -> str:
-    """Create a custom style in the document using COM."""
+@app.tool()
+async def create_custom_style(style_name: str, bold: Optional[bool] = None, italic: Optional[bool] = None,
+                                 font_size: Optional[int] = None, font_name: Optional[str] = None,
+                                 color: Optional[str] = None, base_style: Optional[str] = None, context: Context = None) -> str:
+    """Create a custom style in the document."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
-        # wdStyleTypeParagraph = 1
-        style = doc.Styles.Add(Name=style_name, Type=1)
-        font = style.Font
-        if bold is not None:
-            font.Bold = bold
-        if italic is not None:
-            font.Italic = italic
-        if font_size:
-            font.Size = font_size
-        if font_name:
-            font.Name = font_name
-        if color:
-            try:
-                font.Color = hex_to_bgr(color)
-            except Exception:
-                return f"Invalid color format: '{color}'. Use RRGGBB hex format."
-        if base_style:
-            try:
-                style.BaseStyle = base_style
-            except Exception:
-                return f"Base style '{base_style}' not found."
+        # Check if style already exists
+        try:
+            existing_style = doc.Styles(style_name)
+            if existing_style:
+                return f"Style '{style_name}' already exists."
+        except Exception:
+            # Style doesn't exist, which is what we want
+            pass
 
-        doc.Save()
-        return f"Style '{style_name}' created successfully."
+        # Create new style based on Normal style or specified base style
+        base_style_name = base_style if base_style else "Normal"
+        try:
+            new_style = doc.Styles.Add(Name=style_name, Type=1) # 1 = Paragraph style
+            new_style.BaseStyle = base_style_name
+            
+            # Apply formatting
+            font = new_style.Font
+            if bold is not None:
+                font.Bold = bold
+            if italic is not None:
+                font.Italic = italic
+            if font_size:
+                font.Size = font_size
+            if font_name:
+                font.Name = font_name
+            if color:
+                try:
+                    font.Color = hex_to_bgr(color)
+                except Exception:
+                    return f"Invalid color format: '{color}'. Use RRGGBB hex format."
+                    
+            doc.Save()
+            return f"Custom style '{style_name}' created successfully."
+        except Exception as e:
+            return handle_com_error(e)
     except Exception as e:
-        return f"Failed to create style: {str(e)}"
+        return handle_com_error(e)
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def format_table(table_index: int, 
-                      has_header_row: Optional[bool] = None,
-                      border_style: Optional[str] = None,
-                      shading: Optional[List[List[str]]] = None) -> str:
-    """Format a table with borders, shading, and structure using COM."""
+@app.tool()
+async def format_table(table_index: int, has_header_row: Optional[bool] = None,
+                                 border_style: Optional[str] = None, shading: Optional[List[List[str]]] = None, context: Context = None) -> str:
+    """Format a table with borders, shading, and structure."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
-        table = doc.Tables(table_index + 1) # COM is 1-based
-        if has_header_row:
-            table.Rows(1).HeadingFormat = True
+        table = doc.Tables(table_index + 1)
         
+        # Apply header row setting
+        if has_header_row is not None:
+            table.HeaderRowCount = 1 if has_header_row else 0
+            
+        # Apply border style
         if border_style:
-            # This is a simplified mapping. COM offers much more control.
-            # wdLineStyleSingle = 1, wdLineStyleNone = 0
-            line_style = 1 if border_style != 'none' else 0
-            table.Borders.InsideLineStyle = line_style
-            table.Borders.OutsideLineStyle = line_style
-
+            # Map border styles to Word constants
+            border_map = {
+                "single": 1,      # wdLineStyleSingle
+                "double": 3,      # wdLineStyleDouble
+                "dotted": 4,      # wdLineStyleDot
+                "dashed": 5,      # wdLineStyleDash
+                "thick": 6,       # wdLineStyleThick
+            }
+            line_style = border_map.get(border_style.lower(), 1)
+            
+            # Apply to all borders
+            for border in [table.Borders(-1), table.Borders(-2), table.Borders(-3), 
+                          table.Borders(-4), table.Borders(-5), table.Borders(-6)]:
+                border.LineStyle = line_style
+                border.Visible = True
+                
+        # Apply shading if provided
         if shading:
-            for r, row_data in enumerate(shading):
-                for c, color_hex in enumerate(row_data):
-                    if r < table.Rows.Count and c < table.Columns.Count:
-                        cell = table.Cell(r + 1, c + 1)
-                        cell.Shading.BackgroundPatternColor = hex_to_bgr(color_hex)
-
+            for row_idx, row_colors in enumerate(shading):
+                if row_idx < table.Rows.Count:
+                    for col_idx, color in enumerate(row_colors):
+                        if col_idx < table.Columns.Count:
+                            cell = table.Cell(row_idx + 1, col_idx + 1)
+                            try:
+                                cell.Shading.BackgroundPatternColor = hex_to_bgr(color)
+                            except Exception:
+                                return f"Invalid color format: '{color}'. Use RRGGBB hex format."
+            
         doc.Save()
-        return f"Table at index {table_index} formatted successfully."
+        return f"Table {table_index} formatted successfully."
     except Exception as e:
-        return f"Failed to format table: {str(e)}"
+        return handle_com_error(e)
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-# The remaining table formatting functions are complex and will be implemented
-# based on user needs. For now, they return a "not implemented" message.
-
-async def set_table_cell_shading(table_index: int, row_index: int, 
-                                col_index: int, fill_color: str, pattern: str = "clear") -> str:
-    """Apply shading/filling to a specific table cell using COM."""
+@app.tool()
+async def set_table_cell_shading(table_index: int, row_index: int, col_index: int,
+                                 fill_color: str, pattern: str = "clear", context: Context = None) -> str:
+    """Apply shading/filling to a specific table cell."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -175,60 +209,70 @@ async def set_table_cell_shading(table_index: int, row_index: int,
             return "Invalid row or column index."
 
         cell = table.Cell(row_index + 1, col_index + 1)
+        
+        # Pattern constants
+        # wdTextureNone = -1, wdTextureSolid = 1000
+        pattern_map = {
+            "clear": -1,
+            "solid": 1000,
+        }
+        
         try:
             cell.Shading.BackgroundPatternColor = hex_to_bgr(fill_color)
+            cell.Shading.Texture = pattern_map.get(pattern.lower(), -1)
         except Exception:
             return f"Invalid color format: '{fill_color}'. Use RRGGBB hex format."
-        
+            
         doc.Save()
-        return f"Cell ({row_index}, {col_index}) shading set successfully."
+        return f"Cell ({row_index}, {col_index}) shading applied successfully."
     except Exception as e:
-        return f"Failed to set cell shading: {str(e)}"
+        return handle_com_error(e)
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def apply_table_alternating_rows(table_index: int, 
-                                     color1: str = "FFFFFF", color2: str = "F2F2F2") -> str:
-    """Apply alternating row colors to a table for better readability using COM."""
+@app.tool()
+async def apply_table_alternating_rows(table_index: int, color1: str = "FFFFFF", 
+                                 color2: str = "F2F2F2", context: Context = None) -> str:
+    """Apply alternating row colors to a table for better readability."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
-    doc = None
-    try:
-        doc = com_utils.open_document(filename)
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
         table = doc.Tables(table_index + 1)
         
-        try:
-            bgr_color1 = hex_to_bgr(color1)
-            bgr_color2 = hex_to_bgr(color2)
-        except Exception:
-            return f"Invalid color format. Use RRGGBB hex format."
-
-        for i, row in enumerate(table.Rows):
-            color = bgr_color1 if (i % 2) == 0 else bgr_color2
-            row.Shading.BackgroundPatternColor = color
-            
+        for i in range(table.Rows.Count):
+            row = table.Rows(i + 1)
+            color = color1 if i % 2 == 0 else color2
+            try:
+                row.Shading.BackgroundPatternColor = hex_to_bgr(color)
+            except Exception:
+                return f"Invalid color format: '{color}'. Use RRGGBB hex format."
+                
         doc.Save()
         return f"Alternating row colors applied to table {table_index}."
     except Exception as e:
-        return f"Failed to apply alternating row colors: {str(e)}"
+        return handle_com_error(e)
     finally:
-        if doc:
-            doc.Close(SaveChanges=0)
+        # No need to close the active document
+        pass
 
-async def highlight_table_header(table_index: int, 
-                               header_color: str = "4472C4", text_color: str = "FFFFFF") -> str:
-    """Apply special highlighting to table header row using COM."""
+@app.tool()
+async def highlight_table_header(table_index: int, header_color: str = "4472C4", 
+                                 text_color: str = "FFFFFF", context: Context = None) -> str:
+    """Apply special highlighting to table header row."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -236,10 +280,12 @@ async def highlight_table_header(table_index: int,
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
         table = doc.Tables(table_index + 1)
+        
         if table.Rows.Count == 0:
-            return "Cannot highlight header of an empty table."
-
+            return "Table has no rows."
+            
         header_row = table.Rows(1)
+        
         try:
             header_row.Shading.BackgroundPatternColor = hex_to_bgr(header_color)
             header_row.Range.Font.Color = hex_to_bgr(text_color)
@@ -247,66 +293,67 @@ async def highlight_table_header(table_index: int,
             return f"Invalid color format. Use RRGGBB hex format."
             
         doc.Save()
-        return f"Table {table_index} header highlighted."
+        return f"Header row of table {table_index} highlighted successfully."
     except Exception as e:
-        return f"Failed to highlight table header: {str(e)}"
+        return handle_com_error(e)
     finally:
         # No need to close the active document
         pass
 
-async def merge_table_cells(table_index: int, start_row: int, start_col: int, 
-                          end_row: int, end_col: int) -> str:
-    """Merge cells in a rectangular area of a table using COM."""
+@app.tool()
+async def merge_table_cells(table_index: int, start_row: int, start_col: int,
+                                 end_row: int, end_col: int, context: Context = None) -> str:
+    """Merge cells in a rectangular area of a table."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
         if table_index < 0 or table_index >= doc.Tables.Count:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
-        table = doc.Tables(table_index + 1) # COM is 1-based
+        table = doc.Tables(table_index + 1)
 
         # Validate indices
-        if start_row < 0 or start_row >= table.Rows.Count or 
-           end_row < 0 or end_row >= table.Rows.Count or 
-           start_col < 0 or start_col >= table.Columns.Count or 
-           end_col < 0 or end_col >= table.Columns.Count:
-            return "Invalid row or column index."
-
+        if (start_row < 0 or start_row >= table.Rows.Count or
+            end_row < 0 or end_row >= table.Rows.Count or
+            start_col < 0 or start_col >= table.Columns.Count or
+            end_col < 0 or end_col >= table.Columns.Count):
+            return "Invalid cell range specified."
+            
         if start_row > end_row or start_col > end_col:
-            return "Start indices must be less than or equal to end indices."
+            return "Start position must be before end position."
 
+        # Get the range of cells to merge
         start_cell = table.Cell(start_row + 1, start_col + 1)
         end_cell = table.Cell(end_row + 1, end_col + 1)
         
-        start_cell.Merge(end_cell)
+        # Create a range spanning these cells
+        merge_range = doc.Range(Start=start_cell.Range.Start, End=end_cell.Range.End)
+        
+        # Perform the merge
+        merge_range.Cells.Merge()
         
         doc.Save()
-        return f"Cells from ({start_row}, {start_col}) to ({end_row}, {end_col}) merged successfully."
+        return f"Cells merged successfully in table {table_index}."
     except Exception as e:
-        return f"Failed to merge cells: {str(e)}"
+        return handle_com_error(e)
     finally:
         # No need to close the active document
         pass
 
-async def merge_table_cells_horizontal(table_index: int, row_index: int, 
-                                     start_col: int, end_col: int) -> str:
-    """Merge cells horizontally in a single row using COM."""
-    return await merge_table_cells(table_index, row_index, start_col, row_index, end_col)
-
-async def merge_table_cells_vertical(table_index: int, col_index: int, 
-                                   start_row: int, end_row: int) -> str:
-    """Merge cells vertically in a single column using COM."""
-    return await merge_table_cells(table_index, start_row, col_index, end_row, col_index)
-
-async def set_table_cell_alignment(table_index: int, row_index: int, col_index: int,
-                                 horizontal: str = "left", vertical: str = "top") -> str:
-    """Set text alignment for a specific table cell using COM."""
+@app.tool()
+async def merge_table_cells_horizontal(table_index: int, row_index: int,
+                                 start_col: int, end_col: int, context: Context = None) -> str:
+    """Merge cells horizontally in a single row."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -315,35 +362,189 @@ async def set_table_cell_alignment(table_index: int, row_index: int, col_index: 
 
         table = doc.Tables(table_index + 1)
 
-        if row_index < 0 or row_index >= table.Rows.Count or \
-           col_index < 0 or col_index >= table.Columns.Count:
-            return "Invalid row or column index."
+        # Validate indices
+        if (row_index < 0 or row_index >= table.Rows.Count or
+            start_col < 0 or start_col >= table.Columns.Count or
+            end_col < 0 or end_col >= table.Columns.Count):
+            return "Invalid cell range specified."
+            
+        if start_col > end_col:
+            return "Start column must be before end column."
+
+        # Get the range of cells to merge
+        start_cell = table.Cell(row_index + 1, start_col + 1)
+        end_cell = table.Cell(row_index + 1, end_col + 1)
+        
+        # Create a range spanning these cells
+        merge_range = doc.Range(Start=start_cell.Range.Start, End=end_cell.Range.End)
+        
+        # Perform the merge
+        merge_range.Cells.Merge()
+        
+        doc.Save()
+        return f"Cells merged horizontally in row {row_index} of table {table_index}."
+    except Exception as e:
+        return handle_com_error(e)
+    finally:
+        # No need to close the active document
+        pass
+
+@app.tool()
+async def merge_table_cells_vertical(table_index: int, col_index: int,
+                                 start_row: int, end_row: int, context: Context = None) -> str:
+    """Merge cells vertically in a single column."""
+    doc = None
+    try:
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
+        if not doc:
+            return "No active document found."
+
+        if table_index < 0 or table_index >= doc.Tables.Count:
+            return f"Invalid table index. Document has {doc.Tables.Count} tables."
+
+        table = doc.Tables(table_index + 1)
+
+        # Validate indices
+        if (col_index < 0 or col_index >= table.Columns.Count or
+            start_row < 0 or start_row >= table.Rows.Count or
+            end_row < 0 or end_row >= table.Rows.Count):
+            return "Invalid cell range specified."
+            
+        if start_row > end_row:
+            return "Start row must be before end row."
+
+        # Get the range of cells to merge
+        start_cell = table.Cell(start_row + 1, col_index + 1)
+        end_cell = table.Cell(end_row + 1, col_index + 1)
+        
+        # Create a range spanning these cells
+        merge_range = doc.Range(Start=start_cell.Range.Start, End=end_cell.Range.End)
+        
+        # Perform the merge
+        merge_range.Cells.Merge()
+        
+        doc.Save()
+        return f"Cells merged vertically in column {col_index} of table {table_index}."
+    except Exception as e:
+        return handle_com_error(e)
+    finally:
+        # No need to close the active document
+        pass
+
+@app.tool()
+async def set_table_cell_alignment(table_index: int, row_index: int, col_index: int,
+                                 horizontal: str = "left", vertical: str = "top", context: Context = None) -> str:
+    """Set text alignment for a specific table cell."""
+    doc = None
+    try:
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
+        if not doc:
+            return "No active document found."
+
+        if table_index < 0 or table_index >= doc.Tables.Count:
+            return f"Invalid table index. Document has {doc.Tables.Count} tables."
+
+        table = doc.Tables(table_index + 1)
+
+        # Validate indices
+        if (row_index < 0 or row_index >= table.Rows.Count or
+            col_index < 0 or col_index >= table.Columns.Count):
+            return "Invalid cell index specified."
 
         cell = table.Cell(row_index + 1, col_index + 1)
-
-        # Horizontal alignment constants
-        h_align_map = {"left": 0, "center": 1, "right": 2, "justify": 3}
-        # Vertical alignment constants
-        v_align_map = {"top": 0, "center": 1, "bottom": 3}
-
-        cell.Range.ParagraphFormat.Alignment = h_align_map.get(horizontal.lower(), 0)
-        cell.VerticalAlignment = v_align_map.get(vertical.lower(), 0)
         
+        # Map horizontal alignment
+        horizontal_map = {
+            "left": 0,      # wdCellAlignLeft
+            "center": 1,    # wdCellAlignCenter
+            "right": 2      # wdCellAlignRight
+        }
+        
+        # Map vertical alignment
+        vertical_map = {
+            "top": 1,       # wdCellAlignVerticalTop
+            "center": 3,    # wdCellAlignVerticalCenter
+            "bottom": 5     # wdCellAlignVerticalBottom
+        }
+        
+        if horizontal.lower() in horizontal_map:
+            cell.VerticalAlignment = horizontal_map[horizontal.lower()]
+        else:
+            return f"Invalid horizontal alignment: {horizontal}"
+            
+        if vertical.lower() in vertical_map:
+            cell.VerticalAlignment = vertical_map[vertical.lower()]
+        else:
+            return f"Invalid vertical alignment: {vertical}"
+            
         doc.Save()
-        return f"Cell ({row_index}, {col_index}) alignment set to {horizontal}/{vertical}."
+        return f"Alignment set for cell ({row_index}, {col_index}) in table {table_index}."
     except Exception as e:
-        return f"Failed to set cell alignment: {str(e)}"
+        return handle_com_error(e)
     finally:
         # No need to close the active document
         pass
 
-
-async def set_table_alignment_all(table_index: int, 
-                                horizontal: str = "left", vertical: str = "top") -> str:
-    """Set text alignment for all cells in a table using COM."""
+@app.tool()
+async def set_table_alignment_all(table_index: int, horizontal: str = "left",
+                                 vertical: str = "top", context: Context = None) -> str:
+    """Set text alignment for all cells in a table."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
+        if not doc:
+            return "No active document found."
+
+        if table_index < 0 or table_index >= doc.Tables.Count:
+            return f"Invalid table index. Document has {doc.Tables.Count} tables."
+
+        table = doc.Tables(table_index + 1)
+        
+        # Map horizontal alignment
+        horizontal_map = {
+            "left": 0,      # wdCellAlignLeft
+            "center": 1,    # wdCellAlignCenter
+            "right": 2      # wdCellAlignRight
+        }
+        
+        # Map vertical alignment
+        vertical_map = {
+            "top": 1,       # wdCellAlignVerticalTop
+            "center": 3,    # wdCellAlignVerticalCenter
+            "bottom": 5     # wdCellAlignVerticalBottom
+        }
+        
+        # Apply alignment to all cells
+        for row in table.Rows:
+            for cell in row.Cells:
+                if horizontal.lower() in horizontal_map:
+                    cell.VerticalAlignment = horizontal_map[horizontal.lower()]
+                if vertical.lower() in vertical_map:
+                    cell.VerticalAlignment = vertical_map[vertical.lower()]
+                    
+        doc.Save()
+        return f"Alignment set for all cells in table {table_index}."
+    except Exception as e:
+        return handle_com_error(e)
+    finally:
+        # No need to close the active document
+        pass
+
+@app.tool()
+async def set_table_column_width(table_index: int, col_index: int, width: float,
+                                 width_type: str = "points", context: Context = None) -> str:
+    """Set the width of a specific table column."""
+    doc = None
+    try:
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -352,84 +553,44 @@ async def set_table_alignment_all(table_index: int,
 
         table = doc.Tables(table_index + 1)
 
-        # Horizontal alignment constants
-        h_align_map = {"left": 0, "center": 1, "right": 2, "justify": 3}
-        # Vertical alignment constants
-        v_align_map = {"top": 0, "center": 1, "bottom": 3}
-
-        h_align = h_align_map.get(horizontal.lower(), 0)
-        v_align = v_align_map.get(vertical.lower(), 0)
-
-        for r in range(1, table.Rows.Count + 1):
-            for c in range(1, table.Columns.Count + 1):
-                cell = table.Cell(r, c)
-                cell.Range.ParagraphFormat.Alignment = h_align
-                cell.VerticalAlignment = v_align
-        
-        doc.Save()
-        return f"All cells in table {table_index} alignment set to {horizontal}/{vertical}."
-    except Exception as e:
-        return f"Failed to set table alignment: {str(e)}"
-    finally:
-        # No need to close the active document
-        pass
-
-async def set_table_column_width(table_index: int, col_index: int, 
-                                width: float, width_type: str = "points") -> str:
-    """Set the width of a specific table column using COM."""
-    doc = None
-    try:
-        doc = com_utils.get_active_document()
-        if not doc:
-            return "No active document found."
-    if not os.path.exists(filename):
-        return f"Document {filename} does not exist"
-
-    is_writeable, error_message = check_file_writeable(filename)
-    if not is_writeable:
-        return f"Cannot modify document: {error_message}."
-
-    doc = None
-    try:
-        doc = com_utils.open_document(filename)
-        if table_index < 0 or table_index >= doc.Tables.Count:
-            return f"Invalid table index. Document has {doc.Tables.Count} tables."
-
-        table = doc.Tables(table_index + 1)
-
+        # Validate column index
         if col_index < 0 or col_index >= table.Columns.Count:
-            return "Invalid column index."
+            return "Invalid column index specified."
 
+        # Map width type to Word constants
+        width_type_map = {
+            "points": 0,        # wdPreferredWidthPoints
+            "pct": 1,           # wdPreferredWidthPercent
+            "auto": 2           # wdPreferredWidthAuto
+        }
+        
+        if width_type.lower() not in width_type_map:
+            return f"Invalid width type: {width_type}"
+            
+        # Set the column width
         column = table.Columns(col_index + 1)
-        
-        # Preferred width type constants
-        # wdPreferredWidthPoints = 2, wdPreferredWidthPercent = 3
-        if width_type.lower() == "points":
-            column.PreferredWidthType = 2
+        column.Width = width if width_type.lower() == "points" else 0
+        column.PreferredWidthType = width_type_map[width_type.lower()]
+        if width_type.lower() == "pct":
             column.PreferredWidth = width
-        elif width_type.lower() == "percent":
-            column.PreferredWidthType = 3
-            column.PreferredWidth = width
-        elif width_type.lower() == "inches":
-            column.PreferredWidthType = 2
-            column.PreferredWidth = width * 72 # Convert inches to points
-        else:
-            return f"Unsupported width type: {width_type}. Use 'points', 'percent', or 'inches'."
-
+            
         doc.Save()
-        return f"Column {col_index} width set to {width} {width_type}."
+        return f"Width set for column {col_index} in table {table_index}."
     except Exception as e:
-        return f"Failed to set column width: {str(e)}"
+        return handle_com_error(e)
     finally:
         # No need to close the active document
         pass
 
-async def set_table_column_widths(table_index: int, widths: list, 
-                                 width_type: str = "points") -> str:
-    """Set the widths of multiple table columns using COM."""
+@app.tool()
+async def set_table_column_widths(table_index: int, widths: list[float],
+                                 width_type: str = "points", context: Context = None) -> str:
+    """Set the widths of multiple table columns."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -438,25 +599,48 @@ async def set_table_column_widths(table_index: int, widths: list,
 
         table = doc.Tables(table_index + 1)
 
+        # Validate widths list
+        if not isinstance(widths, list) or len(widths) == 0:
+            return "Widths must be a non-empty list."
+            
         if len(widths) > table.Columns.Count:
-            return f"Widths list has more items ({len(widths)}) than table has columns ({table.Columns.Count})."
+            return f"Too many widths specified. Table has {table.Columns.Count} columns."
 
+        # Map width type to Word constants
+        width_type_map = {
+            "points": 0,        # wdPreferredWidthPoints
+            "pct": 1,           # wdPreferredWidthPercent
+            "auto": 2           # wdPreferredWidthAuto
+        }
+        
+        if width_type.lower() not in width_type_map:
+            return f"Invalid width type: {width_type}"
+
+        # Set widths for each column
         for i, width in enumerate(widths):
-            await set_table_column_width(table_index, i, width, width_type)
-        
-        return f"Successfully set widths for {len(widths)} columns."
+            column = table.Columns(i + 1)
+            column.Width = width if width_type.lower() == "points" else 0
+            column.PreferredWidthType = width_type_map[width_type.lower()]
+            if width_type.lower() == "pct":
+                column.PreferredWidth = width
+                
+        doc.Save()
+        return f"Widths set for {len(widths)} columns in table {table_index}."
     except Exception as e:
-        return f"Failed to set column widths: {str(e)}"
+        return handle_com_error(e)
     finally:
         # No need to close the active document
         pass
 
-async def set_table_width(table_index: int, width: float, 
-                         width_type: str = "points") -> str:
-    """Set the overall width of a table using COM."""
+@app.tool()
+async def set_table_width(table_index: int, width: float,
+                                 width_type: str = "points", context: Context = None) -> str:
+    """Set the overall width of a table."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -465,31 +649,39 @@ async def set_table_width(table_index: int, width: float,
 
         table = doc.Tables(table_index + 1)
         
+        # Map width type to Word constants
+        width_type_map = {
+            "points": 0,        # wdPreferredWidthPoints
+            "pct": 1,           # wdPreferredWidthPercent
+            "auto": 2           # wdPreferredWidthAuto
+        }
+        
+        if width_type.lower() not in width_type_map:
+            return f"Invalid width type: {width_type}"
+            
+        # Set the table width
+        table.PreferredWidthType = width_type_map[width_type.lower()]
         if width_type.lower() == "points":
-            table.PreferredWidthType = 2
             table.PreferredWidth = width
-        elif width_type.lower() == "percent":
-            table.PreferredWidthType = 3
+        elif width_type.lower() == "pct":
             table.PreferredWidth = width
-        elif width_type.lower() == "inches":
-            table.PreferredWidthType = 2
-            table.PreferredWidth = width * 72
-        else:
-            return f"Unsupported width type: {width_type}. Use 'points', 'percent', or 'inches'."
-
+            
         doc.Save()
-        return f"Table {table_index} width set to {width} {width_type}."
+        return f"Width set for table {table_index}."
     except Exception as e:
-        return f"Failed to set table width: {str(e)}"
+        return handle_com_error(e)
     finally:
         # No need to close the active document
         pass
 
-async def auto_fit_table_columns(table_index: int) -> str:
-    """Set table columns to auto-fit based on content using COM."""
+@app.tool()
+async def auto_fit_table_columns(table_index: int, context: Context = None) -> str:
+    """Set table columns to auto-fit based on content."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -497,24 +689,30 @@ async def auto_fit_table_columns(table_index: int) -> str:
             return f"Invalid table index. Document has {doc.Tables.Count} tables."
 
         table = doc.Tables(table_index + 1)
-        table.AutoFitBehavior(1) # wdAutoFitContent
+        
+        # Auto fit columns based on content
+        table.AutoFitBehavior(1)  # wdAutoFitContent
+        table.Columns.AutoFit()
         
         doc.Save()
-        return f"Table {table_index} columns set to auto-fit."
+        return f"Columns auto-fitted for table {table_index}."
     except Exception as e:
-        return f"Failed to auto-fit table columns: {str(e)}"
+        return handle_com_error(e)
     finally:
         # No need to close the active document
         pass
 
+@app.tool()
 async def format_table_cell_text(table_index: int, row_index: int, col_index: int,
                                  text_content: Optional[str] = None, bold: Optional[bool] = None, italic: Optional[bool] = None,
                                  underline: Optional[bool] = None, color: Optional[str] = None, font_size: Optional[int] = None,
-                                 font_name: Optional[str] = None) -> str:
-    """Format text within a specific table cell using COM."""
+                                 font_name: Optional[str] = None, context: Context = None) -> str:
+    """Format text within a specific table cell."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -552,18 +750,21 @@ async def format_table_cell_text(table_index: int, row_index: int, col_index: in
         doc.Save()
         return f"Cell ({row_index}, {col_index}) text formatted successfully."
     except Exception as e:
-        return f"Failed to format cell text: {str(e)}"
+        return handle_com_error(e)
     finally:
         # No need to close the active document
         pass
 
+@app.tool()
 async def set_table_cell_padding(table_index: int, row_index: int, col_index: int,
                                  top: Optional[float] = None, bottom: Optional[float] = None, left: Optional[float] = None, 
-                                 right: Optional[float] = None, unit: str = "points") -> str:
-    """Set padding/margins for a specific table cell using COM."""
+                                 right: Optional[float] = None, unit: str = "points", context: Context = None) -> str:
+    """Set padding/margins for a specific table cell."""
     doc = None
     try:
-        doc = com_utils.get_active_document()
+        # 从Context获取活动文档
+        app_context = context.request_context.lifespan_context.get(AppContext)
+        doc = app_context.get_active_document()
         if not doc:
             return "No active document found."
 
@@ -594,7 +795,9 @@ async def set_table_cell_padding(table_index: int, row_index: int, col_index: in
         doc.Save()
         return f"Cell ({row_index}, {col_index}) padding set successfully."
     except Exception as e:
-        return f"Failed to set cell padding: {str(e)}"
+        return handle_com_error(e)
     finally:
+        # No need to close the active document
+        pass
         if doc:
             doc.Close(SaveChanges=0)

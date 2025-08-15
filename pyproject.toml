@@ -19,7 +19,7 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
     "python-docx>=1.1.2",
-    "fastmcp>=2.8.1",
+    "mcp[cli]",
     "msoffcrypto-tool>=5.4.2",
     "docx2pdf>=0.1.8",
 ]
@@ -31,9 +31,44 @@ dependencies = [
 [tool.hatch.build.targets.wheel]
 only-include = [
     "word_document_server",
-    "office_word_mcp_server",
 ]
 sources = ["."]
 
 [project.scripts]
 word_mcp_server = "word_document_server.main:run_server"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "black>=23.0",
+    "isort>=5.0",
+    "mypy>=1.0",
+]
+
+test = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+]
+
+[tool.uv]
+package = true
+
+dev-dependencies = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "black>=23.0",
+    "isort>=5.0",
+    "mypy>=1.0",
+]
+
+[tool.hatch.envs.default]
+installer = "uv"
+
+dependencies = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "black>=23.0",
+    "isort>=5.0",
+    "mypy>=1.0",
+]
