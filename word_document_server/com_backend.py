@@ -7,8 +7,12 @@ to be used as a context manager to ensure proper resource management.
 """
 import win32com.client
 import pythoncom
-from typing import Optional, List
+import re
+from typing import Optional, List, Dict, Any
 
+class WordComError(RuntimeError):
+    """Custom exception for errors during COM interactions with Word."""
+    pass
 
 class WordBackend:
     """
@@ -57,6 +61,10 @@ class WordBackend:
                 import os
                 abs_path = os.path.abspath(self.file_path)
                 self.document = self.word_app.Documents.Open(abs_path)
+            except pythoncom.com_error as e:
+                # This can happen if the file is corrupt, password-protected, or doesn't exist.
+                self.cleanup()
+                raise WordComError(f"Word COM error while opening document: {self.file_path}. Details: {e}")
             except Exception as e:
                 self.cleanup()
                 raise IOError(f"Failed to open document: {self.file_path}. Error: {e}")
@@ -264,3 +272,122 @@ class WordBackend:
         
         # Set the text for the new paragraph.
         new_para.Range.Text = text
+
+    def set_header_text(self, text: str, header_index: int = 1):
+        """
+        Sets the text for a specific header in all sections of the document.
+
+        Args:
+            text: The text to set in the header.
+            header_index: The index of the header to modify (e.g., 1 for primary header).
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+
+        # Iterate through all sections in the document
+        for i in range(1, self.document.Sections.Count + 1):
+            section = self.document.Sections(i)
+            # Access the specified header
+            header = section.Headers(header_index)
+            # Set the text of the header's range
+            header.Range.Text = text
+
+    def set_footer_text(self, text: str, footer_index: int = 1):
+        """
+        Sets the text for a specific footer in all sections of the document.
+
+        Args:
+            text: The text to set in the footer.
+            footer_index: The index of the footer to modify (e.g., 1 for primary footer).
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+
+        # Iterate through all sections in the document
+        for i in range(1, self.document.Sections.Count + 1):
+            section = self.document.Sections(i)
+            # Access the specified footer
+            footer = section.Footers(footer_index)
+            # Set the text of the footer's range
+            footer.Range.Text = text
+
+    def create_bulleted_list_relative_to(self, com_range_obj: win32com.client.CDispatch, items: List[str], position: str):
+        """
+        Creates a new bulleted list relative to a given range.
+
+        Args:
+            com_range_obj: The range to insert the list before or after.
+            items: A list of strings, where each string is a list item.
+            position: "before" or "after".
+        """
+        if position == "before":
+            insertion_point = com_range_obj.Start
+        elif position == "after":
+            insertion_point = com_range_obj.End
+        else:
+            raise ValueError("Position must be 'before' or 'after'.")
+
+        # Collapse the range to the desired insertion point
+        target_range = self.document.Range(insertion_point, insertion_point)
+        
+        # Join items and insert the text block
+        full_text = "\n".join(items) + "\n"
+        target_range.InsertAfter(full_text)
+
+        # Select the newly inserted text
+        new_text_range = self.document.Range(insertion_point, insertion_point + len(full_text))
+        
+        # Apply list format to each paragraph in the new range
+        for para in new_text_range.Paragraphs:
+            para.Range.ListFormat.ApplyBulletDefault()
+
+    def get_headings(self) -> List[Dict[str, Any]]:
+        """
+        Extracts all heading paragraphs from the document.
+
+        Returns:
+            A list of dictionaries, where each dictionary represents a heading
+            with "text" and "level" keys.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+
+        headings = []
+        for para in self.document.Paragraphs:
+            style_name = para.Style.NameLocal
+            # Check for both English and Chinese heading styles
+            if style_name.startswith("Heading") or style_name.startswith("标题"):
+                try:
+                    # Extract the level number from the end of the style name
+                    level = int(re.findall(r'\d+$', style_name)[0])
+                    text = para.Range.Text.strip()
+                    if text: # Only include headings with text
+                        headings.append({"text": text, "level": level})
+                except (IndexError, ValueError):
+                    # Not a standard heading style like "Heading 1", so we ignore it
+                    continue
+        return headings
+
+    def set_alignment_for_range(self, com_range_obj: win32com.client.CDispatch, alignment: str):
+        """
+        Set paragraph alignment for a range.
+
+        Args:
+            com_range_obj: COM Range object to format.
+            alignment: "left", "center", or "right".
+        """
+        alignment_map = {
+            "left": 0,    # wdAlignParagraphLeft
+            "center": 1,  # wdAlignParagraphCenter
+            "right": 2    # wdAlignParagraphRight
+        }
+        if alignment.lower() in alignment_map:
+            com_range_obj.ParagraphFormat.Alignment = alignment_map[alignment.lower()]
+        else:
+            raise ValueError(f"Invalid alignment value: {alignment}. Must be 'left', 'center', or 'right'.")
+
+    def accept_all_changes(self):
+        """Accepts all tracked changes in the document."""
+        if not self.document:
+            raise RuntimeError("No document open.")
+        self.document.AcceptAllRevisions()

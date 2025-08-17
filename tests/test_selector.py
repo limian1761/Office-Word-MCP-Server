@@ -165,5 +165,32 @@ class TestSelectorEngineIntegration:
             # Verify the text was replaced
             assert selection.get_text().strip() == "Replaced text."
 
+    def test_select_raises_ambiguous_locator_error(self, test_doc_path):
+        """Verify that select() raises AmbiguousLocatorError when multiple elements are found and expect_single is True."""
+        engine = SelectorEngine()
+        # This locator will find multiple paragraphs
+        locator = {"target": {"type": "paragraph"}}
+        
+        # We need to import the new exception from selector
+        from word_document_server.selector import AmbiguousLocatorError
+        
+        with pytest.raises(AmbiguousLocatorError) as excinfo:
+            with WordBackend(file_path=test_doc_path, visible=False) as backend:
+                # Call select with the new expect_single flag
+                engine.select(backend, locator, expect_single=True)
+        
+        assert "Expected 1 element but found" in str(excinfo.value)
+
+    def test_select_by_is_list_item(self, test_doc_path):
+        """Verify selecting paragraphs that are part of a list."""
+        engine = SelectorEngine()
+        locator = {"target": {"type": "paragraph", "filters": [{"is_list_item": True}]}}
+        with WordBackend(file_path=test_doc_path, visible=False) as backend:
+            selection = engine.select(backend, locator)
+            assert len(selection._elements) == 2
+            full_text = selection.get_text()
+            assert "List item 1" in full_text
+            assert "List item 2" in full_text
+
 if __name__ == "__main__":
     pytest.main(["-v", __file__])

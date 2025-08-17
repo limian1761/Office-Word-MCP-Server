@@ -2,7 +2,7 @@
 Main MCP Server application file, built with the official mcp.server.fastmcp library.
 """
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 # Correct import for the MCP server components from the local SDK
 from mcp.server.fastmcp.server import Context, FastMCP
@@ -208,13 +208,15 @@ def set_cell_value(ctx: Context, locator: Dict[str, Any], text: str) -> str:
 
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
-        selection = selector.select(backend, locator)
+        selection = selector.select(backend, locator, expect_single=True)
         selection.replace_text(text)
         backend.document.Save()
         return "Successfully set cell value."
             
     except ElementNotFoundError as e:
         return f"Error finding cell: {e}"
+    except AmbiguousLocatorError as e:
+        return f"Error: The locator found multiple cells. Please specify a unique cell. Details: {e}"
     except Exception as e:
         return f"An unexpected error occurred: {e}"
 
@@ -251,6 +253,162 @@ def create_table(ctx: Context, locator: Dict[str, Any], rows: int, cols: int) ->
         return f"Error finding anchor point: {e}"
     except Exception as e:
         return f"An unexpected error occurred: {e}"
+
+
+@mcp_server.tool()
+def set_header_text(ctx: Context, text: str) -> str:
+    """
+    Sets the text for the primary header in the active document.
+
+    Args:
+        text: The text to place in the header.
+
+    Returns:
+        A success or error message.
+    """
+    active_doc_path = ctx.get_state("active_document_path")
+    if not active_doc_path:
+        return "Error: No active document. Please use 'open_document' first."
+
+    try:
+        backend = get_backend_for_tool(ctx, active_doc_path)
+        backend.set_header_text(text)
+        backend.document.Save()
+        return "Header text set successfully."
+    except Exception as e:
+        return f"An unexpected error occurred while setting the header: {e}"
+
+
+@mcp_server.tool()
+def set_footer_text(ctx: Context, text: str) -> str:
+    """
+    Sets the text for the primary footer in the active document.
+
+    Args:
+        text: The text to place in the footer.
+
+    Returns:
+        A success or error message.
+    """
+    active_doc_path = ctx.get_state("active_document_path")
+    if not active_doc_path:
+        return "Error: No active document. Please use 'open_document' first."
+
+    try:
+        backend = get_backend_for_tool(ctx, active_doc_path)
+        backend.set_footer_text(text)
+        backend.document.Save()
+        return "Footer text set successfully."
+    except Exception as e:
+        return f"An unexpected error occurred while setting the footer: {e}"
+
+
+@mcp_server.tool()
+def create_bulleted_list(ctx: Context, locator: Dict[str, Any], items: List[str], position: str = "after") -> str:
+    """
+    Creates a new bulleted list relative to the element found by the locator.
+
+    Args:
+        locator: The Locator object to find the anchor element.
+        items: A list of strings to become the list items.
+        position: "before" or "after" the anchor element.
+    
+    Returns:
+        A success or error message.
+    """
+    active_doc_path = ctx.get_state("active_document_path")
+    if not active_doc_path:
+        return "Error: No active document. Please use 'open_document' first."
+
+    if not items:
+        return "Error: Cannot create an empty list."
+
+    try:
+        backend = get_backend_for_tool(ctx, active_doc_path)
+        selection = selector.select(backend, locator, expect_single=True)
+        
+        # Use the range of the single element found as the anchor
+        anchor_range = selection._elements[0].Range
+        
+        backend.create_bulleted_list_relative_to(anchor_range, items, position)
+        backend.document.Save()
+        return "Bulleted list created successfully."
+            
+    except (ElementNotFoundError, AmbiguousLocatorError) as e:
+        return f"Error finding a unique anchor point: {e}"
+    except ValueError as e:
+        return f"Error creating list: {e}"
+    except Exception as e:
+        return f"An unexpected error occurred during list creation: {e}"
+
+
+@mcp_server.tool()
+def get_document_structure(ctx: Context) -> List[Dict[str, Any]]:
+    """
+    Provides a structured overview of the document by listing all headings.
+
+    Returns:
+        A list of dictionaries, each representing a heading with its text and level.
+    """
+    active_doc_path = ctx.get_state("active_document_path")
+    if not active_doc_path:
+        return []
+
+    try:
+        backend = get_backend_for_tool(ctx, active_doc_path)
+        return backend.get_headings()
+    except Exception:
+        return []
+
+
+@mcp_server.tool()
+def accept_all_changes(ctx: Context) -> str:
+    """
+    Accepts all tracked revisions in the document.
+    """
+    active_doc_path = ctx.get_state("active_document_path")
+    if not active_doc_path:
+        return "Error: No active document. Please use 'open_document' first."
+
+    try:
+        backend = get_backend_for_tool(ctx, active_doc_path)
+        backend.accept_all_changes()
+        backend.document.Save()
+        return "All changes accepted successfully."
+    except Exception as e:
+        return f"An unexpected error occurred: {e}"
+
+
+@mcp_server.tool()
+def apply_format(ctx: Context, locator: Dict[str, Any], formatting: Dict[str, Any]) -> str:
+    """
+    Applies specified formatting to the element(s) found by the locator.
+
+    Args:
+        locator: The Locator object to find the target element(s).
+        formatting: A dictionary of formatting options to apply.
+                    Example: {"bold": True, "alignment": "center"}
+    
+    Returns:
+        A success or error message.
+    """
+    active_doc_path = ctx.get_state("active_document_path")
+    if not active_doc_path:
+        return "Error: No active document. Please use 'open_document' first."
+
+    try:
+        backend = get_backend_for_tool(ctx, active_doc_path)
+        selection = selector.select(backend, locator)
+        selection.apply_format(formatting)
+        backend.document.Save()
+        return "Formatting applied successfully."
+            
+    except ElementNotFoundError as e:
+        return f"Error finding element to format: {e}"
+    except ValueError as e:
+        return f"Error applying format: {e}"
+    except Exception as e:
+        return f"An unexpected error occurred during formatting: {e}"
 
 
 

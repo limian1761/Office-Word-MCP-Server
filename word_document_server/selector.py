@@ -17,6 +17,10 @@ class LocatorSyntaxError(ValueError):
 class ElementNotFoundError(LookupError):
     pass
 
+class AmbiguousLocatorError(LookupError):
+    """Raised when a locator expecting a single element finds multiple."""
+    pass
+
 class SelectorEngine:
     """
     Engine for selecting document elements based on locator queries.
@@ -34,9 +38,10 @@ class SelectorEngine:
             "index_in_parent": self._filter_by_index,
             "row_index": self._filter_by_row_index,
             "column_index": self._filter_by_column_index,
+            "is_list_item": self._filter_by_is_list_item,
         }
 
-    def select(self, backend: WordBackend, locator: Dict[str, Any]) -> Selection:
+    def select(self, backend: WordBackend, locator: Dict[str, Any], expect_single: bool = False) -> Selection:
         """
         Selects elements in the document based on a locator query.
         This is the main entry point for the selector.
@@ -45,33 +50,34 @@ class SelectorEngine:
             raise LocatorSyntaxError("Locator must have a 'target'.")
 
         target_spec = locator["target"]
+        elements: List[Any]
 
         # If no anchor, perform a global search from the start of the document
         if "anchor" not in locator:
             elements = self._select_core(backend, target_spec)
-            if not elements:
-                raise ElementNotFoundError(f"No elements found for target: {target_spec}")
-            return Selection(elements, backend)
+        else:
+            # If anchor and relation are present, perform a relational search
+            if "relation" not in locator:
+                raise LocatorSyntaxError("Locator with 'anchor' must also have a 'relation'.")
 
-        # If anchor and relation are present, perform a relational search
-        if "relation" not in locator:
-            raise LocatorSyntaxError("Locator with 'anchor' must also have a 'relation'.")
+            # 1. Find the anchor element(s) first
+            anchor_spec = locator["anchor"]
+            anchor_element = self._find_anchor(backend, anchor_spec)
+            
+            if not anchor_element:
+                raise ElementNotFoundError(f"Anchor element not found for: {anchor_spec}")
+            
+            # 2. Perform the relational selection
+            relation = locator["relation"]
+            elements = self._select_relative_to_anchor(backend, anchor_element, target_spec, relation)
 
-        # 1. Find the anchor element(s) first
-        anchor_spec = locator["anchor"]
-        anchor_element = self._find_anchor(backend, anchor_spec)
+        if not elements:
+            raise ElementNotFoundError(f"No elements found for locator: {locator}")
         
-        if not anchor_element:
-            raise ElementNotFoundError(f"Anchor element not found for: {anchor_spec}")
-        
-        # 2. Perform the relational selection
-        relation = locator["relation"]
-        related_elements = self._select_relative_to_anchor(backend, anchor_element, target_spec, relation)
+        if expect_single and len(elements) > 1:
+            raise AmbiguousLocatorError(f"Expected 1 element but found {len(elements)} for locator: {locator}")
 
-        if not related_elements:
-            raise ElementNotFoundError(f"No target elements found in relation to anchor. Locator: {locator}")
-
-        return Selection(related_elements, backend)
+        return Selection(elements, backend)
 
     def _find_anchor(self, backend: WordBackend, anchor_spec: Dict[str, Any]) -> Optional[Any]:
         """Finds a single anchor element based on its specification."""
@@ -269,3 +275,18 @@ class SelectorEngine:
     def _filter_by_column_index(self, elements: List[Any], index: int) -> List[Any]:
         """Filters for cells in a specific column."""
         return [el for el in elements if hasattr(el, 'ColumnIndex') and el.ColumnIndex == index]
+
+    def _filter_by_is_list_item(self, elements: List[Any], is_list: bool) -> List[Any]:
+        """Filters for paragraphs that are part of a list."""
+        if not is_list:
+            # Return elements that are NOT list items
+            return [
+                el for el in elements 
+                if hasattr(el, 'Range') and hasattr(el.Range, 'ListFormat') and el.Range.ListFormat.ListString == ''
+            ]
+        
+        # Return elements that ARE list items
+        return [
+            el for el in elements 
+            if hasattr(el, 'Range') and hasattr(el.Range, 'ListFormat') and el.Range.ListFormat.ListString != ''
+        ]

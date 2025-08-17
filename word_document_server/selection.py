@@ -52,7 +52,7 @@ class Selection:
 
         Args:
             options: A dictionary of formatting options.
-                     Supported options: "bold", "italic", "font_size", "font_name".
+                     Supported options: "bold", "italic", "font_size", "font_name", "alignment".
         """
         for element in self._elements:
             if not hasattr(element, 'Range'):
@@ -68,6 +68,8 @@ class Selection:
                 self._backend.set_font_size_for_range(com_range, options["font_size"])
             if "font_name" in options:
                 self._backend.set_font_name_for_range(com_range, options["font_name"])
+            if "alignment" in options:
+                self._backend.set_alignment_for_range(com_range, options["alignment"])
 
     def delete(self) -> None:
         """Delete all elements in the selection."""

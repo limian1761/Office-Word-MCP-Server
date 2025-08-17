@@ -44,7 +44,16 @@ def create_test_document(file_path):
 
 
         # --- Add Content in Order ---
+        doc.TrackRevisions = True # Turn on Track Changes
         add_paragraph("First paragraph.")
+        
+        # Add a paragraph and then delete it to create a revision
+        current_range.InsertAfter("This sentence will be deleted.\n")
+        deleted_range = doc.Range(current_range.End - len("This sentence will be deleted.\n"), current_range.End - 1)
+        deleted_range.Delete()
+        
+        doc.TrackRevisions = False # Turn off Track Changes for the rest
+        
         add_paragraph("A paragraph for substring search.")
         add_paragraph("This is a bold paragraph.", is_bold=True)
         add_paragraph("This is a heading.", style_const=constants.wdStyleHeading1)
@@ -60,6 +69,20 @@ def create_test_document(file_path):
         table.Cell(3, 1).Range.Text = "Last cell."
         
         # Move current_range after the table
+        current_range = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
+
+        # --- Add a Bulleted List ---
+        # Insert and format the first list item
+        current_range.InsertAfter("List item 1\n")
+        list_para1_range = doc.Range(current_range.End - len("List item 1\n"), current_range.End - 1)
+        list_para1_range.ListFormat.ApplyBulletDefault()
+        current_range = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
+
+        # Insert and format the second list item
+        current_range.InsertAfter("List item 2\n")
+        list_para2_range = doc.Range(current_range.End - len("List item 2\n"), current_range.End - 1)
+        # Word will automatically continue the list, but we call it again for robustness
+        list_para2_range.ListFormat.ApplyBulletDefault()
         current_range = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
 
         add_paragraph("This paragraph is outside the table.")
