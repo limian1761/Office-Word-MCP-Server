@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "word-document-server": {
-      "command": "C:\\Python313\\python.exe",
+      "command": "python",
       "args": [
         "-m",
         "word_document_server.main"
@@ -10,5 +10,161 @@
         "MCP_TRANSPORT": "stdio"
       }
     }
-  }
+  },
+  "tools": [
+    {
+      "name": "open_document",
+      "title": "Open Document",
+      "description": "Opens a Word document and prepares it for editing. This must be the first tool called.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["file_path"],
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "The absolute path to the .docx file."
+          }
+        }
+      }
+    },
+    {
+      "name": "shutdown_word",
+      "title": "Shutdown Word",
+      "description": "Closes the document and shuts down the Word application instance. Should be called at the end of a session.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "insert_paragraph",
+      "title": "Insert Paragraph",
+      "description": "Inserts a new paragraph with the given text relative to the element found by the locator.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["locator", "text"],
+        "properties": {
+          "locator": {
+            "type": "object",
+            "description": "The Locator object to find the anchor element."
+          },
+          "text": {
+            "type": "string",
+            "description": "The text of the paragraph to insert."
+          },
+          "position": {
+            "type": "string",
+            "description": "\"before\" or \"after\" the located element.",
+            "default": "after"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_text_from_cell",
+      "title": "Get Text From Cell",
+      "description": "Retrieves the text from a single table cell found by the locator.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["locator"],
+        "properties": {
+          "locator": {
+            "type": "object",
+            "description": "The Locator object to find the target cell."
+          }
+        }
+      }
+    },
+    {
+      "name": "delete_element",
+      "title": "Delete Element",
+      "description": "Deletes the element(s) found by the locator.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["locator"],
+        "properties": {
+          "locator": {
+            "type": "object",
+            "description": "The Locator object to find the target element(s) to delete."
+          }
+        }
+      }
+    },
+    {
+      "name": "get_text",
+      "title": "Get Text",
+      "description": "Retrieves the text from all elements found by the locator.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["locator"],
+        "properties": {
+          "locator": {
+            "type": "object",
+            "description": "The Locator object to find the target element(s)."
+          }
+        }
+      }
+    },
+    {
+      "name": "replace_text",
+      "title": "Replace Text",
+      "description": "Replaces the text content of the element(s) found by the locator with new text.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["locator", "new_text"],
+        "properties": {
+          "locator": {
+            "type": "object",
+            "description": "The Locator object to find the target element(s) to replace."
+          },
+          "new_text": {
+            "type": "string",
+            "description": "The new text to replace the existing content."
+          }
+        }
+      }
+    },
+    {
+      "name": "set_cell_value",
+      "title": "Set Cell Value",
+      "description": "Sets the text value of a single table cell found by the locator.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["locator", "text"],
+        "properties": {
+          "locator": {
+            "type": "object",
+            "description": "The Locator object to find the target cell."
+          },
+          "text": {
+            "type": "string",
+            "description": "The text to set in the cell."
+          }
+        }
+      }
+    },
+    {
+      "name": "create_table",
+      "title": "Create Table",
+      "description": "Creates a new table at the location specified by the locator.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["locator", "rows", "cols"],
+        "properties": {
+          "locator": {
+            "type": "object",
+            "description": "The Locator object to find the anchor point for the new table."
+          },
+          "rows": {
+            "type": "integer",
+            "description": "Number of rows for the new table."
+          },
+          "cols": {
+            "type": "integer",
+            "description": "Number of columns for the new table."
+          }
+        }
+      }
+    }
+  ]
 }

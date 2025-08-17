@@ -18,10 +18,8 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "python-docx>=1.1.2",
-    "mcp[cli]",
-    "msoffcrypto-tool>=5.4.2",
-    "docx2pdf>=0.1.8",
+    "mcp[cli]>=0.1.0",
+    "pywin32>=306"
 ]
 
 [project.urls]
@@ -33,6 +31,9 @@ only-include = [
     "word_document_server",
 ]
 sources = ["."]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [project.scripts]
 word_mcp_server = "word_document_server.main:run_server"
