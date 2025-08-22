@@ -10,6 +10,9 @@ from mcp.server.fastmcp.server import Context, FastMCP
 from word_document_server.com_backend import WordBackend
 from word_document_server.selector import SelectorEngine, ElementNotFoundError
 
+# --- State Management ---
+# Using Context.session to store state as recommended by MCP documentation
+
 # --- MCP Server Initialization ---
 mcp_server = FastMCP("Office-Word-MCP-Server")
 selector = SelectorEngine()
@@ -22,14 +25,19 @@ selector = SelectorEngine()
 
 def get_backend_for_tool(ctx: Context, file_path: str) -> WordBackend:
     """
-    This is a temporary solution for debugging. It creates a new backend
-    for every tool call to ensure there is no stale state.
+    Gets or creates a WordBackend instance for the specified file path.
     """
-    # Always create a new backend to ensure we get a fresh view of the document.
-    # This is inefficient but necessary to isolate the state bug.
+    # Initialize session state if not exists
+    if 'document_state' not in ctx.session:
+        ctx.session['document_state'] = {}
+    
+    # Create a new backend instance
     backend = WordBackend(file_path=file_path, visible=True)
     backend.__enter__()
-    ctx.set_state("word_backend", backend) # Overwrite the old one
+    
+    # Store backend in session state
+    ctx.session['document_state']['word_backend'] = backend
+    
     return backend
 
 @mcp_server.tool()
@@ -53,7 +61,10 @@ def open_document(ctx: Context, file_path: str) -> str:
     # Get or create the backend instance
     backend = get_backend_for_tool(ctx, file_path)
     
-    ctx.set_state("active_document_path", file_path)
+    # Store active document path in session state
+    if 'document_state' not in ctx.session:
+        ctx.session['document_state'] = {}
+    ctx.session['document_state']['active_document_path'] = file_path
     return f"Active document set to: {file_path}"
 
 @mcp_server.tool()
@@ -62,11 +73,17 @@ def shutdown_word(ctx: Context) -> str:
     Closes the document and shuts down the Word application instance.
     Should be called at the end of a session.
     """
-    backend = ctx.get_state("word_backend")
+    # Get backend from session state
+    backend = None
+    if 'document_state' in ctx.session:
+        backend = ctx.session['document_state'].get('word_backend')
+    
     if backend and backend.word_app:
         try:
             backend.word_app.Quit()
-            ctx.set_state("word_backend", None)
+            # Clear backend reference from session state
+            if 'document_state' in ctx.session:
+                ctx.session['document_state']['word_backend'] = None
             return "Word application shut down successfully."
         except Exception as e:
             return f"Error shutting down Word: {e}"
@@ -77,7 +94,11 @@ def insert_paragraph(ctx: Context, locator: Dict[str, Any], text: str, position:
     """
     Inserts a new paragraph with the given text relative to the element found by the locator.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
+    
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -98,7 +119,11 @@ def get_text_from_cell(ctx: Context, locator: Dict[str, Any]) -> str:
     """
     Retrieves the text from a single table cell found by the locator.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
+    
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -125,7 +150,10 @@ def delete_element(ctx: Context, locator: Dict[str, Any]) -> str:
     Returns:
         A success or error message.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -147,7 +175,10 @@ def get_text(ctx: Context, locator: Dict[str, Any]) -> str:
     """
     Retrieves the text from all elements found by the locator.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -173,7 +204,10 @@ def replace_text(ctx: Context, locator: Dict[str, Any], new_text: str) -> str:
     Returns:
         A success or error message.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -202,7 +236,10 @@ def set_cell_value(ctx: Context, locator: Dict[str, Any], text: str) -> str:
     Returns:
         A success or error message.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -234,7 +271,10 @@ def create_table(ctx: Context, locator: Dict[str, Any], rows: int, cols: int) ->
     Returns:
         A success or error message.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -266,7 +306,10 @@ def set_header_text(ctx: Context, text: str) -> str:
     Returns:
         A success or error message.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -290,7 +333,10 @@ def set_footer_text(ctx: Context, text: str) -> str:
     Returns:
         A success or error message.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -316,7 +362,10 @@ def create_bulleted_list(ctx: Context, locator: Dict[str, Any], items: List[str]
     Returns:
         A success or error message.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -350,7 +399,10 @@ def get_document_structure(ctx: Context) -> List[Dict[str, Any]]:
     Returns:
         A list of dictionaries, each representing a heading with its text and level.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return []
 
@@ -366,7 +418,10 @@ def accept_all_changes(ctx: Context) -> str:
     """
     Accepts all tracked revisions in the document.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
@@ -392,7 +447,10 @@ def apply_format(ctx: Context, locator: Dict[str, Any], formatting: Dict[str, An
     Returns:
         A success or error message.
     """
-    active_doc_path = ctx.get_state("active_document_path")
+    # Get active document path from session state
+    active_doc_path = None
+    if 'document_state' in ctx.session:
+        active_doc_path = ctx.session['document_state'].get('active_document_path')
     if not active_doc_path:
         return "Error: No active document. Please use 'open_document' first."
 
