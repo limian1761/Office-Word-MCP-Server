@@ -1,7 +1,9 @@
 # mcp_service.py
-from typing import Dict, Any, List
-from word_document_server.selector import SelectorEngine, ElementNotFoundError
+from typing import Any, Dict, List
+
 from word_document_server.com_backend import WordBackend
+from word_document_server.selector import ElementNotFoundError, SelectorEngine
+
 
 class McpService:
     """

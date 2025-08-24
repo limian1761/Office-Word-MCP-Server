@@ -93,14 +93,22 @@
     {
       "name": "get_text",
       "title": "Get Text",
-      "description": "Retrieves the text from all elements found by the locator.",
+      "description": "Retrieves the text from all elements found by the locator or from a specific range.",
       "inputSchema": {
         "type": "object",
-        "required": ["locator"],
+        "required": [],
         "properties": {
           "locator": {
             "type": "object",
-            "description": "The Locator object to find the target element(s)."
+            "description": "Optional. The Locator object to find the target element(s)."
+          },
+          "start_pos": {
+            "type": "integer",
+            "description": "Optional. The start position of the text range."
+          },
+          "end_pos": {
+            "type": "integer",
+            "description": "Optional. The end position of the text range."
           }
         }
       }

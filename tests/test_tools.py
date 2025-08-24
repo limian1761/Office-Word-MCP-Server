@@ -1,14 +1,15 @@
 import os
 import sys
+
 import pytest
 import pythoncom
 
 # Add project root to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from create_test_doc import create_test_document
 from word_document_server import app
 from word_document_server.com_backend import WordBackend
-from create_test_doc import create_test_document
 
 # --- Test Setup ---
 

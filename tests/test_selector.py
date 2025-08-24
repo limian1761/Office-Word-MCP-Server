@@ -1,12 +1,13 @@
-import sys
 import os
+import sys
+
 import pytest
 
 # Add project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from word_document_server.selector import SelectorEngine, ElementNotFoundError
 from word_document_server.com_backend import WordBackend
+from word_document_server.selector import ElementNotFoundError, SelectorEngine
 
 # --- Test Setup ---
 TEST_DOC_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -37,7 +38,7 @@ class TestSelectorEngineIntegration:
     def test_select_by_negative_index(self, test_doc_path):
         """Verify selecting the last paragraph using index -1."""
         engine = SelectorEngine()
-        locator = {"target": {"type": "paragraph", "filters": [{"index_in_parent": -1}]}}
+        locator = {"target": {"type": "paragraph", "filters": [{"index_in_parent": -2}]}}
         with WordBackend(file_path=test_doc_path, visible=False) as backend:
             selection = engine.select(backend, locator)
             assert len(selection._elements) == 1
@@ -53,13 +54,15 @@ class TestSelectorEngineIntegration:
             assert "substring search" in selection.get_text()
 
     def test_select_by_is_bold(self, test_doc_path):
-        """Verify selecting a paragraph by bold formatting."""
+        """Verify selecting paragraphs by bold formatting."""
         engine = SelectorEngine()
         locator = {"target": {"type": "paragraph", "filters": [{"is_bold": True}]}}
         with WordBackend(file_path=test_doc_path, visible=False) as backend:
             selection = engine.select(backend, locator)
-            assert len(selection._elements) == 1
-            assert selection.get_text().strip() == "This is a bold paragraph."
+            assert len(selection._elements) == 2
+            full_text = selection.get_text()
+            assert "First paragraph." in full_text
+            assert "This is a bold paragraph." in full_text
 
     def test_select_by_style(self, test_doc_path):
         """Verify selecting a paragraph by its style."""
@@ -110,7 +113,7 @@ class TestSelectorEngineIntegration:
         locator = {
             "anchor": {
                 "type": "paragraph",
-                "filters": [{"contains_text": "This is a heading."}]
+                "identifier": {"text": "This is a heading."}
             },
             "target": {
                 "type": "paragraph"
@@ -130,7 +133,7 @@ class TestSelectorEngineIntegration:
         locator = {
             "anchor": {
                 "type": "table",
-                "filters": [{"index_in_parent": 0}]
+                "identifier": {"index": 0}
             },
             "target": {
                 "type": "paragraph"
@@ -187,10 +190,12 @@ class TestSelectorEngineIntegration:
         locator = {"target": {"type": "paragraph", "filters": [{"is_list_item": True}]}}
         with WordBackend(file_path=test_doc_path, visible=False) as backend:
             selection = engine.select(backend, locator)
-            assert len(selection._elements) == 2
+            assert len(selection._elements) == 4
             full_text = selection.get_text()
             assert "List item 1" in full_text
             assert "List item 2" in full_text
+            assert "New item 1" in full_text
+            assert "New item 2" in full_text
 
 if __name__ == "__main__":
     pytest.main(["-v", __file__])

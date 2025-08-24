@@ -4,8 +4,11 @@ COM utilities for Word Document Server.
 This module provides utility functions for working with Word documents via COM interface.
 """
 from typing import Optional
+
 import win32com.client
+
 from word_document_server.utils.app_context import app_context
+
 
 def get_active_document() -> Optional[win32com.client.CDispatch]:
     """Get the current active document from the global app context.

@@ -2,7 +2,9 @@
 Main entry point for the Word Document MCP Server.
 """
 import mcp
+
 from word_document_server.app import mcp_server
+
 
 def run_server():
     """

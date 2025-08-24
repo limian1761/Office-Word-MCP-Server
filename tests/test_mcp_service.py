@@ -1,12 +1,13 @@
-import sys
 import os
+import sys
+
 import pytest
 
 # Add project root to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from word_document_server.mcp_service import McpService
 from word_document_server.com_backend import WordBackend
+from word_document_server.mcp_service import McpService
 from word_document_server.selector import ElementNotFoundError
 
 # Path to the test document

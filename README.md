@@ -227,6 +227,308 @@ Once configured, you can ask Claude to perform operations like:
 - "Add numbering to paragraphs 2 through 5"
 
 
+## AI大模型客户端使用指南
+
+本节详细介绍AI大模型客户端如何使用Office-Word-MCP-Server进行Word文档操作，包括工具调用方法、参数说明和使用示例。
+
+### 使用流程概述
+
+1. **连接服务器**：确保MCP服务器已启动并与AI大模型客户端正确连接
+2. **打开文档**：首先使用`open_document`工具打开目标Word文档
+3. **执行操作**：调用相应工具进行文档编辑、内容提取等操作
+4. **关闭文档**：完成操作后使用`shutdown_word`关闭Word应用实例
+
+### 核心工具列表及参数说明
+
+#### 文档管理工具
+
+```python
+# 打开Word文档，这是使用其他工具的前提
+open_document(file_path: str) -> str
+# 参数：file_path - .docx文件的绝对路径
+# 返回值：确认消息或错误信息
+
+# 关闭文档并关闭Word应用实例
+shutdown_word() -> str
+# 返回值：关闭结果确认消息
+
+# 获取文档结构（所有标题）
+get_document_structure() -> List[Dict[str, Any]]
+# 返回值：标题列表，每项包含text和level
+
+# 接受文档中的所有修订
+accept_all_changes() -> str
+# 返回值：操作结果确认消息
+```
+
+#### 内容操作工具
+
+```python
+# 插入新段落
+insert_paragraph(locator: Dict[str, Any], text: str, position: str = "after") -> str
+# 参数：
+#   locator - 定位锚点元素的定位器
+#   text - 要插入的段落文本
+#   position - 相对于锚点的位置（"before"或"after"）
+# 返回值：操作结果确认消息
+
+# 获取指定元素的文本或指定范围的文本
+get_text(locator: Dict[str, Any] = None, start_pos: int = None, end_pos: int = None) -> str
+# 参数：
+#   locator - 可选，定位目标元素的定位器
+#   start_pos - 可选，文本范围的起始位置（整数）
+#   end_pos - 可选，文本范围的结束位置（整数）
+# 返回值：元素文本内容或范围内的文本内容
+
+# 替换指定元素的文本
+replace_text(locator: Dict[str, Any], new_text: str) -> str
+# 参数：
+#   locator - 定位目标元素的定位器
+#   new_text - 替换的新文本
+# 返回值：操作结果确认消息
+
+# 删除指定元素
+delete_element(locator: Dict[str, Any]) -> str
+# 参数：locator - 定位目标元素的定位器
+# 返回值：操作结果确认消息
+
+# 创建表格
+create_table(locator: Dict[str, Any], rows: int, cols: int) -> str
+# 参数：
+#   locator - 定位表格插入位置的定位器
+#   rows - 表格行数
+#   cols - 表格列数
+# 返回值：操作结果确认消息
+
+# 创建项目符号列表
+create_bulleted_list(locator: Dict[str, Any], items: List[str], position: str = "after") -> str
+# 参数：
+#   locator - 定位列表插入位置的定位器
+#   items - 列表项内容列表
+#   position - 相对于锚点的位置
+# 返回值：操作结果确认消息
+```
+
+#### 表格操作工具
+
+```python
+# 获取表格单元格文本
+get_text_from_cell(locator: Dict[str, Any]) -> str
+# 参数：locator - 定位表格单元格的定位器
+# 返回值：单元格文本内容
+
+# 设置表格单元格值
+set_cell_value(locator: Dict[str, Any], text: str) -> str
+# 参数：
+#   locator - 定位表格单元格的定位器
+#   text - 要设置的单元格文本
+# 返回值：操作结果确认消息
+```
+
+#### 页眉页脚工具
+
+```python
+# 设置文档页眉文本
+set_header_text(text: str) -> str
+# 参数：text - 页眉文本
+# 返回值：操作结果确认消息
+
+# 设置文档页脚文本
+set_footer_text(text: str) -> str
+# 参数：text - 页脚文本
+# 返回值：操作结果确认消息
+```
+
+#### 格式设置工具
+
+```python
+# 应用格式到指定元素
+apply_format(locator: Dict[str, Any], formatting: Dict[str, Any]) -> str
+# 参数：
+#   locator - 定位目标元素的定位器
+#   formatting - 格式设置字典，如{"bold": True, "alignment": "center"}
+# 返回值：操作结果确认消息
+```
+
+### Locator使用详解
+
+Locator是一个特殊的查询对象，用于精确定位Word文档中的元素。它支持多种定位方式和过滤条件，使AI大模型能够精确地找到需要操作的文档部分。
+
+#### 基本结构
+
+Locator是一个字典，必须包含`target`字段，`target`内部包含以下组件：
+- `type`: 元素类型（如"paragraph", "table", "cell", "heading"等）
+- `filters`: 过滤条件列表（可选）
+
+对于相对定位，Locator还可以包含：
+- `anchor`: 锚点元素的定位器（包含`type`和`filters`）
+- `relation`: 相对位置描述
+
+#### 支持的元素类型
+
+- `paragraph`: 段落
+- `table`: 表格
+- `cell`: 表格单元格
+- `heading`: 标题
+- `image`: 图片
+- `list`: 列表
+
+#### 常用过滤器
+
+- `contains_text`: 文本包含指定内容
+- `text_matches_regex`: 文本匹配正则表达式
+- `index_in_parent`: 元素在父容器中的索引位置
+- `style`: 元素样式名称
+- `is_bold`: 是否为粗体
+- `row_index`: 表格行索引
+- `column_index`: 表格列索引
+- `is_list_item`: 是否为列表项
+
+#### 相对定位
+
+通过`relation`字段可以指定元素相对于其他元素的位置，如：
+- `all_occurrences_within`
+- `first_occurrence_after`
+- `last_occurrence_before`
+
+### 使用示例
+
+下面是AI大模型客户端调用MCP工具的典型示例：
+
+#### 1. 打开文档
+
+```python
+# 调用示例
+response = await mcp_client.call_tool(
+    "open_document",
+    {
+        "file_path": "C:/Users/username/Documents/report.docx"
+    }
+)
+print(response)  # "Active document set to: C:/Users/username/Documents/report.docx"
+```
+
+#### 2. 读取文档结构
+
+```python
+# 获取文档标题结构
+headings = await mcp_client.call_tool("get_document_structure", {})
+print(headings)
+# 输出示例: [{"text": "Introduction", "level": 1}, {"text": "Methods", "level": 1}, ...]
+```
+
+#### 3. 插入段落
+
+```python
+# 在文档开头插入段落
+response = await mcp_client.call_tool(
+    "insert_paragraph",
+    {
+        "locator": {"target": {"type": "paragraph", "filters": [{"index_in_parent": 0}]}},
+        "text": "This is a new paragraph at the beginning of the document.",
+        "position": "before"
+    }
+)
+print(response)  # "Successfully inserted paragraph."
+```
+
+#### 4. 查找并替换文本
+
+```python
+# 查找包含特定文本的段落并替换
+response = await mcp_client.call_tool(
+    "replace_text",
+    {
+        "locator": {"target": {"type": "paragraph", "filters": [{"contains_text": "old information"}]}},
+        "new_text": "Updated content with new information."
+    }
+)
+print(response)  # "Successfully replaced text."
+```
+
+#### 5. 格式化文本
+
+```python
+# 将第一段设置为粗体并居中对齐
+response = await mcp_client.call_tool(
+    "apply_format",
+    {
+        "locator": {"target": {"type": "paragraph", "filters": [{"index_in_parent": 0}]}},
+        "formatting": {"bold": True, "alignment": "center"}
+    }
+)
+print(response)  # "Formatting applied successfully."
+```
+
+#### 6. 操作表格
+
+```python
+# 在文档末尾创建一个3x4的表格
+response = await mcp_client.call_tool(
+    "create_table",
+    {
+        "locator": {"target": {"type": "paragraph", "filters": [{"index_in_parent": -1}]}},  # 最后一个段落
+        "rows": 3,
+        "cols": 4
+    }
+)
+print(response)  # "Successfully created table."
+
+# 设置表格单元格值
+response = await mcp_client.call_tool(
+    "set_cell_value",
+    {
+        "locator": {
+            "target": {
+                "type": "cell", 
+                "filters": [
+                    {"table_index": 0},
+                    {"row_index": 0},
+                    {"column_index": 0}
+                ]
+            }
+        },
+        "text": "Header 1"
+    }
+)
+print(response)  # "Successfully set cell value."
+```
+
+#### 7. 设置页眉页脚
+
+```python
+# 设置页眉文本
+response = await mcp_client.call_tool(
+    "set_header_text",
+    {"text": "Confidential Report - 2023"}
+)
+print(response)  # "Header text set successfully."
+
+# 设置页脚文本
+response = await mcp_client.call_tool(
+    "set_footer_text",
+    {"text": "Page [Page] of [Pages]"}
+)
+print(response)  # "Footer text set successfully."
+```
+
+#### 8. 关闭文档
+
+```python
+# 关闭Word应用
+response = await mcp_client.call_tool("shutdown_word", {})
+print(response)  # "Word application shut down successfully."
+```
+
+### 最佳实践
+
+1. **会话管理**：在一个会话中完成一组相关操作，最后调用`shutdown_word`释放资源
+2. **错误处理**：检查工具返回值，处理可能的错误信息
+3. **定位策略**：使用精确的locator避免误操作
+4. **路径处理**：确保提供的文件路径是绝对路径
+5. **文档检查**：使用`open_document`前确认文件存在且格式正确
+6. **资源释放**：长时间不使用时关闭Word应用实例
+
 ## API Reference
 
 ### Document Creation and Properties

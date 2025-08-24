@@ -1,5 +1,6 @@
-import sys
 import os
+import sys
+
 import pytest
 import win32com.client
 
@@ -8,20 +9,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from word_document_server.com_backend import WordBackend
 
-# Path to the test document
-TEST_DOC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 'test_docs', 'test_document.docx'))
-
-@pytest.fixture
-def backend():
-    """Fixture to provide a WordBackend instance for testing."""
-    # This fixture is not used in the main tests because we need to
-    # control the __enter__ and __exit__ for each test.
-    pass
-
-def test_context_manager_no_file():
+def test_context_manager_no_file(word_app):
     """Test that the backend can be used as a context manager without a file."""
     try:
-        with WordBackend(visible=False) as backend:
+        with WordBackend(visible=False, word_app=word_app) as backend:
             assert backend.word_app is not None
             assert backend.document is not None
             # Check that a new document is created
@@ -29,13 +20,13 @@ def test_context_manager_no_file():
     except Exception as e:
         pytest.fail(f"WordBackend context manager raised an exception: {e}")
 
-def test_context_manager_with_file():
+@pytest.mark.document_name("test_document.docx")
+def test_context_manager_with_file(word_app, document):
     """Test that the backend can open an existing document."""
-    if not os.path.exists(TEST_DOC_PATH):
-        pytest.skip(f"Test document not found at {TEST_DOC_PATH}")
-    
     try:
-        with WordBackend(file_path=TEST_DOC_PATH, visible=False) as backend:
+        # Using the document path from the fixture
+        doc_path = document.FullName
+        with WordBackend(file_path=doc_path, visible=False, word_app=word_app) as backend:
             assert backend.word_app is not None
             assert backend.document is not None
             assert "test_document.docx" in backend.document.Name

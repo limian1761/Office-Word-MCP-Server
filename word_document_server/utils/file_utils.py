@@ -2,8 +2,8 @@
 File utility functions for Word Document Server.
 """
 import os
-from typing import Tuple, Optional
 import shutil
+from typing import Optional, Tuple
 
 
 def check_file_writeable(filepath: str) -> Tuple[bool, str]:

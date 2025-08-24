@@ -5,14 +5,13 @@ This module encapsulates all interactions with the Word COM interface,
 providing a clean, Pythonic API for higher-level components. It is designed
 to be used as a context manager to ensure proper resource management.
 """
-import win32com.client
-import pythoncom
 import re
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
-class WordComError(RuntimeError):
-    """Custom exception for errors during COM interactions with Word."""
-    pass
+import pythoncom
+import win32com.client
+
+from word_document_server.errors import WordDocumentError
 
 class WordBackend:
     """
@@ -195,7 +194,7 @@ class WordBackend:
                     cells.append(table.Cell(row, col))
         return cells
 
-    def add_table(self, com_range_obj: win32com.client.CDispatch, rows: int, cols: int) -> win32com.client.CDispatch:
+    def add_table(self, com_range_obj: win32com.client.CDispatch, rows: int, cols: int):
         """
         Adds a table after a given range.
 
@@ -210,11 +209,28 @@ class WordBackend:
         if not self.document:
             raise RuntimeError("No document open.")
         
-        # Collapse the range to its end point to insert after
-        new_range = com_range_obj.Duplicate
-        new_range.Collapse(0) # WdCollapseDirection.wdCollapseEnd
-        new_range.InsertParagraphAfter() # Add a paragraph break to ensure table is on a new line
-        return self.document.Tables.Add(new_range, rows, cols)
+        try:
+            # Validate row and column parameters
+            if not isinstance(rows, int) or rows <= 0:
+                raise ValueError("Row count must be a positive integer")
+            if not isinstance(cols, int) or cols <= 0:
+                raise ValueError("Column count must be a positive integer")
+            
+            # Validate range object
+            if not com_range_obj or not hasattr(com_range_obj, 'Duplicate'):
+                raise ValueError("Invalid range object")
+            
+            # Collapse the range to its end point to insert after
+            new_range = com_range_obj.Duplicate
+            new_range.Collapse(0) # WdCollapseDirection.wdCollapseEnd
+            new_range.InsertParagraphAfter() # Add a paragraph break to ensure table is on a new line
+            return self.document.Tables.Add(new_range, rows, cols)
+        except Exception as e:
+            # Check if it's a COM related error
+            if "COM" in str(type(e)) or "Dispatch" in str(type(e)):
+                from word_document_server.errors import WordDocumentError
+                raise WordDocumentError(f"Failed to create table in Word: {str(e)}")
+            raise
 
     def set_bold_for_range(self, com_range_obj: win32com.client.CDispatch, is_bold: bool):
         """
@@ -256,13 +272,14 @@ class WordBackend:
         """
         com_range_obj.Font.Name = name
 
-    def insert_paragraph_after(self, com_range_obj: win32com.client.CDispatch, text: str):
+    def insert_paragraph_after(self, com_range_obj: win32com.client.CDispatch, text: str, style: str = None):
         """
         Insert a paragraph after a given range using the document's Paragraphs collection.
 
         Args:
             com_range_obj: COM Range object after which to insert.
             text: Text to insert.
+            style: Optional, paragraph style name to apply.
         """
         # Define the range for the new paragraph, which is at the end of the anchor range.
         insert_range = self.document.Range(com_range_obj.End, com_range_obj.End)
@@ -272,6 +289,13 @@ class WordBackend:
         
         # Set the text for the new paragraph.
         new_para.Range.Text = text
+        
+        # Apply style if specified
+        if style:
+            try:
+                new_para.Style = style
+            except Exception as e:
+                print(f"Warning: Failed to apply paragraph style '{style}': {e}")
 
     def set_header_text(self, text: str, header_index: int = 1):
         """
@@ -391,3 +415,678 @@ class WordBackend:
         if not self.document:
             raise RuntimeError("No document open.")
         self.document.AcceptAllRevisions()
+
+    def enable_track_revisions(self):
+        """Enables track changes (revision mode) in the document."""
+        if not self.document:
+            raise RuntimeError("No document open.")
+        self.document.TrackRevisions = True
+
+    def disable_track_revisions(self):
+        """Disables track changes (revision mode) in the document."""
+        if not self.document:
+            raise RuntimeError("No document open.")
+        self.document.TrackRevisions = False
+        
+    def get_all_styles(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves all available styles in the document.
+        
+        Returns:
+            A list of dictionaries containing style information, each with "name" and "type" keys.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+            
+        styles = []
+        # Get all styles from the document
+        for i in range(1, self.document.Styles.Count + 1):
+            style = self.document.Styles(i)
+            try:
+                style_info = {
+                    "name": style.NameLocal,  # Local name of the style
+                    "type": self._get_style_type(style.Type)
+                }
+                styles.append(style_info)
+            except Exception as e:
+                print(f"Warning: Failed to retrieve style information: {e}")
+                continue
+        
+        return styles
+        
+    def _get_style_type(self, type_code: int) -> str:
+        """
+        Converts Word style type code to human-readable string.
+        
+        Args:
+            type_code: Style type code from Word COM interface.
+        
+        Returns:
+            Human-readable style type.
+        """
+        # Word style type constants
+        style_types = {
+            1: "Paragraph",  # wdStyleTypeParagraph
+            2: "Character",  # wdStyleTypeCharacter
+            3: "Table",      # wdStyleTypeTable
+            4: "List"         # wdStyleTypeList
+        }
+        return style_types.get(type_code, "Unknown")
+    
+    def get_all_inline_shapes(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves all inline shapes (including pictures) in the document.
+        
+        Returns:
+            A list of dictionaries containing shape information, each with "index", "type", and "width" keys.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+            
+        shapes = []
+        try:
+            # Check if InlineShapes property exists and is accessible
+            if not hasattr(self.document, 'InlineShapes'):
+                return shapes
+            
+            # Get all inline shapes from the document safely
+            shapes_count = 0
+            try:
+                shapes_count = self.document.InlineShapes.Count
+            except Exception as e:
+                print(f"Warning: Failed to access InlineShapes collection: {e}")
+                return shapes
+            
+            for i in range(1, shapes_count + 1):
+                try:
+                    shape = self.document.InlineShapes(i)
+                    try:
+                        shape_info = {
+                            "index": i - 1,  # 0-based index
+                            "type": self._get_shape_type(shape.Type) if hasattr(shape, 'Type') else "Unknown",
+                            "width": shape.Width if hasattr(shape, 'Width') else 0,
+                            "height": shape.Height if hasattr(shape, 'Height') else 0
+                        }
+                        # Add additional properties based on shape type
+                        if shape_info["type"] == "Picture":
+                            # Try to get picture format information if available
+                            if hasattr(shape, 'PictureFormat'):
+                                if hasattr(shape.PictureFormat, 'ColorType'):
+                                    shape_info["color_type"] = self._get_color_type(shape.PictureFormat.ColorType)
+                        shapes.append(shape_info)
+                    except Exception as e:
+                        print(f"Warning: Failed to retrieve shape information for index {i}: {e}")
+                        continue
+                except Exception as e:
+                    print(f"Warning: Failed to access shape at index {i}: {e}")
+                    continue
+        except Exception as e:
+            print(f"Error: Failed to retrieve inline shapes: {e}")
+            
+        return shapes
+        
+    def insert_inline_picture(self, com_range_obj: win32com.client.CDispatch, image_path: str, position: str = "after") -> win32com.client.CDispatch:
+        """
+        Inserts an inline picture at the specified range.
+        
+        Args:
+            com_range_obj: The COM Range object where the picture will be inserted.
+            image_path: The absolute path to the image file.
+            position: "before", "after", or "replace" to specify where to insert the picture relative to the range.
+        
+        Returns:
+            The newly inserted InlineShape COM object.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+        
+        if not image_path or not isinstance(image_path, str):
+            raise ValueError("Invalid image path provided.")
+        
+        if not com_range_obj:
+            raise ValueError("Invalid range object provided.")
+        
+        if position not in ["before", "after", "replace"]:
+            raise ValueError("Invalid position. Must be 'before', 'after', or 'replace'.")
+        
+        try:
+            # Create a duplicate of the range to avoid modifying the original
+            insert_range = com_range_obj.Duplicate
+            
+            if position == "replace":
+                # Delete the content of the range
+                insert_range.Text = ""
+                # Insert the picture
+                return self.document.InlineShapes.AddPicture(FileName=image_path, LinkToFile=False, SaveWithDocument=True, Range=insert_range)
+            elif position == "before":
+                # Collapse the range to its start point
+                insert_range.Collapse(1)  # wdCollapseStart
+                # Insert the picture
+                return self.document.InlineShapes.AddPicture(FileName=image_path, LinkToFile=False, SaveWithDocument=True, Range=insert_range)
+            else:  # position == "after"
+                # Collapse the range to its end point
+                insert_range.Collapse(0)  # wdCollapseEnd
+                # Insert the picture
+                return self.document.InlineShapes.AddPicture(FileName=image_path, LinkToFile=False, SaveWithDocument=True, Range=insert_range)
+        except Exception as e:
+            raise WordComError(f"Failed to insert picture '{image_path}': {e}")
+            
+    def _get_shape_type(self, type_code: int) -> str:
+        """
+        Converts Word shape type code to human-readable string.
+        
+        Args:
+            type_code: Shape type code from Word COM interface.
+        
+        Returns:
+            Human-readable shape type.
+        """
+        # Word inline shape type constants
+        shape_types = {
+            1: "Picture",       # wdInlineShapePicture
+            2: "LinkedPicture", # wdInlineShapeLinkedPicture
+            3: "Chart",         # wdInlineShapeChart
+            4: "Diagram",       # wdInlineShapeDiagram
+            5: "OLEControlObject", # wdInlineShapeOLEControlObject
+            6: "OLEObject",     # wdInlineShapeOLEObject
+            7: "ActiveXControl", # wdInlineShapeActiveXControl
+            8: "SmartArt",      # wdInlineShapeSmartArt
+            9: "3DModel"         # wdInlineShape3DModel
+        }
+        return shape_types.get(type_code, "Unknown")
+        
+    def _get_color_type(self, color_code: int) -> str:
+        """
+        Converts Word picture color type code to human-readable string.
+        
+        Args:
+            color_code: Color type code from Word COM interface.
+        
+        Returns:
+            Human-readable color type.
+        """
+        # Word picture color type constants
+        color_types = {
+            0: "Color",         # msoPictureColorTypeColor
+            1: "Grayscale",     # msoPictureColorTypeGrayscale
+            2: "BlackAndWhite", # msoPictureColorTypeBlackAndWhite
+            3: "Watermark"       # msoPictureColorTypeWatermark
+        }
+        return color_types.get(color_code, "Unknown")
+
+    def add_comment(self, com_range_obj: win32com.client.CDispatch, text: str, author: str = "User") -> win32com.client.CDispatch:
+        """
+        Adds a comment to the specified range.
+
+        Args:
+            com_range_obj: The COM Range object where the comment will be inserted.
+            text: The text of the comment.
+            author: The author of the comment (default: "User").
+
+        Returns:
+            The newly created Comment COM object.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+        
+        if not com_range_obj:
+            raise ValueError("Invalid range object provided.")
+        
+        try:
+            # Add a comment at the specified range
+            return self.document.Comments.Add(Range=com_range_obj, Text=text)
+        except Exception as e:
+            raise WordComError(f"Failed to add comment: {e}")
+
+    def get_comments(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves all comments in the document.
+
+        Returns:
+            A list of dictionaries containing comment information, each with "index", "text", "author", "start_pos", "end_pos", and "scope_text" keys.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+            
+        comments = []
+        try:
+            # Check if Comments property exists and is accessible
+            if not hasattr(self.document, 'Comments'):
+                return comments
+            
+            # Get all comments from the document
+            comments_count = 0
+            try:
+                comments_count = self.document.Comments.Count
+            except Exception as e:
+                print(f"Warning: Failed to access Comments collection: {e}")
+                return comments
+            
+            for i in range(1, comments_count + 1):
+                try:
+                    comment = self.document.Comments(i)
+                    try:
+                        comment_info = {
+                            "index": i - 1,  # 0-based index
+                            "text": comment.Range.Text if hasattr(comment, 'Range') else "",
+                            "author": comment.Author if hasattr(comment, 'Author') else "Unknown",
+                            "start_pos": comment.Scope.Start if hasattr(comment, 'Scope') and hasattr(comment.Scope, 'Start') else 0,
+                            "end_pos": comment.Scope.End if hasattr(comment, 'Scope') and hasattr(comment.Scope, 'End') else 0,
+                            "scope_text": comment.Scope.Text.strip() if hasattr(comment, 'Scope') and hasattr(comment.Scope, 'Text') else ""
+                        }
+                        comments.append(comment_info)
+                    except Exception as e:
+                        print(f"Warning: Failed to retrieve comment information for index {i}: {e}")
+                        continue
+                except Exception as e:
+                    print(f"Warning: Failed to access comment at index {i}: {e}")
+                    continue
+        except Exception as e:
+            print(f"Error: Failed to retrieve comments: {e}")
+            
+        return comments
+
+    def get_comments_by_range(self, com_range_obj: win32com.client.CDispatch) -> List[Dict[str, Any]]:
+        """
+        Retrieves comments within a specific COM Range.
+
+        Args:
+            com_range_obj: The COM Range object to search within.
+
+        Returns:
+            A list of dictionaries containing comment information.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+            
+        if not com_range_obj:
+            raise ValueError("Invalid range object provided.")
+            
+        comments = []
+        try:
+            # Check if Comments property exists and is accessible
+            if not hasattr(self.document, 'Comments'):
+                return comments
+            
+            # Get all comments from the document
+            comments_count = 0
+            try:
+                comments_count = self.document.Comments.Count
+            except Exception as e:
+                print(f"Warning: Failed to access Comments collection: {e}")
+                return comments
+            
+            # Check if the range object has Start and End properties
+            if not hasattr(com_range_obj, 'Start') or not hasattr(com_range_obj, 'End'):
+                print("Warning: Invalid range object - missing Start or End properties")
+                return comments
+            
+            for i in range(1, comments_count + 1):
+                try:
+                    comment = self.document.Comments(i)
+                    try:
+                        # Check if comment is within the specified range
+                        if (hasattr(comment, 'Scope') and 
+                            hasattr(comment.Scope, 'Start') and 
+                            hasattr(comment.Scope, 'End') and 
+                            comment.Scope.Start >= com_range_obj.Start and 
+                            comment.Scope.End <= com_range_obj.End):
+                            comment_info = {
+                                "index": i - 1,  # 0-based index
+                                "text": comment.Range.Text if hasattr(comment, 'Range') else "",
+                                "author": comment.Author if hasattr(comment, 'Author') else "Unknown",
+                                "start_pos": comment.Scope.Start if hasattr(comment, 'Scope') and hasattr(comment.Scope, 'Start') else 0,
+                                "end_pos": comment.Scope.End if hasattr(comment, 'Scope') and hasattr(comment.Scope, 'End') else 0,
+                                "scope_text": comment.Scope.Text.strip() if hasattr(comment, 'Scope') and hasattr(comment.Scope, 'Text') else ""
+                            }
+                            comments.append(comment_info)
+                    except Exception as e:
+                        print(f"Warning: Failed to retrieve comment information for index {i}: {e}")
+                        continue
+                except Exception as e:
+                    print(f"Warning: Failed to access comment at index {i}: {e}")
+                    continue
+        except Exception as e:
+            print(f"Error: Failed to retrieve comments by range: {e}")
+            
+        return comments
+        
+    def get_document_styles(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves all available styles in the active document.
+        
+        Returns:
+            A list of styles with their names and types.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+            
+        styles = []
+        try:
+            # Iterate through all styles in the document
+            for style in self.document.Styles:
+                try:
+                    # Skip built-in hidden styles
+                    if not style.BuiltIn or style.InUse:
+                        style_info = {
+                            'name': style.NameLocal,
+                            'type': style.Type  # wdStyleTypeParagraph (1), wdStyleTypeCharacter (2), etc.
+                        }
+                        styles.append(style_info)
+                except Exception as e:
+                    print(f"Warning: Failed to retrieve style info: {e}")
+                    continue
+            
+            # Sort styles by name
+            styles.sort(key=lambda x: x['name'])
+            
+        except Exception as e:
+            raise WordComError(f"Error retrieving document styles: {e}")
+            
+        return styles
+        
+    def get_document_structure(self) -> List[Dict[str, Any]]:
+        """
+        Provides a structured overview of the document by listing all headings.
+        
+        Returns:
+            A list of dictionaries, each representing a heading with its text and level.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+            
+        structure = []
+        try:
+            # Iterate through all paragraphs
+            for paragraph in self.document.Paragraphs:
+                try:
+                    # Get paragraph style name
+                    style_name = paragraph.Style.NameLocal
+                    
+                    # Check if it's a heading style
+                    if style_name.startswith('Heading '):
+                        try:
+                            # Extract heading level (1-9)
+                            level = int(style_name.split(' ')[1])
+                            
+                            # Get heading text
+                            text = paragraph.Range.Text.strip()
+                            
+                            if text:
+                                structure.append({
+                                    'text': text,
+                                    'level': level
+                                })
+                        except (ValueError, IndexError):
+                            # Not a standard heading style with a numeric level
+                            continue
+                except Exception as e:
+                    print(f"Warning: Failed to process paragraph: {e}")
+                    continue
+        except Exception as e:
+            raise WordComError(f"Error retrieving document structure: {e}")
+            
+        return structure
+
+    def delete_comment(self, comment_index: int) -> None:
+        """
+        Deletes a comment by its 0-based index.
+
+        Args:
+            comment_index: The 0-based index of the comment to delete.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+            
+        try:
+            # Check if Comments property exists and is accessible
+            if not hasattr(self.document, 'Comments'):
+                raise WordComError("Comments collection is not available in this document.")
+            
+            # Get comments count safely
+            comments_count = 0
+            try:
+                comments_count = self.document.Comments.Count
+            except Exception as e:
+                raise WordComError(f"Failed to access Comments collection: {e}")
+            
+            # Validate comment index
+            if comment_index < 0 or comment_index >= comments_count:
+                raise ValueError(f"Invalid comment index: {comment_index}. Valid range is 0 to {comments_count - 1}.")
+            
+            # Comments are 1-based in the COM API
+            try:
+                self.document.Comments(comment_index + 1).Delete()
+            except Exception as e:
+                raise WordComError(f"Failed to delete comment: {e}")
+        except WordComError:
+            # Re-raise WordComError to maintain consistency
+            raise
+        except Exception as e:
+            raise WordComError(f"Error during comment deletion: {e}")
+
+    def delete_all_comments(self) -> int:
+        """
+        Deletes all comments in the document.
+        
+        Returns:
+            The number of comments deleted.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+            
+        try:
+            # Check if Comments property exists and is accessible
+            if not hasattr(self.document, 'Comments'):
+                # No comments to delete
+                return 0
+            
+            # Get initial comments count safely
+            comments_count = 0
+            try:
+                comments_count = self.document.Comments.Count
+            except Exception as e:
+                raise WordComError(f"Failed to access Comments collection: {e}")
+            
+            if comments_count == 0:
+                # No comments to delete
+                return 0
+            
+            # Store initial count for return value
+            deleted_count = comments_count
+            
+            # Delete comments in reverse order to avoid index shifting issues
+            try:
+                for i in range(comments_count, 0, -1):
+                    try:
+                        self.document.Comments(i).Delete()
+                    except Exception as e:
+                        print(f"Warning: Failed to delete comment at index {i}: {e}")
+                        # Continue with next comment
+                        continue
+            except Exception as e:
+                raise WordComError(f"Failed to delete all comments: {e}")
+            
+            return deleted_count
+        except WordComError:
+            # Re-raise WordComError to maintain consistency
+            raise
+        except Exception as e:
+            raise WordComError(f"Error during deletion of all comments: {e}")
+
+    def add_picture_caption(self, filename: str, caption_text: str, picture_index: Optional[int] = None, paragraph_index: Optional[int] = None) -> None:
+        """
+        Adds a caption to a picture in the document.
+        
+        Args:
+            filename: The filename of the document.
+            caption_text: The caption text to add.
+            picture_index: Optional index of the picture (0-based). If not specified, adds to first picture.
+            paragraph_index: Optional index of the paragraph to add caption after.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+        
+        try:
+            # Get all inline shapes (pictures)
+            inline_shapes = self.document.InlineShapes
+            shape_count = inline_shapes.Count
+            
+            if shape_count == 0:
+                raise WordComError("No pictures found in the document")
+            
+            # Determine which picture to add caption to
+            target_index = picture_index if picture_index is not None else 0
+            if target_index < 0 or target_index >= shape_count:
+                raise ValueError(f"Invalid picture index: {target_index}. Valid range is 0 to {shape_count - 1}.")
+            
+            # Get the target picture
+            picture = inline_shapes(target_index + 1)  # COM is 1-based
+            
+            # Create a range after the picture for the caption
+            caption_range = picture.Range
+            caption_range.Collapse(0)  # wdCollapseEnd
+            caption_range.InsertAfter("\n" + caption_text)
+            
+            # Apply caption style if available
+            try:
+                caption_range.Style = self.document.Styles("Caption")
+            except:
+                # If Caption style doesn't exist, continue without it
+                pass
+                
+        except Exception as e:
+            raise WordComError(f"Failed to add picture caption: {e}")
+
+    def edit_comment(self, comment_index: int, new_text: str) -> None:
+        """
+        Edits an existing comment by its 0-based index.
+
+        Args:
+            comment_index: The 0-based index of the comment to edit.
+            new_text: The new text for the comment.
+
+        Raises:
+            IndexError: If the comment index is out of range.
+            WordComError: If editing the comment fails.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+        
+        try:
+            # Check if comment index is valid
+            if comment_index < 0 or comment_index >= self.document.Comments.Count:
+                raise IndexError(f"Comment index {comment_index} out of range.")
+            
+            # Get the comment (COM is 1-based)
+            comment = self.document.Comments(comment_index + 1)
+            
+            # Update the comment text
+            comment.Range.Text = new_text
+        except IndexError:
+            raise
+        except Exception as e:
+            raise WordComError(f"Failed to edit comment: {e}")
+    
+    def reply_to_comment(self, comment_index: int, reply_text: str, author: str = "User") -> None:
+        """
+        Replies to an existing comment.
+
+        Args:
+            comment_index: The 0-based index of the comment to reply to.
+            reply_text: The text of the reply.
+            author: The author of the reply (default: "User").
+
+        Raises:
+            IndexError: If the comment index is out of range.
+            WordComError: If replying to the comment fails.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+        
+        try:
+            # Check if comment index is valid
+            if comment_index < 0 or comment_index >= self.document.Comments.Count:
+                raise IndexError(f"Comment index {comment_index} out of range.")
+            
+            # Get the comment (COM is 1-based)
+            comment = self.document.Comments(comment_index + 1)
+            
+            # Add a reply to the comment
+            # Note: Word COM doesn't have a direct Reply method, so we need to
+            # create a new comment at the same range as the original comment
+            # and set the author accordingly
+            reply = self.document.Comments.Add(
+                Range=comment.Scope, 
+                Text=reply_text
+            )
+            
+            # Set the author of the reply
+            reply.Author = author
+        except IndexError:
+            raise
+        except Exception as e:
+            raise WordComError(f"Failed to reply to comment: {e}")
+    
+    def get_comment_thread(self, comment_index: int) -> Dict[str, Any]:
+        """
+        Retrieves a comment thread including the original comment and all replies.
+
+        Args:
+            comment_index: The 0-based index of the original comment.
+
+        Returns:
+            A dictionary containing the original comment and all replies.
+
+        Raises:
+            IndexError: If the comment index is out of range.
+            WordComError: If retrieving the comment thread fails.
+        """
+        if not self.document:
+            raise RuntimeError("No document open.")
+        
+        try:
+            # Check if comment index is valid
+            if comment_index < 0 or comment_index >= self.document.Comments.Count:
+                raise IndexError(f"Comment index {comment_index} out of range.")
+            
+            # Get the original comment (COM is 1-based)
+            original_comment = self.document.Comments(comment_index + 1)
+            
+            # Get the range of the original comment's scope
+            original_scope = original_comment.Scope
+            
+            # Create the result dictionary with the original comment
+            result = {
+                "original_comment": {
+                    "text": original_comment.Range.Text,
+                    "author": original_comment.Author,
+                    "date": original_comment.Date
+                },
+                "replies": []
+            }
+            
+            # Search for replies to this comment
+            # We consider a reply as any comment that shares the same scope as the original
+            for i in range(1, self.document.Comments.Count + 1):
+                comment = self.document.Comments(i)
+                
+                # Skip the original comment
+                if comment.Index == original_comment.Index:
+                    continue
+                
+                # Check if this comment shares the same scope as the original
+                # We compare the start and end positions of the scopes
+                if (comment.Scope.Start == original_scope.Start and 
+                    comment.Scope.End == original_scope.End):
+                    result["replies"].append({
+                        "text": comment.Range.Text,
+                        "author": comment.Author,
+                        "date": comment.Date
+                    })
+            
+            return result
+        except IndexError:
+            raise
+        except Exception as e:
+            raise WordComError(f"Failed to get comment thread: {e}")

@@ -3,7 +3,9 @@ AppContext for managing the Word application instance and the active document st
 """
 import threading
 from typing import Optional
+
 import win32com.client
+
 
 class AppContext:
     """
