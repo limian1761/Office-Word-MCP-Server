@@ -51,7 +51,8 @@ class SelectorEngine:
         This is the main entry point for the selector.
         """
         if "target" not in locator:
-            raise LocatorSyntaxError("Locator must have a 'target'. Please refer to docs/locator_guide.md for proper usage.")
+            from word_document_server.utils.file_utils import get_doc_path
+            raise LocatorSyntaxError(f"Locator must have a 'target'. Please refer to {get_doc_path('locator_guide.md')} for proper usage.")
 
         target_spec = locator["target"]
         elements: List[Any]
@@ -76,7 +77,8 @@ class SelectorEngine:
             elements = self._select_relative_to_anchor(backend, anchor_element, target_spec, relation)
 
         if not elements:
-            raise ElementNotFoundError(f"No elements found for locator: {locator}. Please refer to locator_guide.md for proper usage.")
+            from word_document_server.utils.file_utils import get_doc_path
+            raise ElementNotFoundError(f"No elements found for locator: {locator}. Please refer to {get_doc_path('locator_guide.md')} for proper usage.")
         
         if expect_single and len(elements) > 1:
             raise AmbiguousLocatorError(f"Expected 1 element but found {len(elements)} for locator: {locator}. Please refer to locator_guide.md for proper usage.")

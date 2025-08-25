@@ -72,6 +72,8 @@ Objective: You are to continue the development of a Python-based MCP (Model Cont
   *   **Priority 2: Expand the Toolset**
     *   **Task 2.1: Create `replace_text` Tool:** A robust tool for finding an element via a locator and replacing its entire text content.
     *   **Task 2.2: Create More Table Tools:** Implemented `set_cell_value` to change the text of a single cell and `create_table` to add a new table at a specified location.
+    *   **Task 2.3: Image Manipulation Tools:** Added `insert_inline_picture`, `set_image_size`, and `get_image_info` for image operations.
+    *   **Task 2.4: Comment Tools:** Implemented `add_comment`, `get_comments`, and `delete_comment` for comment management.
 
   *   **Priority 3: Official MCP Conformance**
     *   **Task 3.1: Synchronize `mcp-config.json`:** The `mcp-config.json` file is synchronized with the tools defined in `app.py`, ensuring discoverability by MCP clients.

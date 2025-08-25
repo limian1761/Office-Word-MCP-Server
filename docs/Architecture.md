@@ -80,13 +80,13 @@
 *   **支持的关系:** `first_occurrence_after`, `all_occurrences_within`
 
 #### **3.2. 已实现的工具 (Tools)**
-*   **文档管理:** `open_document`, `shutdown_word`
-*   **内容读取:** `get_text`, `get_document_structure` (读取标题大纲)
-*   **内容写入:** `insert_paragraph`, `replace_text`, `set_cell_value`
-*   **内容创建:** `create_table`, `create_bulleted_list`
-*   **格式化:** `apply_format` (支持粗体, 对齐等)
-*   **删除:** `delete_element`
-*   **高级编辑:** `accept_all_changes`
+*   **文档管理:** `open_document`, `shutdown_word`, `save_document`, `close_document`
+*   **内容读取:** `get_text`, `get_document_structure`, `get_image_info`, `get_comments`, `get_text_from_cell`
+*   **内容写入:** `insert_paragraph`, `replace_text`, `set_cell_value`, `add_comment`
+*   **内容创建:** `create_table`, `create_bulleted_list`, `insert_inline_picture`
+*   **格式化:** `apply_format`, `set_image_size`
+*   **删除:** `delete_element`, `delete_comment`, `delete_image`
+*   **高级编辑:** `accept_all_changes`, `enable_track_revisions`, `disable_track_revisions`
 
 #### **3.3. 健壮性**
 *   **自定义异常:** 定义了 `ElementNotFoundError`, `AmbiguousLocatorError` 等异常，为AI提供清晰的失败反馈。

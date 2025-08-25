@@ -76,10 +76,51 @@ def ensure_docx_extension(filename: str) -> str:
     
     Args:
         filename: The filename to check
-        
+    
     Returns:
         Filename with .docx extension
     """
     if not filename.endswith('.docx'):
         return filename + '.docx'
     return filename
+
+
+def get_absolute_path(relative_path: str) -> str:
+    """
+    Convert a relative path to absolute path.
+    
+    Args:
+        relative_path: The relative path to convert
+    
+    Returns:
+        Absolute path
+    """
+    # Get absolute path based on current working directory
+    return os.path.abspath(relative_path)
+
+
+def get_project_root() -> str:
+    """
+    Get the project root directory.
+    
+    Returns:
+        Absolute path to project root
+    """
+    # Get the directory of the current file
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Go up two levels to reach project root
+    return os.path.abspath(os.path.join(current_dir, '..', '..'))
+
+
+def get_doc_path(doc_filename: str) -> str:
+    """
+    Get absolute path to a document in the docs directory.
+    
+    Args:
+        doc_filename: Filename of the document
+    
+    Returns:
+        Absolute path to the document
+    """
+    project_root = get_project_root()
+    return os.path.join(project_root, 'docs', doc_filename)

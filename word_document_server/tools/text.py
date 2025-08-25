@@ -91,45 +91,18 @@ def delete_element(ctx: Context, locator: Dict[str, Any], password: Optional[str
         element_count = len(selection._elements)
         
         try:
-            # First attempt to delete
+            # 尝试删除元素
             selection.delete()
         except Exception as e:
-            # Log the error
+            # 记录错误日志
             logger.error(f"Error occurred: {str(e)}", exc_info=True)
-            # Check if deletion failed due to protection or permission issues
-            error_msg = str(e)
-            if "permission" in error_msg.lower() or "locked" in error_msg.lower() or "protected" in error_msg.lower():
-                # Check protection status
-                protection_status = backend.get_protection_status()
-                if protection_status.get("protected", False):
-                    # First try without password
-                    if backend.unprotect_document():
-                        logger.info("Document unprotected successfully without password")
-                    else:
-                        if password:
-                            if backend.unprotect_document(password):
-                                logger.info("Document unprotected successfully with password")
-                            else:
-                                raise RuntimeError("Failed to unprotect document with provided password")
-                        else:
-                            raise RuntimeError("Document is protected and requires a password to unprotect")
-                    # Try to unprotect with provided password
-                    unprotect_result = backend.unprotect_document(password)
-                    if unprotect_result["success"]:
-                        # Try deleting again after unprotecting
-                        selection.delete()
-                    else:
-                        return f"Error [4003]: Failed to unprotect document: {unprotect_result['message']}"
-                else:
-                    return "Error [4003]: Document is protected. Please provide a password to delete elements."
-            # Re-raise if it's not a protection issue or we couldn't handle it
-            raise
+            # 直接汇报错误原因
+            return format_error_response(e)
         
         backend.document.Save()
         return f"Successfully deleted {element_count} element(s)."
     except Exception as e:
         return format_error_response(e)
-
 
 @mcp_server.tool()
 def get_text(ctx: Context, locator: Optional[Dict[str, Any]] = None, start_pos: Optional[int] = None, end_pos: Optional[int] = None) -> str:

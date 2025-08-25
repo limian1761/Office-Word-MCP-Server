@@ -90,10 +90,10 @@ class Selection:
         Delete all elements in the selection.
         
         Enhanced implementation with better error handling and verification,
-        including document protection check and unprotect functionality.
+        including document protection check without modifying protection status.
         
         Args:
-            password: Optional password to use for unprotecting the document if needed.
+            password: Optional password (not used for unprotecting document per user request).
         """
         if not self._elements:
             raise ValueError("No elements to delete.")
@@ -102,12 +102,14 @@ class Selection:
         # Create a copy of the elements list to avoid issues during iteration
         elements_to_delete = list(self._elements)
         deleted_count = 0
+        errors = []
         
         try:
             for element in elements_to_delete:
                 try:
                     # First, check if the element has a Delete method
                     if not hasattr(element, 'Delete'):
+                        errors.append("Element has no Delete method")
                         continue
                     
                     # Store element's text/content for verification
@@ -135,8 +137,10 @@ class Selection:
                         
                 except Exception as e:
                     # Log the error but continue with other elements
+                    error_msg = f"Failed to delete element: {str(e)}"
+                    errors.append(error_msg)
                     import logging
-                    logging.error(f"Failed to delete element: {str(e)}")
+                    logging.error(error_msg)
                     continue
             
             # If no elements were successfully deleted, check protection status
@@ -144,28 +148,18 @@ class Selection:
                 # Check if the document is protected
                 protection_status = self._backend.get_protection_status()
                 if protection_status["is_protected"]:
-                    # Attempt to unprotect the document
-                    unprotect_success = self._backend.unprotect_document(password)
-                    if unprotect_success:
-                        # Try deleting again after unprotecting
-                        deleted_count = 0
-                        for element in elements_to_delete:
-                            try:
-                                if hasattr(element, 'Delete'):
-                                    element.Delete()
-                                    deleted_count += 1
-                            except Exception as e2:
-                                logging.error(f"Failed to delete element after unprotecting: {str(e2)}")
-                                continue
-                        
-                        if deleted_count == 0:
-                            raise RuntimeError("Failed to delete any elements even after unprotecting the document.")
-                    else:
-                        raise RuntimeError(f"Failed to delete any elements. Document is protected and could not be unprotected.")
+                    raise WordDocumentError(
+                        ErrorCode.PERMISSION_DENIED, 
+                        "Failed to delete any elements. Document is protected and modification is not allowed.",
+                        {"protection_status": protection_status}
+                    )
                 else:
-                    raise RuntimeError("Failed to delete any elements. This might be due to permission issues or element锁定.")
-            
-            # Clear the elements list to reflect the deletion
+                    error_details = {"errors": errors} if errors else {}
+                    raise WordDocumentError(
+                        ErrorCode.ELEMENT_LOCKED, 
+                        "Failed to delete any elements. This might be due to permission issues or element locking.",
+                        error_details
+                    )
             self._elements = []
         except Exception as e:
             raise RuntimeError(f"Error during deletion: {str(e)}")
