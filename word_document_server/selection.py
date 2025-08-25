@@ -3,7 +3,7 @@ Selection Abstraction Layer for Word Document MCP Server.
 
 This module provides a unified interface for operating on selected document elements.
 """
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import win32com.client
 
@@ -70,6 +70,8 @@ class Selection:
                 self._backend.set_font_size_for_range(com_range, options["font_size"])
             if "font_name" in options:
                 self._backend.set_font_name_for_range(com_range, options["font_name"])
+            if "font_color" in options:
+                self._backend.set_font_color_for_range(com_range, options["font_color"])
             if "alignment" in options:
                 self._backend.set_alignment_for_range(com_range, options["alignment"])
             
@@ -83,11 +85,15 @@ class Selection:
                     import logging
                     logging.error(f"Failed to apply paragraph style '{options['paragraph_style']}': {str(e)}")
 
-    def delete(self) -> None:
+    def delete(self, password: Optional[str] = None) -> None:
         """
         Delete all elements in the selection.
         
-        Enhanced implementation with better error handling and verification.
+        Enhanced implementation with better error handling and verification,
+        including document protection check and unprotect functionality.
+        
+        Args:
+            password: Optional password to use for unprotecting the document if needed.
         """
         if not self._elements:
             raise ValueError("No elements to delete.")
@@ -97,47 +103,72 @@ class Selection:
         elements_to_delete = list(self._elements)
         deleted_count = 0
         
-        for element in elements_to_delete:
-            try:
-                # First, check if the element has a Delete method
-                if not hasattr(element, 'Delete'):
+        try:
+            for element in elements_to_delete:
+                try:
+                    # First, check if the element has a Delete method
+                    if not hasattr(element, 'Delete'):
+                        continue
+                    
+                    # Store element's text/content for verification
+                    original_content = None
+                    if hasattr(element, 'Range') and hasattr(element.Range, 'Text'):
+                        original_content = element.Range.Text
+                        
+                    # For paragraphs specifically, we might need to check if it's a valid paragraph
+                    is_paragraph = hasattr(element, 'Style') and hasattr(element.Style, 'NameLocal')
+                    
+                    # Attempt to delete the element
+                    element.Delete()
+                    
+                    # For certain element types, perform additional verification
+                    if is_paragraph:
+                        # For paragraphs, we should verify deletion by checking the document structure
+                        # This is a simple check - in a real implementation, you might want to do more thorough verification
+                        deleted_count += 1
+                    elif original_content:
+                        # For other elements with content, consider it deleted if we attempted the operation
+                        deleted_count += 1
+                    else:
+                        # For elements without content, assume deletion was attempted
+                        deleted_count += 1
+                        
+                except Exception as e:
+                    # Log the error but continue with other elements
+                    import logging
+                    logging.error(f"Failed to delete element: {str(e)}")
                     continue
-                
-                # Store element's text/content for verification
-                original_content = None
-                if hasattr(element, 'Range') and hasattr(element.Range, 'Text'):
-                    original_content = element.Range.Text
-                    
-                # For paragraphs specifically, we might need to check if it's a valid paragraph
-                is_paragraph = hasattr(element, 'Style') and hasattr(element.Style, 'NameLocal')
-                
-                # Attempt to delete the element
-                element.Delete()
-                
-                # For certain element types, perform additional verification
-                if is_paragraph:
-                    # For paragraphs, we should verify deletion by checking the document structure
-                    # This is a simple check - in a real implementation, you might want to do more thorough verification
-                    deleted_count += 1
-                elif original_content:
-                    # For other elements with content, consider it deleted if we attempted the operation
-                    deleted_count += 1
+            
+            # If no elements were successfully deleted, check protection status
+            if deleted_count == 0:
+                # Check if the document is protected
+                protection_status = self._backend.get_protection_status()
+                if protection_status["is_protected"]:
+                    # Attempt to unprotect the document
+                    unprotect_success = self._backend.unprotect_document(password)
+                    if unprotect_success:
+                        # Try deleting again after unprotecting
+                        deleted_count = 0
+                        for element in elements_to_delete:
+                            try:
+                                if hasattr(element, 'Delete'):
+                                    element.Delete()
+                                    deleted_count += 1
+                            except Exception as e2:
+                                logging.error(f"Failed to delete element after unprotecting: {str(e2)}")
+                                continue
+                        
+                        if deleted_count == 0:
+                            raise RuntimeError("Failed to delete any elements even after unprotecting the document.")
+                    else:
+                        raise RuntimeError(f"Failed to delete any elements. Document is protected and could not be unprotected.")
                 else:
-                    # For elements without content, assume deletion was attempted
-                    deleted_count += 1
-                    
-            except Exception as e:
-                # Log the error but continue with other elements
-                import logging
-                logging.error(f"Failed to delete element: {str(e)}")
-                continue
-        
-        # If no elements were successfully deleted, raise an exception
-        if deleted_count == 0:
-            raise RuntimeError("Failed to delete any elements. This might be due to permission issues or element锁定.")
-        
-        # Clear the elements list to reflect the deletion
-        self._elements = []
+                    raise RuntimeError("Failed to delete any elements. This might be due to permission issues or element锁定.")
+            
+            # Clear the elements list to reflect the deletion
+            self._elements = []
+        except Exception as e:
+            raise RuntimeError(f"Error during deletion: {str(e)}")
     
     def get_image_info(self) -> List[Dict[str, Any]]:
         """

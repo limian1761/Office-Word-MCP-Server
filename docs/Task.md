@@ -27,7 +27,7 @@ Objective: You are to continue the development of a Python-based MCP (Model Cont
     *   **Description:** Implement more specific exceptions to give the LLM better feedback on failed operations.
     *   **Implementation:**
         1.  In `selector.py`, create and raise an `AmbiguousLocatorError` if a locator, which is expected to return a single element, finds multiple.
-        2.  In `com_backend.py`, wrap key COM calls in `try...except` blocks to catch `pywintypes.com_error` and re-raise them as a more user-friendly `WordComError`, providing context on what failed.
+        2.  In `com_backend.py`, wrap key COM calls in `try...except` blocks to catch `pywintypes.com_error` and re-raise them as a more user-friendly `WordDocumentError`, providing context on what failed.
 
   #### **Priority 2: Expanding Document Element Support**
 

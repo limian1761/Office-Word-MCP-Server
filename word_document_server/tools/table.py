@@ -1,8 +1,9 @@
 from typing import Dict, Any, Optional
-from mcp.server.context import Context
-from word_document_server.utils import get_backend_for_tool, mcp_server
-from word_document_server.selector import selector
-from word_document_server.errors import ElementNotFoundError, AmbiguousLocatorError, format_error_response
+from mcp.server.fastmcp.server import Context
+from word_document_server.core_utils import get_backend_for_tool, mcp_server
+from word_document_server.core import selector
+from word_document_server.errors import ElementNotFoundError, format_error_response
+from word_document_server.selector import AmbiguousLocatorError
 
 
 @mcp_server.tool()

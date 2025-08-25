@@ -5,6 +5,21 @@ from mcp.server.fastmcp.server import Context
 from word_document_server.core_utils import get_backend_for_tool, mcp_server
 from word_document_server.selector import SelectorEngine, AmbiguousLocatorError
 from word_document_server.errors import ElementNotFoundError, format_error_response
+import pywintypes
+
+import logging
+
+# 配置日志记录
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+# 创建控制台处理程序
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+# 创建日志格式
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+# 添加控制台处理程序到日志记录器
+logger.addHandler(console_handler)
 
 
 @mcp_server.tool()
@@ -46,12 +61,13 @@ def insert_paragraph(ctx: Context, locator: Dict[str, Any], text: str, position:
 
 
 @mcp_server.tool()
-def delete_element(ctx: Context, locator: Dict[str, Any]) -> str:
+def delete_element(ctx: Context, locator: Dict[str, Any], password: Optional[str] = None) -> str:
     """
     Deletes the element(s) found by the locator.
 
     Args:
         locator: The Locator object to find the target element(s) to delete.
+        password: Optional password to unlock the document if it's protected.
 
     Returns:
         A success or error message.
@@ -73,7 +89,42 @@ def delete_element(ctx: Context, locator: Dict[str, Any]) -> str:
             return "Error [2002]: No elements found matching the locator." + " Please try simplifying your locator or use get_document_structure to check the actual document structure."
         
         element_count = len(selection._elements)
-        selection.delete()
+        
+        try:
+            # First attempt to delete
+            selection.delete()
+        except Exception as e:
+            # Log the error
+            logger.error(f"Error occurred: {str(e)}", exc_info=True)
+            # Check if deletion failed due to protection or permission issues
+            error_msg = str(e)
+            if "permission" in error_msg.lower() or "locked" in error_msg.lower() or "protected" in error_msg.lower():
+                # Check protection status
+                protection_status = backend.get_protection_status()
+                if protection_status.get("protected", False):
+                    # First try without password
+                    if backend.unprotect_document():
+                        logger.info("Document unprotected successfully without password")
+                    else:
+                        if password:
+                            if backend.unprotect_document(password):
+                                logger.info("Document unprotected successfully with password")
+                            else:
+                                raise RuntimeError("Failed to unprotect document with provided password")
+                        else:
+                            raise RuntimeError("Document is protected and requires a password to unprotect")
+                    # Try to unprotect with provided password
+                    unprotect_result = backend.unprotect_document(password)
+                    if unprotect_result["success"]:
+                        # Try deleting again after unprotecting
+                        selection.delete()
+                    else:
+                        return f"Error [4003]: Failed to unprotect document: {unprotect_result['message']}"
+                else:
+                    return "Error [4003]: Document is protected. Please provide a password to delete elements."
+            # Re-raise if it's not a protection issue or we couldn't handle it
+            raise
+        
         backend.document.Save()
         return f"Successfully deleted {element_count} element(s)."
     except Exception as e:

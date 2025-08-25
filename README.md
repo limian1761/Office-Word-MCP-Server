@@ -28,6 +28,20 @@ The server features a modular architecture that separates concerns into core fun
 
 ## Features
 
+### Document Protection Status
+The system can detect and return the protection status of Word documents using the `get_protection_status()` method, which returns a JSON object with:
+- `is_protected`: Boolean indicating if the document is protected
+- `protection_type`: Human-readable protection type based on Microsoft's WdProtectionType enumeration
+
+Protection types include:
+- `No protection` (-1): Document is not protected
+- `Allow only revisions` (0): Only revisions to existing content are allowed
+- `Allow only comments` (1): Only comments can be added
+- `Allow only form fields` (2): Content can only be added through form fields
+- `Allow only reading` (3): Read-only access only
+
+For implementation details, see: [WdProtectionType Enumeration](https://learn.microsoft.com/en-us/dotnet/api/microsoft.office.interop.word.wdprotectiontype)
+
 ### Document Management
 
 - Create new Word documents with metadata

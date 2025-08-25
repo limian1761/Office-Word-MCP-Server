@@ -35,7 +35,8 @@ class ErrorCode(Enum):
     ELEMENT_NOT_FOUND = (3001, "Element not found")
     ELEMENT_LOCKED = (3002, "Element is locked")
     ELEMENT_TYPE_ERROR = (3003, "Invalid element type")
-    
+    PARAGRAPH_SELECTION_FAILED = (3004, "Failed to select paragraph elements")
+
     # Style errors
     STYLE_NOT_FOUND = (4001, "Style not found")
     STYLE_APPLY_ERROR = (4002, "Failed to apply style")

@@ -9,10 +9,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from word_document_server.com_backend import WordBackend
 
-def test_context_manager_no_file(word_app):
+# Define test document path
+TEST_DOC_PATH = os.path.join(os.path.dirname(__file__), 'test_docs', 'test_document.docx')
+
+def test_context_manager_no_file():
     """Test that the backend can be used as a context manager without a file."""
     try:
-        with WordBackend(visible=False, word_app=word_app) as backend:
+        with WordBackend(visible=False) as backend:
             assert backend.word_app is not None
             assert backend.document is not None
             # Check that a new document is created
@@ -21,12 +24,10 @@ def test_context_manager_no_file(word_app):
         pytest.fail(f"WordBackend context manager raised an exception: {e}")
 
 @pytest.mark.document_name("test_document.docx")
-def test_context_manager_with_file(word_app, document):
+def test_context_manager_with_file():
     """Test that the backend can open an existing document."""
     try:
-        # Using the document path from the fixture
-        doc_path = document.FullName
-        with WordBackend(file_path=doc_path, visible=False, word_app=word_app) as backend:
+        with WordBackend(file_path=TEST_DOC_PATH, visible=False) as backend:
             assert backend.word_app is not None
             assert backend.document is not None
             assert "test_document.docx" in backend.document.Name

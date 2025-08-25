@@ -88,6 +88,7 @@ def create_test_document(file_path):
         add_paragraph("This paragraph is outside the table.")
         add_paragraph("The last paragraph.")
 
+        doc.ProtectionType = constants.wdNoProtection
         doc.SaveAs(file_path)
         print(f"Test document created at: {file_path}")
         

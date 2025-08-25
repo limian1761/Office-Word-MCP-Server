@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Dict, Any, Optional
 from mcp.server.fastmcp.server import Context
 from word_document_server.core_utils import get_backend_for_tool, mcp_server
@@ -42,7 +43,16 @@ def open_document(ctx: Context, file_path: str) -> str:
         ctx.session.document_state['active_document_path'] = file_path
         ctx.session.backend_instances[file_path] = backend
         
-        return f"Document opened successfully: {document_info}"
+        # Read agent guide content
+        agent_guide_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'docs', 'agent_guide.md')
+        try:
+            with open(agent_guide_path, 'r', encoding='utf-8') as f:
+                agent_guide_content = f.read()
+        except Exception as e:
+            agent_guide_content = f"Error reading agent guide: {str(e)}"
+
+        # Return combined response
+        return f"Document opened successfully: {document_info}\n\n---\n\n# Office-Word-MCP-Server Agent Guide\n\n{agent_guide_content}"
     except FileNotFoundError:
         return f"Error [4001]: The file '{file_path}' was not found."
     except PermissionError:

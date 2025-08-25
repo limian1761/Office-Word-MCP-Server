@@ -9,8 +9,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 import win32com.client
 
-from word_document_server.com_backend import WordBackend, WordComError
-from word_document_server.errors import ElementNotFoundError
+from word_document_server.com_backend import WordBackend
+from word_document_server.errors import WordDocumentError, ElementNotFoundError, ErrorCode
 from word_document_server.selection import Selection
 
 
@@ -51,7 +51,7 @@ class SelectorEngine:
         This is the main entry point for the selector.
         """
         if "target" not in locator:
-            raise LocatorSyntaxError("Locator must have a 'target'. Please refer to locator_guide.md for proper usage.")
+            raise LocatorSyntaxError("Locator must have a 'target'. Please refer to docs/locator_guide.md for proper usage.")
 
         target_spec = locator["target"]
         elements: List[Any]
@@ -185,22 +185,22 @@ class SelectorEngine:
                 try:
                     candidates = backend.get_paragraphs_in_range(search_range)
                 except Exception as e:
-                    raise WordComError(f"Failed to get paragraphs in range: {e}")
+                    raise WordDocumentError(f"Failed to get paragraphs in range: {e}")
             elif element_type == "table":
                 try:
                     candidates = backend.get_tables_in_range(search_range)
                 except Exception as e:
-                    raise WordComError(f"Failed to get tables in range: {e}")
+                    raise WordDocumentError(f"Failed to get tables in range: {e}")
             elif element_type == "cell":
                 try:
                     candidates = backend.get_cells_in_range(search_range)
                 except Exception as e:
-                    raise WordComError(f"Failed to get cells in range: {e}")
+                    raise WordDocumentError(f"Failed to get cells in range: {e}")
             elif element_type == "run":
                 try:
                     candidates = backend.get_runs_in_range(search_range)
                 except Exception as e:
-                    raise WordComError(f"Failed to get runs in range: {e}")
+                    raise WordDocumentError(f"Failed to get runs in range: {e}")
             elif element_type == "inline_shape" or element_type == "image":
                 # For images in a specific range, iterate through all inline shapes and check if they are within the range
                 try:
@@ -218,37 +218,38 @@ class SelectorEngine:
                     # Filter shapes that are within the search range
                     candidates = [shape for shape in all_shapes if hasattr(shape, 'Range') and shape.Range.Start >= search_range.Start and shape.Range.End <= search_range.End]
                 except Exception as e:
-                    raise WordComError(f"Failed to get inline shapes in range: {e}")
+                    raise WordDocumentError(f"Failed to get inline shapes in range: {e}")
         else:
             # Global search
             if element_type == "paragraph":
                 try:
                     candidates = backend.get_all_paragraphs()
                 except Exception as e:
-                    raise WordComError(f"Failed to get all paragraphs: {e}")
+                     from word_document_server.errors import ErrorCode
+                     raise WordDocumentError(ErrorCode.PARAGRAPH_SELECTION_FAILED, f"Failed to get all paragraphs: {e}")
             elif element_type == "table":
                 try:
                     candidates = backend.get_all_tables()
                 except Exception as e:
-                    raise WordComError(f"Failed to get all tables: {e}")
+                    raise WordDocumentError(f"Failed to get all tables: {e}")
             elif element_type == "heading":
                 try:
                     all_paragraphs = backend.get_all_paragraphs()
                     candidates = [p for p in all_paragraphs if hasattr(p, 'Style') and hasattr(p.Style, 'NameLocal') and (p.Style.NameLocal.startswith("Heading") or p.Style.NameLocal.startswith("标题"))]
                 except Exception as e:
-                    raise WordComError(f"Failed to get heading paragraphs: {e}")
+                    raise WordDocumentError(f"Failed to get heading paragraphs: {e}")
             elif element_type == "cell":
                 try:
                     doc_range = backend.document.Range(0, backend.document.Content.End)
                     candidates = backend.get_cells_in_range(doc_range)
                 except Exception as e:
-                    raise WordComError(f"Failed to get all cells: {e}")
+                    raise WordDocumentError(f"Failed to get all cells: {e}")
             elif element_type == "run":
                 try:
                     doc_range = backend.document.Range(0, backend.document.Content.End)
                     candidates = backend.get_runs_in_range(doc_range)
                 except Exception as e:
-                    raise WordComError(f"Failed to get all runs: {e}")
+                    raise WordDocumentError(f"Failed to get all runs: {e}")
             elif element_type == "inline_shape" or element_type == "image":
                 # Get all inline shapes (including images) in the document
                 try:
@@ -262,7 +263,7 @@ class SelectorEngine:
                                 print(f"Warning: Failed to access shape at index {i}: {e}")
                                 continue
                 except Exception as e:
-                    raise WordComError(f"Failed to get all inline shapes: {e}")
+                    raise WordDocumentError(f"Failed to get all inline shapes: {e}")
 
         if not candidates and element_type not in ["paragraph", "table", "heading", "cell", "run", "inline_shape", "image"]:
              raise LocatorSyntaxError(f"Unsupported element type: {element_type}. Please refer to locator_guide.md for proper usage.")
