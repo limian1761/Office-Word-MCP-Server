@@ -12,6 +12,31 @@ from word_document_server.errors import WordDocumentError, format_error_response
 
 from word_document_server.core import mcp_server
 
+# 添加session上下文管理功能
+from mcp.server.fastmcp.server import Context
+from typing import Any, Dict
+
+
+class MockSession:
+    """
+    用于测试的模拟会话类，实现session状态管理
+    """
+    def __init__(self):
+        self.document_state: Dict[str, Any] = {}
+        self.backend_instances: Dict[str, WordBackend] = {}
+
+
+class MockContext:
+    """
+    用于测试的模拟上下文类，提供Context接口
+    """
+    def __init__(self):
+        self.session = MockSession()
+        
+    def __getattr__(self, name):
+        # 提供默认行为，避免在测试中出错
+        return lambda *args, **kwargs: None
+
 def get_backend_for_tool(ctx: Context, file_path: str) -> WordBackend:
     """
     Gets or creates a WordBackend instance for the specified file path.
@@ -103,3 +128,14 @@ def validate_locator(locator: Dict[str, Any]) -> Optional[str]:
         return "Error: Locator target must contain a 'type' field"
     
     return None
+
+
+def get_session_context() -> MockContext:
+    """
+    获取会话上下文对象，用于测试场景。
+    
+    Returns:
+        一个预初始化的MockContext实例
+    """
+    # 创建并返回一个新的MockContext实例
+    return MockContext()

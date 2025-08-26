@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "word-document-server": {
-      "command": "python",
+    "word-docx-tools": {
+      "command": "uv",
       "args": [
-        "-m",
-        "word_document_server.main"
+        "run",
+        "C:/Users/lichao/Office-Word-MCP-Server/word_document_server/main.py"
       ],
       "env": {
         "MCP_TRANSPORT": "stdio"

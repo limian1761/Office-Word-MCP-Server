@@ -54,7 +54,6 @@ test = [
 
 [tool.uv]
 package = true
-
 dev-dependencies = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
@@ -63,6 +62,7 @@ dev-dependencies = [
     "mypy>=1.0",
 ]
 
+# 使用uv作为默认包管理器
 [tool.hatch.envs.default]
 installer = "uv"
 

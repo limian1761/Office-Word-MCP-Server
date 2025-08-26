@@ -8,6 +8,12 @@ from typing import Any, Dict, List, Optional
 import win32com.client
 
 from word_document_server.com_backend import WordBackend
+from word_document_server.errors import WordDocumentError, ErrorCode
+
+# 延迟导入，避免循环依赖
+def get_backend_for_tool(ctx, file_path):
+    from word_document_server.core_utils import get_backend_for_tool as _get_backend_for_tool
+    return _get_backend_for_tool(ctx, file_path)
 
 
 class Selection:

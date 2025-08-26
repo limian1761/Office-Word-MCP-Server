@@ -94,6 +94,8 @@ def test_set_header_text(test_doc):
     """
     pythoncom.CoInitialize()
     mock_context = MockContext()
+    mock_context.is_testing = True # 标记为测试环境
+    mock_context.is_testing = True # 标记为测试环境
     header_text_to_set = "This is a test header."
     
     try:
@@ -497,7 +499,7 @@ def test_accept_all_changes_tool(test_doc):
             backend.document = mock_context.session.document_state
 
             # 3. Mock document revisions (since we can't directly access Word's Revisions)
-            backend.document.Revisions = [object()]
+            backend.document['Revisions'] = [object()]
 
             # 4. Call the tool to accept all changes
             result = accept_all_changes(mock_context)
