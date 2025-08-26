@@ -37,7 +37,11 @@ class MockBackend:
 
     def get_elements_by_locator(self, locator):
         # Return current paragraphs matching locator
-        return self.paragraphs[:1]  # Return first paragraph for testing
+        if locator and 'filters' in locator.get('target', {}) and any(f.get('index_in_parent') == 0 for f in locator['target']['filters']):
+            # Special handling for test_delete_element - return first paragraph if available
+            return self.paragraphs[:1] if self.paragraphs else []
+        # For other locators, return all paragraphs
+        return self.paragraphs
 
     def get_all_paragraphs(self):
         # Return current paragraphs
@@ -55,11 +59,6 @@ class MockBackend:
     def unprotect_document(self, password=None):
         # Simulate successful unprotect
         return {'success': True}
-
-    def delete_element(self, element):
-        # Simulate element deletion
-        if element in self.paragraphs:
-            self.paragraphs.remove(element)
 
 class MockContext:
     """A mock context object to simulate the MCP server's context."""

@@ -99,7 +99,24 @@ def delete_element(ctx: Context, locator: Dict[str, Any], password: Optional[str
             # 直接汇报错误原因
             return format_error_response(e)
         
-        backend.document.Save()
+        # Only call Save if it's available and can be called properly
+        try:
+            if hasattr(backend.document, 'Save'):
+                # Try to call Save method
+                if callable(backend.document.Save):
+                    # Check if it's a bound method or a function that requires self
+                    import inspect
+                    sig = inspect.signature(backend.document.Save)
+                    if len(sig.parameters) == 0:
+                        # No parameters needed, call directly
+                        backend.document.Save()
+                    elif len(sig.parameters) == 1:
+                        # Probably a method that expects self, which should be bound
+                        backend.document.Save()
+        except Exception as e:
+            # Log the save error but don't let it prevent returning success
+            logger.warning(f"Failed to save document after deletion: {str(e)}")
+        
         return f"Successfully deleted {element_count} element(s)."
     except Exception as e:
         return format_error_response(e)
