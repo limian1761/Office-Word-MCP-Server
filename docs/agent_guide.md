@@ -5,48 +5,17 @@
 ### 使用流程概述
 
 1. **连接服务器**：确保MCP服务器已启动并与AI大模型客户端正确连接
-2. **打开文档**：首先使用`open_document`工具打开目标Word文档
+2. **打开文档**：首先使用[open_document](file:///c:/Users/lichao/Office-Word-MCP-Server/word_document_server/tools/document.py#L23-L52)工具打开目标Word文档
 3. **执行操作**：调用相应工具进行文档编辑、内容提取等操作
-4. **关闭文档**：完成操作后使用`shutdown_word`关闭Word应用实例
+4. **关闭文档**：完成操作后使用[shutdown_word](file:///c:/Users/lichao/Office-Word-MCP-Server/word_document_server/tools/document.py#L137-L153)关闭Word应用实例
 
 ### 错误处理指南
 
 在使用MCP服务器时，需要注意以下错误处理原则:
 
-1. 确保在调用任何工具前，已经通过`open_document`打开了一个有效的文档
-2. 对于可能返回错误的工具，检查返回值是否包含错误信息和标准化的错误代码
+1. 确保在调用任何工具前，已经通过[open_document](file:///c:/Users/lichao/Office-Word-MCP-Server/word_document_server/tools/document.py#L23-L52)打开了一个有效的文档
+2. 对于可能返回错误的工具，检查返回值是否包含错误信息
 3. 当出现错误时，尝试理解错误原因并采取相应措施
-
-以下是标准化的错误代码表:
-
-| 错误代码 | 错误类型 | 描述 | 可能的解决方法 |
-|---------|---------|------|--------------|
-| [0] | 成功 | 操作成功完成 | - |
-| [1001] | 参数错误 | 无效输入参数 | 检查参数格式和值是否正确 |
-| [1002] | 资源错误 | 请求的资源未找到 | 确认资源存在且路径正确 |
-| [1003] | 权限错误 | 权限不足 | 检查文件和系统权限设置 |
-| [1004] | 服务器错误 | 内部服务器错误 | 查看服务器日志获取详细信息 |
-| [2001] | 文档错误 | 没有活动文档 | 确保已通过`open_document`打开有效文档 |
-| [2002] | 文档错误 | 无法打开文档 | 确认文件路径正确且文件未损坏 |
-| [2003] | 文档错误 | 无法保存文档 | 检查文件权限和存储空间 |
-| [2004] | 文档错误 | 无效的文档格式 | 确认文件是有效的.docx格式 |
-| [3001] | 元素错误 | 元素未找到 | 检查Locator定位器是否正确 |
-| [3002] | 元素错误 | 元素已锁定 | 检查文档保护设置 |
-| [3003] | 元素错误 | 无效的元素类型 | 确保定位器选择了正确类型的元素 |
-| [3004] | 元素错误 | 无法选择段落元素 | 检查文档结构和段落格式 |
-| [4001] | 样式错误 | 样式未找到 | 确认样式名称正确 |
-| [4002] | 样式错误 | 无法应用样式 | 检查样式定义和文档兼容性 |
-| [5001] | 格式化错误 | 格式化错误 | 检查格式参数是否符合要求 |
-| [6001] | 图像错误 | 图像未找到 | 确认图像文件路径正确 |
-| [6002] | 图像错误 | 无效的图像格式 | 使用支持的图像格式（JPG、PNG等） |
-| [6003] | 图像错误 | 无法加载图像 | 检查图像文件完整性 |
-| [7001] | 表格错误 | 表格操作错误 | 检查表格结构是否完整 |
-| [8001] | 注释错误 | 注释操作错误 | 检查文档是否包含注释组件 |
-
-这些错误消息通常会以JSON格式返回，例如:
-```json
-{"error": "Element not found", "code": 2002}
-```
 
 ### 核心工具列表及参数说明
 
@@ -104,7 +73,7 @@ get_text(locator: Dict[str, Any] = None, start_pos: int = None, end_pos: int = N
 #   end_pos - 可选，文本范围的结束位置（整数）
 # 返回值：
 #   - 成功时：返回格式为 "Success: '{提取的文本}'" 的字符串，其中包含提取的文本内容
-#   - 失败时：返回错误信息字符串，如 "Error: No active document. Please use 'open_document' first."、"Error: Invalid range positions. start_pos must be >= 0 and end_pos must be > start_pos." 或 "An unexpected error occurred: {具体错误信息}"
+#   - 失败时：返回错误信息字符串，如 "No active document. Please use 'open_document' first."、"Invalid range positions. start_pos must be >= 0 and end_pos must be > start_pos." 或 "An unexpected error occurred: {具体错误信息}"
 # 注意事项：
 #   - 使用前必须先调用open_document打开文档
 #   - 如果定位器匹配多个元素，将返回所有匹配元素的文本内容
@@ -159,7 +128,7 @@ find_text(find_text: str, match_case: bool = False, match_whole_word: bool = Fal
 #   ignore_space - 是否忽略空格差异（默认：False）
 # 返回值：
 #   - 成功时：返回JSON格式字符串，包含找到的匹配项数量和每个匹配项的详细信息（位置、文本、段落索引、上下文预览）
-#   - 失败时：返回错误信息字符串，如 "Error: No active document. Please use 'open_document' first." 或 "Error: Search text cannot be empty." 或 "An unexpected error occurred during text search: {具体错误信息}"
+#   - 失败时：返回错误信息字符串，如 "No active document. Please use 'open_document' first." 或 "Search text cannot be empty." 或 "An unexpected error occurred during text search: {具体错误信息}"
 # 注意事项：
 #   - 使用前必须先调用open_document打开文档
 #   - 搜索文本不能为空
@@ -196,8 +165,7 @@ delete_element(locator: Dict[str, Any]) -> str
 # 参数：locator - 定位目标元素的定位器
 # 返回值：
 #   - 成功时：返回格式为 "Element(s) deleted successfully" 的确认消息
-#   - 失败时：返回标准化错误JSON，包含错误代码和描述，如 {"error": "Element not found", "code": 2002} 或 {"error": "Operation failed", "code": 4001}
-# 可能的错误代码：[1001] 参数错误、[2001] 文档错误、[2002] 元素未找到、[3001] 定位器歧义、[4001] 操作失败、[4003] COM组件错误
+#   - 失败时：返回标准化错误信息，如 "Element not found" 或 "Operation failed"
 
 # 添加评论到指定位置
 add_comment(locator: Dict[str, Any], text: str) -> str
@@ -207,15 +175,14 @@ add_comment(locator: Dict[str, Any], text: str) -> str
 #   text - 评论内容文本
 # 返回值：
 #   - 成功时：返回格式为 "Comment added successfully" 的确认消息
-#   - 失败时：返回错误信息字符串，如 "Error: No active document" 或 "An unexpected error occurred" 
+#   - 失败时：返回错误信息字符串，如 "No active document" 或 "An unexpected error occurred" 
 
 # 获取文档中的所有评论
 get_comments() -> str
 # 功能：获取文档中的所有评论
 # 返回值：
 #   - 成功时：包含所有评论信息的JSON字符串，每项包含评论的文本、作者、位置等信息
-#   - 失败时：返回标准化错误JSON，包含错误代码和描述，如 {"error": "No active document available", "code": 2001} 或 {"error": "Comments access error", "code": 4004}
-# 可能的错误代码：[1001] 参数错误、[2001] 文档错误、[4004] 特殊组件错误
+#   - 失败时：返回错误信息字符串，如 "No active document available" 或 "Comments access error"
 
 # 删除指定评论
 delete_comment(comment_id: int) -> str
@@ -224,7 +191,7 @@ delete_comment(comment_id: int) -> str
 #   comment_id - 评论的唯一标识符
 # 返回值：
 #   - 成功时：返回格式为 "Comment deleted successfully" 的确认消息
-#   - 失败时：返回错误信息字符串，如 "Error: Comment not found" 或 "An unexpected error occurred" 
+#   - 失败时：返回错误信息字符串，如 "Comment not found" 或 "An unexpected error occurred" 
 
 # 删除文档中的所有评论
 delete_all_comments() -> str
@@ -255,8 +222,7 @@ get_image_info(locator: Dict[str, Any] = None) -> str
 #   locator - 可选，定位特定图片的定位器，如果未提供，则返回所有图片
 # 返回值：
 #   - 成功时：包含图片信息的JSON字符串，每项包含图片的索引、类型、尺寸等信息
-#   - 失败时：返回标准化错误JSON，包含错误代码和描述，如 {"error": "No active document available", "code": 2001} 或 {"error": "Element not found", "code": 2002}
-# 可能的错误代码：[1001] 参数错误、[2001] 文档错误、[2002] 元素未找到、[3001] 定位器歧义、[4003] COM组件错误
+#   - 失败时：返回错误信息字符串，如 "No active document available" 或 "Element not found"
 
 # 插入嵌入式图片
 insert_inline_picture(locator: Dict[str, Any], image_path: str, position: str = "after") -> str
@@ -275,8 +241,7 @@ get_text_from_cell(locator: Dict[str, Any]) -> str
 # 参数：locator - 定位表格单元格的定位器
 # 返回值：
 #   - 成功时：单元格文本内容
-#   - 失败时：返回标准化错误信息，包含错误代码和描述
-# 可能的错误代码：[1001] 参数错误、[2001] 文档错误、[2002] 元素未找到、[2003] 定位器歧义、[7001] 表格错误
+#   - 失败时：返回标准化错误信息
 
 # 设置表格单元格值
 set_cell_value(locator: Dict[str, Any], text: str) -> str
@@ -285,8 +250,7 @@ set_cell_value(locator: Dict[str, Any], text: str) -> str
 #   text - 要设置的单元格文本
 # 返回值：
 #   - 成功时：操作结果确认消息
-#   - 失败时：返回标准化错误信息，包含错误代码和描述
-# 可能的错误代码：[1001] 参数错误、[2001] 文档错误、[2002] 元素未找到、[2003] 定位器歧义、[7001] 表格错误
+#   - 失败时：返回标准化错误信息
 
 # 创建表格
 create_table(locator: Dict[str, Any], rows: int, cols: int) -> str
@@ -296,8 +260,7 @@ create_table(locator: Dict[str, Any], rows: int, cols: int) -> str
 #   cols - 表格列数（必须为正整数）
 # 返回值：
 #   - 成功时：操作结果确认消息
-#   - 失败时：返回标准化错误信息，包含错误代码和描述
-# 可能的错误代码：[1001] 参数错误、[2001] 文档错误、[2002] 元素未找到、[2003] 定位器歧义、[7001] 表格错误
+#   - 失败时：返回标准化错误信息
 ```
 
 #### 页眉页脚工具
@@ -324,8 +287,7 @@ apply_format(locator: Dict[str, Any], formatting: Dict[str, Any]) -> str
 #   formatting - 格式设置字典，如{"bold": True, "alignment": "center", "paragraph_style": "标题 1"}
 # 返回值：
 #   - 成功时：返回格式为 "Formatting applied successfully" 的确认消息
-#   - 失败时：返回标准化错误JSON，包含错误代码和描述，如 {"error": "Invalid formatting specified", "code": 4002} 或 {"error": "Element not found", "code": 2002}
-# 可能的错误代码：[1001] 参数错误、[2001] 文档错误、[2002] 元素未找到、[3001] 定位器歧义、[4001] 操作失败、[4002] 格式错误、[4003] COM组件错误
+#   - 失败时：返回标准化错误信息，如 "Invalid formatting specified" 或 "Element not found"
 
 # 应用段落样式到指定元素（更稳定的样式应用方式）
 apply_paragraph_style(locator: Dict[str, Any], style_name: str) -> str
@@ -565,7 +527,7 @@ response = await mcp_client.call_tool(
         "text": "Test"
     }
 )
-# 可能的错误响应: "Error [2002]: No table cell found matching the locator: Table index 999 not found"
+# 可能的错误响应: "No table cell found matching the locator: Table index 999 not found"
 
 # 表格创建参数验证错误示例
 response = await mcp_client.call_tool(
@@ -576,7 +538,7 @@ response = await mcp_client.call_tool(
         "cols": 4
     }
 )
-# 可能的错误响应: "Error [1001]: Invalid row count. Must be a positive integer."
+# 可能的错误响应: "Invalid row count. Must be a positive integer."
 
 # COM错误处理示例（表格操作失败）
 response = await mcp_client.call_tool(
@@ -595,7 +557,7 @@ response = await mcp_client.call_tool(
         "text": "Test"
     }
 )
-# 可能的错误响应: "Error [7001]: Failed to update table cell. This may occur if the document structure is corrupted, the table is protected, or Word is in an unstable state. Try closing and reopening the document."
+# 可能的错误响应: "Failed to update table cell. This may occur if the document structure is corrupted, the table is protected, or Word is in an unstable state. Try closing and reopening the document."
 ```
 
 #### 7. 文档修订模式控制
@@ -650,25 +612,25 @@ print(response)  # "Word application shut down successfully."
 
 ### 最佳实践
 
-1. **会话管理**：在一个会话中完成一组相关操作，但不要自动调用`shutdown_word`工具，应由人类用户自己接受修订和关闭文档
+1. **会话管理**：在一个会话中完成一组相关操作，但不要自动调用[shutdown_word](file:///c:/Users/lichao/Office-Word-MCP-Server/word_document_server/tools/document.py#L137-L153)工具，应由人类用户自己接受修订和关闭文档
 2. **修订模式**：文档编辑前打开修订模式，以便追踪和管理所有修改
-3. **错误处理**：检查工具返回值是否包含错误代码，根据错误类型采取相应措施。特别注意处理[4003]、[4004]、[7001]、[8001]等COM组件错误，可能需要重启Word应用
+3. **错误处理**：检查工具返回值是否包含错误信息，根据错误类型采取相应措施。特别注意处理COM组件错误，可能需要重启Word应用
 4. **定位策略**：使用精确的locator避免误操作，特别是在批量操作时
 5. **路径处理**：确保提供的文件路径是绝对路径
-6. **文档检查**：使用`open_document`前确认文件存在且格式正确
-7. **样式应用**：对于段落样式应用，优先使用`apply_paragraph_style`工具，提供更稳定的样式应用体验
-8. **批量操作**：当需要对多个元素应用不同格式时，使用`batch_apply_format`工具提高效率
-9. **样式验证**：在应用样式前，可以使用`get_document_styles`获取文档中可用的样式列表，避免使用不存在的样式
+6. **文档检查**：使用[open_document](file:///c:/Users/lichao/Office-Word-MCP-Server/word_document_server/tools/document.py#L23-L52)前确认文件存在且格式正确
+7. **样式应用**：对于段落样式应用，优先使用[apply_paragraph_style](file:///c:/Users/lichao/Office-Word-MCP-Server/word_document_server/tools/text.py#L321-L374)工具，提供更稳定的样式应用体验
+8. **批量操作**：当需要对多个元素应用不同格式时，使用[batch_apply_format](file:///c:/Users/lichao/Office-Word-MCP-Server/word_document_server/tools/text.py#L377-L470)工具提高效率
+9. **样式验证**：在应用样式前，可以使用[get_document_styles](file:///c:/Users/lichao/Office-Word-MCP-Server/word_document_server/tools/document.py#L156-L176)获取文档中可用的样式列表，避免使用不存在的样式
 10. **错误重试**：对于临时性错误，实现适当的重试机制
 11. **组件访问**：当访问特定Word组件（如Paragraphs、Comments、InlineShapes、Tables）时，确保文档包含相应组件并使用适当的访问方式
 12. **表格操作**：
     - 在操作表格前，确保表格存在且结构完整
     - 使用精确的表格索引、行索引和列索引定位单元格
     - 处理表格操作时，注意文档保护状态和表格锁定状态
-    - 对于[7001]表格错误，建议关闭并重新打开文档后重试
+    - 对于表格错误，建议关闭并重新打开文档后重试
 13. **参数验证**：
     - 在调用工具前验证参数的有效性（如行数、列数必须为正整数）
-    - 使用适当的错误代码帮助用户快速定位问题
+    - 使用适当的错误消息帮助用户快速定位问题
 14. **异常处理**：
     - 实现嵌套异常处理结构，区分不同类型的错误
     - 对COM相关错误提供具体的解决建议

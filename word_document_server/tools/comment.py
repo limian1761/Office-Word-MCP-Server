@@ -2,10 +2,11 @@ import json
 from typing import Dict, Any, Optional
 from mcp.server.fastmcp.server import Context
 from word_document_server.core_utils import get_backend_for_tool, mcp_server
-from word_document_server.errors import ElementNotFoundError, format_error_response
+from word_document_server.errors import format_error_response, handle_tool_errors
 
 
 @mcp_server.tool()
+@handle_tool_errors
 def add_comment(ctx: Context, locator: Dict[str, Any], text: str, author: str = "User") -> str:
     """
     Adds a comment to the document at the location specified by the locator.
@@ -21,12 +22,13 @@ def add_comment(ctx: Context, locator: Dict[str, Any], text: str, author: str = 
     # Get active document path from session state
     active_doc_path = None
     if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
+        from word_document_server.core_utils import validate_active_document
+    error = validate_active_document(ctx)
+    if error:
+        raise Exception(error)
 
     if not text:
-        return "Error [1001]: Comment text cannot be empty."
+        raise Exception("Error [1001]: Comment text cannot be empty.")
 
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
@@ -42,7 +44,7 @@ def add_comment(ctx: Context, locator: Dict[str, Any], text: str, author: str = 
         com_range_obj = selection._elements[0].Range
         
         # Call the backend method to add a comment
-        comment_id = backend.add_comment(com_range_obj, text, author)
+        comment_id = add_comment(backend, com_range_obj, text, author)
         
         # Check if document is not None before saving
         if backend.document is None:
@@ -69,15 +71,16 @@ def get_comments(ctx: Context) -> str:
     # Get active document path from session state
     active_doc_path = None
     if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
+        from word_document_server.core_utils import validate_active_document
+    error = validate_active_document(ctx)
+    if error:
+        return error
 
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
         
         # Get all comments from the backend
-        comments = backend.get_comments()
+        comments = get_comments(backend)
         
         # Convert to JSON string
         return json.dumps(comments, ensure_ascii=False)
@@ -99,34 +102,23 @@ def delete_comment(ctx: Context, comment_index: int) -> str:
     # Get active document path from session state
     active_doc_path = None
     if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
-
-    if not isinstance(comment_index, int):
-        return "Error [1001]: Comment index must be an integer."
-
-    if comment_index < 0:
-        return "Error [1001]: Comment index cannot be negative."
+        from word_document_server.core_utils import validate_active_document
+    error = validate_active_document(ctx)
+    if error:
+        return error
 
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
         
-        # Delete the comment by index
-        backend.delete_comment(comment_index)
+        # Call the backend method to delete the comment
+        delete_comment(backend, comment_index)
         
-        # Check if document is not None before saving
-        if backend.document is None:
-            raise ValueError("Failed to save document after deleting comment: Document object is None.")
-            
         # Save the document
         backend.document.Save()
         
-        return f"Comment at index {comment_index} has been deleted successfully."
+        return f"Comment at index {comment_index} deleted successfully."
     except IndexError:
-        # Get total number of comments to provide better feedback
-        total_comments = len(backend.get_comments())
-        return f"Error [4004]: Comment index {comment_index} out of range. There are {total_comments} comments in the document."
+        return f"Error [1001]: Comment index {comment_index} is out of range."
     except Exception as e:
         return format_error_response(e)
 
@@ -142,24 +134,21 @@ def delete_all_comments(ctx: Context) -> str:
     # Get active document path from session state
     active_doc_path = None
     if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
+        from word_document_server.core_utils import validate_active_document
+    error = validate_active_document(ctx)
+    if error:
+        return error
 
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
         
-        # Delete all comments
-        count = backend.delete_all_comments()
+        # Call the backend method to delete all comments
+        deleted_count = delete_all_comments(backend)
         
-        # Check if document is not None before saving
-        if backend.document is None:
-            raise ValueError("Failed to save document after deleting all comments: Document object is None.")
-            
         # Save the document
         backend.document.Save()
         
-        return f"Successfully deleted {count} comments."
+        return f"All {deleted_count} comments deleted successfully."
     except Exception as e:
         return format_error_response(e)
 
@@ -179,37 +168,26 @@ def edit_comment(ctx: Context, comment_index: int, new_text: str) -> str:
     # Get active document path from session state
     active_doc_path = None
     if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
-
-    if not isinstance(comment_index, int):
-        return "Error [1001]: Comment index must be an integer."
-
-    if comment_index < 0:
-        return "Error [1001]: Comment index cannot be negative."
+        from word_document_server.core_utils import validate_active_document
+    error = validate_active_document(ctx)
+    if error:
+        return error
 
     if not new_text:
-        return "Error [1001]: New comment text cannot be empty."
+        return "Error [1001]: Comment text cannot be empty."
 
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
         
-        # Edit the comment
-        backend.edit_comment(comment_index, new_text)
+        # Call the backend method to edit the comment
+        edit_comment(backend, comment_index, new_text)
         
-        # Check if document is not None before saving
-        if backend.document is None:
-            raise ValueError("Failed to save document after editing comment: Document object is None.")
-            
         # Save the document
         backend.document.Save()
         
-        return f"Comment at index {comment_index} has been updated successfully."
+        return f"Comment at index {comment_index} edited successfully."
     except IndexError:
-        # Get total number of comments to provide better feedback
-        total_comments = len(backend.get_comments())
-        return f"Error [4004]: Comment index {comment_index} out of range. There are {total_comments} comments in the document."
+        return f"Error [1001]: Comment index {comment_index} is out of range."
     except Exception as e:
         return format_error_response(e)
 
@@ -230,15 +208,10 @@ def reply_to_comment(ctx: Context, comment_index: int, reply_text: str, author: 
     # Get active document path from session state
     active_doc_path = None
     if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
-
-    if not isinstance(comment_index, int):
-        return "Error [1001]: Comment index must be an integer."
-
-    if comment_index < 0:
-        return "Error [1001]: Comment index cannot be negative."
+        from word_document_server.core_utils import validate_active_document
+    error = validate_active_document(ctx)
+    if error:
+        return error
 
     if not reply_text:
         return "Error [1001]: Reply text cannot be empty."
@@ -246,21 +219,15 @@ def reply_to_comment(ctx: Context, comment_index: int, reply_text: str, author: 
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
         
-        # Reply to the comment
-        backend.reply_to_comment(comment_index, reply_text, author)
+        # Call the backend method to reply to the comment
+        reply_to_comment(backend, comment_index, reply_text, author)
         
-        # Check if document is not None before saving
-        if backend.document is None:
-            raise ValueError("Failed to save document after replying to comment: Document object is None.")
-            
         # Save the document
         backend.document.Save()
         
         return f"Reply added to comment at index {comment_index} successfully."
     except IndexError:
-        # Get total number of comments to provide better feedback
-        total_comments = len(backend.get_comments())
-        return f"Error [4004]: Comment index {comment_index} out of range. There are {total_comments} comments in the document."
+        return f"Error [1001]: Comment index {comment_index} is out of range."
     except Exception as e:
         return format_error_response(e)
 
@@ -274,7 +241,7 @@ def get_comment_thread(ctx: Context, comment_index: int) -> str:
         comment_index: The 0-based index of the original comment.
 
     Returns:
-        A JSON string containing the comment thread information.
+        A JSON string containing the original comment and all replies.
     """
     # Get active document path from session state
     active_doc_path = None
@@ -283,23 +250,15 @@ def get_comment_thread(ctx: Context, comment_index: int) -> str:
     if not active_doc_path:
         return "Error [2001]: No active document. Please use 'open_document' first."
 
-    if not isinstance(comment_index, int):
-        return "Error [1001]: Comment index must be an integer."
-
-    if comment_index < 0:
-        return "Error [1001]: Comment index cannot be negative."
-
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
         
-        # Get the comment thread
-        thread = backend.get_comment_thread(comment_index)
+        # Call the backend method to get the comment thread
+        thread = get_comment_thread(backend, comment_index)
         
         # Convert to JSON string
         return json.dumps(thread, ensure_ascii=False)
     except IndexError:
-        # Get total number of comments to provide better feedback
-        total_comments = len(backend.get_comments())
-        return f"Error [4004]: Comment index {comment_index} out of range. There are {total_comments} comments in the document."
+        return f"Error [1001]: Comment index {comment_index} is out of range."
     except Exception as e:
         return format_error_response(e)

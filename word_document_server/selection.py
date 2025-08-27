@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Optional
 
 import win32com.client
 
-from word_document_server.com_backend import WordBackend
-from word_document_server.errors import WordDocumentError, ErrorCode
+from word_document_server.word_backend import WordBackend
+from word_document_server.errors import WordDocumentError
 
 # 延迟导入，避免循环依赖
 def get_backend_for_tool(ctx, file_path):
@@ -91,15 +91,12 @@ class Selection:
                     import logging
                     logging.error(f"Failed to apply paragraph style '{options['paragraph_style']}': {str(e)}")
 
-    def delete(self, password: Optional[str] = None) -> None:
+    def delete(self) -> None:
         """
         Delete all elements in the selection.
         
         Enhanced implementation with better error handling and verification,
         including document protection check without modifying protection status.
-        
-        Args:
-            password: Optional password (not used for unprotecting document per user request).
         """
         if not self._elements:
             raise ValueError("No elements to delete.")
@@ -262,61 +259,175 @@ class Selection:
                 if height is not None:
                     element.Height = height
                      
-    def insert_image(self, image_path: str, position: str = "after") -> 'Selection':
+    def insert_object(self, object_path: str, object_type: str = "image", position: str = "after") -> None:
         """
-        Inserts an image relative to the selection.
+        Inserts an object (such as an image, file, or OLE object) at the location of the selection.
         
         Args:
-            image_path: The absolute path to the image file.
-            position: "before", "after", or "replace" to specify where to insert the image relative to the selection.
-            
-        Returns:
-            A new Selection object representing the inserted image.
+            object_path: Path to the object file to insert.
+            object_type: Type of object to insert. Supported types: "image", "file", "ole".
+            position: Where to insert relative to the anchor element. 
+                     Supported values: "before", "after", "replace".
         """
         if not self._elements:
-            # Cannot insert relative to an empty selection
-            raise ValueError("Cannot insert image relative to an empty selection.")
+            raise ValueError("Cannot insert object: No anchor element selected.")
             
-        inserted_shape = None
+        if len(self._elements) > 1:
+            raise ValueError("Cannot insert object: Multiple elements selected. Please select a single element as anchor.")
+            
+        anchor_element = self._elements[0]
         
+        # Validate position parameter
+        if position not in ["before", "after", "replace"]:
+            raise ValueError("Position must be 'before', 'after', or 'replace'.")
+            
+        # Handle position logic
         if position == "replace":
-            # Delete all elements in the selection first
-            for i in range(len(self._elements) - 1, 0, -1):
-                if hasattr(self._elements[i], 'Delete'):
-                    self._elements[i].Delete()
-            
-            # Replace the first element with the image
-            if hasattr(self._elements[0], 'Range'):
-                inserted_shape = self._backend.insert_inline_picture(
-                    self._elements[0].Range, 
-                    image_path, 
-                    position="replace"
-                )
+            # Delete the anchor element first
+            anchor_element.Range.Delete()
+            # Use the anchor element's range as the insertion point
+            insertion_range = anchor_element.Range
         elif position == "before":
-            # Insert before the first element in the selection
-            anchor_range = self._elements[0].Range
-            inserted_shape = self._backend.insert_inline_picture(
-                anchor_range, 
-                image_path, 
-                position="before"
+            # Collapse the range to the start
+            insertion_range = anchor_element.Range
+            insertion_range.Collapse(Direction=0)  # 0 = wdCollapseStart
+        else:  # position == "after"
+            # Collapse the range to the end
+            insertion_range = anchor_element.Range
+            insertion_range.Collapse(Direction=1)  # 1 = wdCollapseEnd
+            
+        # Insert the object based on its type
+        if object_type == "image":
+            # Insert an inline picture
+            insertion_range.InlineShapes.AddPicture(
+                FileName=object_path,
+                LinkToFile=False,
+                SaveWithDocument=True
             )
+        elif object_type == "file":
+            # Insert a file as an embedded object
+            insertion_range.InlineShapes.AddOLEObject(
+                FileName=object_path,
+                LinkToFile=False,
+                DisplayAsIcon=False
+            )
+        elif object_type == "ole":
+            # Insert an OLE object
+            insertion_range.InlineShapes.AddOLEObject(
+                ClassType="",
+                FileName=object_path,
+                LinkToFile=False,
+                DisplayAsIcon=False
+            )
+        else:
+            raise ValueError(f"Unsupported object type: {object_type}. Supported types: 'image', 'file', 'ole'.")
+
+    def insert_paragraph(self, text: str, position: str = "after", style: Optional[str] = None):
+        """Inserts a new paragraph with the given text.
+
+        Args:
+            text: The text to insert.
+            position: "before" or "after" the selected element.
+            style: Optional paragraph style name to apply.
+        """
+        if not self._elements:
+            raise ValueError("Cannot insert paragraph: No element selected.")
+        if len(self._elements) > 1:
+            raise ValueError("Cannot insert paragraph: Multiple elements selected. Please select a single element as anchor.")
+            
+        anchor_element = self._elements[0]
+        
+        if position == "before":
+            # Collapse the range to the start
+            insertion_range = anchor_element.Range
+            insertion_range.Collapse(Direction=0)  # 0 = wdCollapseStart
         elif position == "after":
-            # Insert after the last element in the selection
-            anchor_range = self._elements[-1].Range
-            inserted_shape = self._backend.insert_inline_picture(
-                anchor_range, 
-                image_path, 
-                position="after"
-            )
+            # Collapse the range to the end
+            insertion_range = anchor_element.Range
+            insertion_range.Collapse(Direction=1)  # 1 = wdCollapseEnd
         else:
-            raise ValueError(f"Invalid position '{position}'. Must be 'before', 'after', or 'replace'.")
+            raise ValueError("Position must be 'before' or 'after'.")
             
-        # Return a new Selection containing the inserted image
-        if inserted_shape:
-            return Selection([inserted_shape], self._backend)
-        else:
-            raise RuntimeError("Failed to insert image.")
+        # Insert a paragraph break (using \r for Word)
+        new_paragraph = insertion_range.Paragraphs.Add()
+        new_paragraph.Range.Text = text
+        
+        # Apply style if specified
+        if style:
+            try:
+                new_paragraph.Style = style
+            except Exception:
+                # Style not found, try to find it in the document
+                for i in range(1, self._backend.document.Styles.Count + 1):
+                    if self._backend.document.Styles(i).NameLocal.lower() == style.lower():
+                        new_paragraph.Style = self._backend.document.Styles(i)
+                        break
+                else:
+                    raise ValueError(f"Style '{style}' not found in document.")
+
+    def insert_image(self, image_path: str, position: str = "after") -> None:
+        """
+        Inserts an inline picture at the location of the selection.
+        
+        Args:
+            image_path: Path to the image file to insert.
+            position: Where to insert relative to the anchor element. 
+                     Supported values: "before", "after", "replace".
+        """
+        self.insert_object(image_path, "image", position)
             
+    def add_caption(self, caption_text: str, label: str = "Figure", position: str = "below") -> None:
+        """
+        Adds a caption to the selected object (picture, table, etc.).
+        
+        Args:
+            caption_text: The caption text to add.
+            label: The label for the caption (e.g., "Figure", "Table", "Equation").
+            position: Where to place the caption relative to the object. 
+                     Supported values: "above", "below".
+        """
+        if not self._elements:
+            raise ValueError("Cannot add caption: No element selected.")
+        if len(self._elements) > 1:
+            raise ValueError("Cannot add caption: Multiple elements selected. Please select a single element.")
+            
+        element = self._elements[0]
+        
+        # Validate position parameter
+        if position not in ["above", "below"]:
+            raise ValueError("Position must be 'above' or 'below'.")
+            
+        try:
+            # Get the range of the element
+            element_range = element.Range
+            
+            if position == "above":
+                # Insert caption above the element
+                element_range.Collapse(Direction=0)  # Collapse to start
+                caption_text_with_label = f"{label} {caption_text}"
+                element_range.InsertBefore(caption_text_with_label + "\n")
+            else:  # position == "below"
+                # Insert caption below the element
+                element_range.Collapse(Direction=1)  # Collapse to end
+                caption_text_with_label = f"{label} {caption_text}"
+                element_range.InsertAfter("\n" + caption_text_with_label)
+                
+            # Try to apply the Caption style if it exists
+            try:
+                if self._backend.document and hasattr(self._backend.document, 'Styles'):
+                    caption_range = element_range.Duplicate
+                    if position == "above":
+                        caption_range.End = caption_range.Start + len(caption_text_with_label)
+                    else:
+                        caption_range.Start = caption_range.End - len(caption_text_with_label)
+                    caption_range.Style = self._backend.document.Styles("Caption")
+            except:
+                # If Caption style doesn't exist, continue without it
+                pass
+                
+        except Exception as e:
+            raise RuntimeError(f"Failed to add caption: {str(e)}")
+
     def set_image_color_type(self, color_type: str) -> None:
         """
         Sets the color type of all images in the selection.

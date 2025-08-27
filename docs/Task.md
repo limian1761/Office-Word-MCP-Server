@@ -20,7 +20,7 @@ Objective: You are to continue the development of a Python-based MCP (Model Cont
     *   **Implementation:**
         1.  In `selection.py`, add a new `apply_format(self, formatting_options: dict)` method to the `Selection` class.
         2.  This method should handle options like `font_size`, `font_color`, `italic`, `underline`, `alignment` (left/center/right), etc.
-        3.  In `app.py`, create the `@mcp.tool() def apply_format(...)` tool that calls the new selection method.
+23|         3.  In `tools/text.py`, create the `@mcp.tool() def apply_format(...)` tool that calls the new selection method.
         4.  Add comprehensive tests for various formatting combinations.
 
   *   **Task 1.2: Refined Error Handling**

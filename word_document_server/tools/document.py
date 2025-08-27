@@ -3,11 +3,13 @@ import os
 from typing import Dict, Any, Optional
 from mcp.server.fastmcp.server import Context
 from word_document_server.core_utils import get_backend_for_tool, mcp_server
-from word_document_server.errors import ElementNotFoundError, format_error_response
-from word_document_server.com_backend import WordBackend
+from word_document_server.errors import format_error_response, handle_tool_errors
+from word_document_server import WordBackend
+from word_document_server.operations import get_document_styles, get_document_structure, get_all_text, enable_track_revisions
 
 
 @mcp_server.tool()
+@handle_tool_errors
 def open_document(ctx: Context, file_path: str) -> str:
     """
     Opens a Word document and prepares it for editing. This must be the first tool called.
@@ -18,50 +20,43 @@ def open_document(ctx: Context, file_path: str) -> str:
     Returns:
         A confirmation message with document information.
     """
+    # Initialize or get session state for document
+    if not hasattr(ctx.session, 'document_state'):
+        ctx.session.document_state = {}
+        ctx.session.backend_instances = {}
+    
+    # Create WordBackend for this document using get_backend_for_tool utility
+    backend = get_backend_for_tool(ctx, file_path)
+    
+    # Check if document is not None
+    if backend.document is None:
+        raise ValueError("Failed to open document: Document object is None.")
+        
+    # Enable track changes by default
+    enable_track_revisions(backend)
+        
+    # Get document info
+    document_info = {
+        'file_path': file_path,
+        'title': backend.document.Name,
+        'saved': backend.document.Saved
+    }
+    document_info_str = json.dumps(document_info, ensure_ascii=False)
+    
+    # Store the document path as the active document
+    ctx.session.document_state['active_document_path'] = file_path
+    ctx.session.backend_instances[file_path] = backend
+    
+    # Read agent guide content
+    agent_guide_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'docs', 'agent_guide.md')
     try:
-        # Initialize or get session state for document
-        if not hasattr(ctx.session, 'document_state'):
-            ctx.session.document_state = {}
-            ctx.session.backend_instances = {}
-        
-        # Create WordBackend for this document using get_backend_for_tool utility
-        backend = get_backend_for_tool(ctx, file_path)
-        
-        # Check if document is not None
-        if backend.document is None:
-            raise ValueError("Failed to open document: Document object is None.")
-            
-        # Get document info
-        document_info = {
-            'file_path': file_path,
-            'title': backend.document.Name,
-            'saved': backend.document.Saved
-        }
-        document_info_str = json.dumps(document_info, ensure_ascii=False)
-        
-        # Store the document path as the active document
-        ctx.session.document_state['active_document_path'] = file_path
-        ctx.session.backend_instances[file_path] = backend
-        
-        # Read agent guide content
-        agent_guide_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'docs', 'agent_guide.md')
-        try:
-            with open(agent_guide_path, 'r', encoding='utf-8') as f:
-                agent_guide_content = f.read()
-        except Exception as e:
-            agent_guide_content = f"Error reading agent guide: {str(e)}"
-
-        # Return combined response
-        return f"Document opened successfully: {document_info}\n\n---\n\n# Office-Word-MCP-Server Agent Guide\n\n{agent_guide_content}"
-    except FileNotFoundError:
-        return f"Error [4001]: The file '{file_path}' was not found."
-    except PermissionError:
-        return f"Error [4002]: Permission denied when trying to open '{file_path}'."
-    except ValueError as e:
-        return f"Error [1001]: {e}"
+        with open(agent_guide_path, 'r', encoding='utf-8') as f:
+            agent_guide_content = f.read()
     except Exception as e:
-        return format_error_response(e)
+        agent_guide_content = f"Error reading agent guide: {str(e)}"
 
+    # Return combined response
+    return f"Document opened successfully: {document_info}\n\n---\n\n# Office-Word-MCP-Server Agent Guide\n\n{agent_guide_content}"
 
 @mcp_server.tool()
 def shutdown_word(ctx: Context) -> str:
@@ -102,25 +97,18 @@ def get_document_styles(ctx: Context) -> str:
         A JSON string containing a list of styles with their names and types.
     """
     # Get active document path from session state
-    active_doc_path = None
-    if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
-
-    # Check cache first if available
-    if hasattr(ctx.session, 'document_cache') and 'styles' in ctx.session.document_cache:
-        return json.dumps(ctx.session.document_cache['styles'], ensure_ascii=False)
+    from word_document_server.core_utils import validate_active_document
+    error = validate_active_document(ctx)
+    if error:
+        return error
 
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
-        styles = backend.get_document_styles()
         
-        # Cache the result
-        if not hasattr(ctx.session, 'document_cache'):
-            ctx.session.document_cache = {}
-        ctx.session.document_cache['styles'] = styles
+        # Get all document styles using the backend method
+        styles = get_document_styles(backend)
         
+        # Convert to JSON string
         return json.dumps(styles, ensure_ascii=False)
     except Exception as e:
         return format_error_response(e)
@@ -132,271 +120,86 @@ def get_document_structure(ctx: Context) -> str:
     Provides a structured overview of the document by listing all headings.
 
     Returns:
-        A JSON string containing a list of dictionaries, each representing a heading with its text and level.
-        In testing environments, returns a Python list directly.
+        A JSON string containing a list of headings with their text and level.
     """
     # Get active document path from session state
-    active_doc_path = None
-    if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
-
-    # Check cache first if available
-    if hasattr(ctx.session, 'document_cache') and 'structure' in ctx.session.document_cache:
-        cached_structure = ctx.session.document_cache['structure']
-        # 检查是否在测试环境（通过检查返回值类型）
-        if isinstance(cached_structure, list) and hasattr(ctx.session, 'document_state') and isinstance(ctx.session.document_state, dict):
-            return cached_structure
-        return json.dumps(cached_structure, ensure_ascii=False)
+    from word_document_server.core_utils import validate_active_document
+    error = validate_active_document(ctx)
+    if error:
+        return error
 
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
-        # Check if document is not None
-        if backend.document is None:
-            raise ValueError("Failed to access document: Document object is None.")
-        structure = backend.get_document_structure()
         
-        # Cache the result
-        if not hasattr(ctx.session, 'document_cache'):
-            ctx.session.document_cache = {}
-        ctx.session.document_cache['structure'] = structure
+        # Get document structure using the backend method
+        structure = get_document_structure(backend)
         
-        # 检查是否在测试环境（通过检查ctx.session.document_state是否为字典）
-        if hasattr(ctx.session, 'document_state') and isinstance(ctx.session.document_state, dict):
-            return structure
-        
-        # In normal operation, return JSON string
+        # Convert to JSON string
         return json.dumps(structure, ensure_ascii=False)
     except Exception as e:
         return format_error_response(e)
 
 
 @mcp_server.tool()
-def enable_track_revisions(ctx: Context) -> str:
+def get_all_text(ctx: Context) -> str:
     """
-    Enables track changes (revision mode) in the document.
+    Retrieves all text from the active document.
 
     Returns:
-        A success or error message.
+        A string containing all text content from the document.
     """
     # Get active document path from session state
-    active_doc_path = None
-    if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
-
-    try:
-        backend = get_backend_for_tool(ctx, active_doc_path)
-        backend.enable_track_revisions()
-        return "Track revisions has been enabled successfully."
-    except Exception as e:
-        return format_error_response(e)
-
-
-@mcp_server.tool()
-def disable_track_revisions(ctx: Context) -> str:
-    """
-    Disables track changes (revision mode) in the document.
-
-    Returns:
-        A success or error message.
-    """
-    # Get active document path from session state
-    active_doc_path = None
-    if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
-
-    try:
-        backend = get_backend_for_tool(ctx, active_doc_path)
-        backend.disable_track_revisions()
-        return "Track revisions has been disabled successfully."
-    except Exception as e:
-        return format_error_response(e)
-
-
-@mcp_server.tool()
-def accept_all_changes(ctx: Context) -> str:
-    """
-    Accepts all tracked revisions in the document.
-
-    Returns:
-        A success or error message.
-    """
-    # Get active document path from session state
-    active_doc_path = None
-    if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
-
-    try:
-        backend = get_backend_for_tool(ctx, active_doc_path)
-        backend.accept_all_changes()
-        # Add None check for document
-        if backend.document is None:
-            raise ValueError("Failed to save document: No active document.")
-        backend.document.Save()
-        return "All tracked revisions have been accepted successfully."
-    except Exception as e:
-        return format_error_response(e)
-
-
-@mcp_server.tool()
-def set_header_text(ctx: Context, text: str) -> str:
-    """
-    Sets the text for the primary header in the active document.
-
-    Args:
-        text: The text to place in the header.
-
-    Returns:
-        A success or error message.
-    """
-    # Get active document path from session state
-    active_doc_path = None
-    if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
-
-    try:
-        backend = get_backend_for_tool(ctx, active_doc_path)
-        backend.set_header_text(text)
-        # Add None check for document
-        if backend.document is None:
-            raise ValueError("Failed to save document: No active document.")
-        backend.document.Save()
-        return "Header text has been set successfully."
-    except Exception as e:
-        return format_error_response(e)
-
-
-@mcp_server.tool()
-def set_footer_text(ctx: Context, text: str) -> str:
-    """
-    Sets the text for the primary footer in the active document.
-
-    Args:
-        text: The text to place in the footer.
-
-    Returns:
-        A success or error message.
-    """
-    # Get active document path from session state
-    active_doc_path = None
-    if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
-
-    try:
-        backend = get_backend_for_tool(ctx, active_doc_path)
-        backend.set_footer_text(text)
-        # Add None check for document
-        if backend.document is None:
-            raise ValueError("Failed to save document: No active document.")
-        backend.document.Save()
-        return "Footer text has been set successfully."
-    except Exception as e:
-        return format_error_response(e)
-
-
-@mcp_server.tool()
-def save_document(ctx: Context, file_path: Optional[str] = None) -> str:
-    """
-    Saves the active document, optionally to a new location.
-
-    Args:
-        file_path: Optional, the path to save the document to. If not provided, saves to the current location.
-
-    Returns:
-        A success or error message.
-    """
-    # Get active document path from session state
-    active_doc_path = None
-    if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    if not active_doc_path:
-        return "Error [2001]: No active document. Please use 'open_document' first."
+    from word_document_server.core_utils import validate_active_document
+    error = validate_active_document(ctx)
+    if error:
+        return error
 
     try:
         backend = get_backend_for_tool(ctx, active_doc_path)
         
-        # Check if document is not None
-        if backend.document is None:
-            raise ValueError("Failed to save document: Document object is None.")
-            
-        if file_path:
-            # Save to a new location
-            backend.document.SaveAs(file_path)
-            # Update the active document path in session state
-            ctx.session.document_state['active_document_path'] = file_path
-            ctx.session.backend_instances[file_path] = backend
-            # Remove the old backend reference if it's different
-            if file_path != active_doc_path and active_doc_path in ctx.session.backend_instances:
-                del ctx.session.backend_instances[active_doc_path]
-            
-            # Invalidate cache if we have one
-            if hasattr(ctx.session, 'document_cache'):
-                del ctx.session.document_cache
-                
-            return f"Document has been saved successfully to '{file_path}'."
-        else:
-            # Save to the current location
-            backend.document.Save()
-            return "Document has been saved successfully."
-    except FileNotFoundError:
-        return f"Error [4001]: The directory for '{file_path}' was not found."
-    except PermissionError:
-        return f"Error [4002]: Permission denied when trying to save to '{file_path}'."
+        # Get all text using the backend method
+        text = get_all_text(backend)
+        
+        return text
     except Exception as e:
         return format_error_response(e)
 
 
 @mcp_server.tool()
-def close_document(ctx: Context, file_path: Optional[str] = None) -> str:
+def get_elements(ctx: Context, element_type: str) -> str:
     """
-    Closes a specific document or the active document if no path is provided.
+    Retrieves information about elements of a specific type in the document.
 
     Args:
-        file_path: Optional, the path of the document to close. If not provided, closes the active document.
+        element_type: Type of elements to retrieve. Can be:
+            - "paragraphs": All paragraphs
+            - "tables": All tables
+            - "images": All inline shapes/images
+            - "headings": All headings
+            - "styles": All styles
+            - "comments": All comments
 
     Returns:
-        A success or error message.
+        A JSON string containing information about the elements.
     """
     # Get active document path from session state
-    active_doc_path = None
-    if hasattr(ctx.session, 'document_state'):
-        active_doc_path = ctx.session.document_state.get('active_document_path')
-    
-    # Determine which document to close
-    doc_to_close = file_path or active_doc_path
-    
-    if not doc_to_close:
-        return "Error [2001]: No document path specified and no active document."
-    
-    if not hasattr(ctx.session, 'backend_instances') or doc_to_close not in ctx.session.backend_instances:
-        return f"Error [2003]: The document '{doc_to_close}' is not open."
-    
+    from word_document_server.core_utils import validate_active_document
+    error = validate_active_document(ctx)
+    if error:
+        return error
+
+    # Validate element_type parameter
+    supported_types = ["paragraphs", "tables", "images", "headings", "styles", "comments"]
+    if element_type not in supported_types:
+        return f"Error [1001]: Unsupported element type '{element_type}'. Supported types: {', '.join(supported_types)}"
+
     try:
-        backend = ctx.session.backend_instances[doc_to_close]
-        backend.close_document()
+        backend = get_backend_for_tool(ctx, active_doc_path)
         
-        # Remove from backend instances
-        del ctx.session.backend_instances[doc_to_close]
+        # Get elements using the backend method
+        elements = get_selection_info(backend, element_type)
         
-        # If this was the active document, clear the active document path
-        if doc_to_close == active_doc_path:
-            ctx.session.document_state['active_document_path'] = None
-            
-            # Invalidate cache if we have one
-            if hasattr(ctx.session, 'document_cache'):
-                del ctx.session.document_cache
-        
-        return f"Document '{doc_to_close}' has been closed successfully."
+        # Convert to JSON string
+        return json.dumps(elements, ensure_ascii=False)
     except Exception as e:
         return format_error_response(e)

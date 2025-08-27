@@ -11,9 +11,9 @@ from typing import Any, Dict, List, Optional, TypeVar, cast
 from mcp.server.fastmcp.server import Context, FastMCP
 
 # Import core components
-from word_document_server.com_backend import WordBackend
+from word_document_server.word_backend import WordBackend
 from word_document_server.errors import (
-    ElementNotFoundError, ErrorCode, WordDocumentError,
+    WordDocumentError,
     format_error_response, validate_input_params
 )
 from word_document_server.selector import (

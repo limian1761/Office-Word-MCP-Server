@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp.server import Context
 
-from word_document_server.com_backend import WordBackend
+from word_document_server.word_backend import WordBackend
 from word_document_server.errors import WordDocumentError, format_error_response
 
 

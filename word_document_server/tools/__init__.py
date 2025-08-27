@@ -4,111 +4,86 @@ Tools module for the Word Document MCP Server.
 This module contains all the modularized MCP tools organized by functionality.
 """
 
-# Import and re-export tools from different modules
+# Import all tool modules to register their tools with the MCP server
+from . import (
+    comment,
+    document,
+    image,
+    table,
+    text,
+    quick_tools  # Add quick tools
+)
 
 # Text manipulation tools
 from .text import (
+    get_text,
     insert_paragraph,
     delete_element,
-    get_text,
-    replace_text,
-    find_text,
     apply_format,
-    apply_paragraph_style,
-    create_bulleted_list,
-    batch_apply_format
+    batch_apply_format,
+    find_text,
+    replace_text,
+    create_bulleted_list
 )
 
 # Table manipulation tools
 from .table import (
     get_text_from_cell,
     set_cell_value,
-    create_table
+    insert_table
 )
 
 # Image manipulation tools
-from .image import (
+    from .image import (
     get_image_info,
-    insert_inline_picture,
-    set_image_size,
-    set_image_color_type,
-    delete_image,
-    add_picture_caption
+    insert_object,
+    add_caption
 )
 
 # Document level tools
 from .document import (
     open_document,
     shutdown_word,
-    save_document,
-    close_document,
     get_document_styles,
     get_document_structure,
-    set_header_text,
-    set_footer_text,
-    enable_track_revisions,
-    disable_track_revisions,
-    accept_all_changes
+    get_all_text,
+    get_elements
 )
 
-# Comments tools
-from .comment import (
-    add_comment,
-    get_comments,
-    delete_comment,
-    delete_all_comments,
-    edit_comment,
-    reply_to_comment,
-    get_comment_thread
-)
 
 __all__ = [
+    "comment",
+    "document",
+    "image",
+    "table",
+    "text",
+    "quick_tools",  # Export quick tools
+    
     # Text tools
+    'get_text',
     'insert_paragraph',
     'delete_element',
-    'get_text',
-    'replace_text',
-    'find_text',
     'apply_format',
-    'apply_paragraph_style',
-    'create_bulleted_list',
     'batch_apply_format',
+    'find_text',
+    'replace_text',
+    'create_bulleted_list',
     
     # Table tools
     'get_text_from_cell',
     'set_cell_value',
-    'create_table',
+    'insert_table',
     
     # Image tools
     'get_image_info',
-    'insert_inline_picture',
-    'set_image_size',
-    'set_image_color_type',
-    'delete_image',
-    'add_picture_caption',
+    'insert_object',
+    'add_caption',
     
     # Document tools
     'open_document',
     'shutdown_word',
-    'save_document',
-    'close_document',
     'get_document_styles',
     'get_document_structure',
-    'set_header_text',
-    'set_footer_text',
-    'enable_track_revisions',
-    'disable_track_revisions',
-    'accept_all_changes',
-    
-    # Comments tools
-    'add_comment',
-    'get_comments',
-    'delete_comment',
-    'delete_all_comments',
-    'edit_comment',
-    'reply_to_comment',
-    'get_comment_thread'
+    'get_all_text',
+    'get_elements'
 ]
-
-# Version information
-__version__ = '1.0.0'

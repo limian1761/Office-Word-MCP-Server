@@ -3,6 +3,7 @@
 import logging
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
+from functools import wraps
 
 # Configure logging
 logging.basicConfig(
@@ -182,6 +183,20 @@ def validate_input_params(params: Dict[str, Any], required_params: list) -> Tupl
     if missing_params:
         return False, f"Missing required parameter(s): {', '.join(missing_params)}"
     
-    # Add more specific validations as needed
-    
     return True, ""
+
+
+def handle_tool_errors(func):
+    """
+    Decorator to handle errors in MCP tools uniformly.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            # Log the error with context
+            logger.error(f"Error in tool {func.__name__}: {str(e)}", exc_info=True)
+            # Return formatted error response
+            return format_error_response(e)
+    return wrapper

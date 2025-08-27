@@ -5,12 +5,14 @@ This module implements the logic for locating document elements based on
 the Locator query language defined in the architecture.
 """
 import re
+import hashlib
+import json
 from typing import Any, Callable, Dict, List, Optional
 
 import win32com.client
 
-from word_document_server.com_backend import WordBackend
-from word_document_server.errors import WordDocumentError, ElementNotFoundError, ErrorCode
+from word_document_server.word_backend import WordBackend
+from word_document_server.errors import WordDocumentError
 from word_document_server.selection import Selection
 
 
@@ -44,15 +46,39 @@ class SelectorEngine:
             "table_index": self._filter_by_table_index,
             "shape_type": self._filter_by_shape_type,
         }
+        # Simple cache for selections
+        self._selection_cache: Dict[str, Selection] = {}
+
+    def _get_cache_key(self, backend: WordBackend, locator: Dict[str, Any]) -> str:
+        """
+        Generate a cache key for a given backend and locator.
+        """
+        # Create a unique key based on document path and locator
+        doc_path = backend.file_path or "new_document"
+        locator_str = json.dumps(locator, sort_keys=True)
+        key_str = f"{doc_path}:{locator_str}"
+        return hashlib.md5(key_str.encode()).hexdigest()
+
+    def _validate_locator(self, locator: Dict[str, Any]) -> None:
+        """
+        Validate the locator structure.
+        """
+        if "target" not in locator:
+            from word_document_server.utils.file_utils import get_doc_path
+            raise LocatorSyntaxError(f"Locator must have a 'target'. Please refer to {get_doc_path('locator_guide.md')} for proper usage.")
 
     def select(self, backend: WordBackend, locator: Dict[str, Any], expect_single: bool = False) -> Selection:
         """
         Selects elements in the document based on a locator query.
         This is the main entry point for the selector.
         """
-        if "target" not in locator:
-            from word_document_server.utils.file_utils import get_doc_path
-            raise LocatorSyntaxError(f"Locator must have a 'target'. Please refer to {get_doc_path('locator_guide.md')} for proper usage.")
+        # Try to get from cache first
+        cache_key = self._get_cache_key(backend, locator)
+        if cache_key in self._selection_cache:
+            return self._selection_cache[cache_key]
+            
+        # Parse the locator and validate syntax
+        self._validate_locator(locator)
 
         target_spec = locator["target"]
         elements: List[Any]
@@ -82,6 +108,11 @@ class SelectorEngine:
         
         if expect_single and len(elements) > 1:
             raise AmbiguousLocatorError(f"Expected 1 element but found {len(elements)} for locator: {locator}. Please refer to locator_guide.md for proper usage.")
+            
+        # Cache the result
+        self._selection_cache[cache_key] = Selection(elements, backend)
+        
+        return self._selection_cache[cache_key]
 
         return Selection(elements, backend)
 

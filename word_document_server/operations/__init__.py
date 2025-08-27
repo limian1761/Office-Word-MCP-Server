@@ -1,13 +1,16 @@
 """
-Word Document Server Package
-"""
-from .word_backend import WordBackend
+Operations package for Word Document MCP Server.
 
-# Import all operations
-from .operations import *
+This package contains all the specialized operation modules.
+"""
+
+from .document_operations import *
+from .table_operations import *
+from .text_formatting import *
+from .image_operations import *
+from .comment_operations import *
 
 __all__ = [
-    'WordBackend',
     # document_operations exports
     'get_all_paragraphs',
     'get_paragraphs_in_range',
