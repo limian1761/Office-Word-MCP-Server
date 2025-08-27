@@ -8,9 +8,9 @@ This module contains all the modularized MCP tools organized by functionality.
 from . import (comment, document, image, quick_tools, table,  # Add quick tools
                text)
 # Document level tools
-from .document import (get_all_text, get_document_structure,
-                       get_document_styles, get_elements, open_document,
-                       shutdown_word)
+from .document import (get_all_text, shutdown_word)
+from .document import close_document, open_document
+from .quick_tools import get_document_outline
 # Image manipulation tools
 from .image import add_caption, get_image_info, insert_object
 # Table manipulation tools
@@ -47,8 +47,7 @@ __all__ = [
     # Document tools
     "open_document",
     "shutdown_word",
-    "get_document_styles",
-    "get_document_structure",
     "get_all_text",
-    "get_elements",
+    "get_document_outline",
+    "open_document",
 ]

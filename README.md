@@ -774,11 +774,7 @@ These tools help ensure code consistency and catch potential type-related errors
 ```
 create_document(filename, title=None, author=None)
 get_document_info(filename)
-get_all_text(filename)
-get_document_outline(filename)
-list_opened_documents()
-copy_document(source_filename, destination_filename=None)
-convert_to_pdf(filename, output_filename=None)
+get_all_text, get_document_outline, open_document, close_document, shutdown_word
 ```
 
 ### Content Addition

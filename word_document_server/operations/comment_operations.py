@@ -41,7 +41,7 @@ def add_comment(
         # Add a comment at the specified range
         return backend.document.Comments.Add(Range=com_range_obj, Text=text)
     except Exception as e:
-        raise WordDocumentError(f"Failed to add comment: {e}")
+        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to add comment: {e}")
 
 
 def get_comments(backend: WordBackend) -> List[Dict[str, Any]]:

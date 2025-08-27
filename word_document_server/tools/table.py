@@ -178,6 +178,6 @@ def create_table(
         backend.document.Save()
         return "Successfully created table."
     except ElementNotFoundError as e:
-        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_structure to check the actual document structure."
+        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
     except Exception as e:
         return format_error_response(e)

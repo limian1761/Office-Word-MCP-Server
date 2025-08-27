@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import win32com.client
 
-from word_document_server.errors import WordDocumentError
+from word_document_server.errors import ErrorCode, WordDocumentError
 from word_document_server.word_backend import WordBackend
 
 
@@ -787,7 +787,7 @@ def get_selection_info(
             raise ValueError(f"Unsupported selection type: {selection_type}")
 
     except Exception as e:
-        raise WordDocumentError(f"Failed to get {selection_type}: {e}")
+        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get {selection_type}: {e}")
 
     return elements
 

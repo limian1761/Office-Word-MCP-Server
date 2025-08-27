@@ -138,7 +138,7 @@ def insert_paragraph(
         backend.document.Save()
         return "Successfully inserted paragraph."
     except ElementNotFoundError as e:
-        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_structure to check the actual document structure."
+        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
     except AmbiguousLocatorError as e:
         return f"The locator matched multiple elements: {e}. Please refine your locator to match a single element."
     except ValueError as e:
@@ -193,7 +193,7 @@ def delete_element(
         backend.document.Save()
         return f"Successfully deleted {element_count} element(s)."
     except ElementNotFoundError as e:
-        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_structure to check the actual document structure."
+        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
     except ValueError as e:
         return f"Invalid parameter: {e}"
     except Exception as e:
@@ -348,7 +348,7 @@ def apply_format(
         backend.document.Save()
         return f"Successfully applied formatting ({', '.join(applied_formats)}) to {len(selection._elements)} element(s)."
     except ElementNotFoundError as e:
-        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_structure to check the actual document structure."
+        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
     except ValueError as e:
         return f"Invalid parameter: {e}"
     except Exception as e:
@@ -643,7 +643,7 @@ def replace_text(
         else:
             return f"Successfully replaced text in {count} elements."
     except ElementNotFoundError as e:
-        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_structure to check the actual document structure."
+        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
     except ValueError as e:
         return f"Invalid parameter: {e}"
     except Exception as e:

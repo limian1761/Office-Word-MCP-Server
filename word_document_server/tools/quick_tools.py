@@ -14,8 +14,9 @@ from pydantic import Field
 from word_document_server.core_utils import get_backend_for_tool, mcp_server
 from word_document_server.errors import handle_tool_errors
 from word_document_server.operations import (add_heading, add_table,
-                                             get_document_structure,
-                                             insert_paragraph_after)
+                                            get_all_paragraphs, get_all_tables,
+                                            get_all_text,
+                                            insert_paragraph_after)
 
 
 @mcp_server.tool()
@@ -88,8 +89,6 @@ def get_document_outline(ctx: Context = Field(description="Context object")) -> 
     Get a simplified outline of the document - Quick Tool.
     
     This is a quick tool that provides a fast way to get the document outline.
-    It returns the same information as get_document_structure but is categorized 
-    as a quick tool for easier discovery.
 
     Returns:
         JSON string with document outline containing heading text and levels.
@@ -108,7 +107,7 @@ def get_document_outline(ctx: Context = Field(description="Context object")) -> 
     # Get document structure
     structure = get_document_structure(backend)
 
-    # Simplify structure to just headings (all items from get_document_structure are headings)
+    # Simplify structure to just headings
     outline = [
         {"text": item["text"], "level": item["level"]}
         for item in structure

@@ -27,7 +27,6 @@ __all__ = [
     "get_protection_status",
     "unprotect_document",
     "get_document_styles",
-    "get_document_structure",
     "get_all_text",
     "find_text",
     "replace_text",
