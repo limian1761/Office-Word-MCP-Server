@@ -69,3 +69,93 @@ def get_comments(backend: WordBackend) -> List[Dict[str, Any]]:
             comments_count = backend.document.Comments.Count
         except Exception as e:
             raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to access Comments collection: {e}")
+
+        for i in range(1, comments_count + 1):
+            comment = backend.document.Comments(i)
+            comments.append(
+                {
+                    "index": i,
+                    "text": comment.Text,
+                    "author": comment.Author,
+                    "start_pos": comment.Scope.Start,
+                    "end_pos": comment.Scope.End,
+                    "scope_text": comment.Scope.Text,
+                }
+            )
+    except Exception as e:
+        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to retrieve comments: {e}")
+
+    return comments
+
+
+def delete_all_comments(backend: WordBackend) -> None:
+    """
+    Deletes all comments in the document.
+
+    Args:
+        backend: The WordBackend instance.
+
+    Returns:
+        None
+    """
+    if not backend.document:
+        raise RuntimeError("No document open.")
+
+    try:
+        backend.document.Comments.DeleteAll()
+    except Exception as e:
+        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Error during deletion of all comments: {e}")
+
+
+def edit_comment(
+    backend: WordBackend,
+    comment_index: int,
+    new_text: str,
+) -> None:
+    """
+    Edits the text of an existing comment.
+
+    Args:
+        backend: The WordBackend instance.
+        comment_index: The index of the comment to edit.
+        new_text: The new text for the comment.
+
+    Returns:
+        None
+    """
+    if not backend.document:
+        raise RuntimeError("No document open.")
+
+    try:
+        comment = backend.document.Comments(comment_index)
+        comment.Text = new_text
+    except Exception as e:
+        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to edit comment: {e}")
+
+
+def reply_to_comment(
+    backend: WordBackend,
+    comment_index: int,
+    reply_text: str,
+    author: str = "User",
+) -> None:
+    """
+    Replies to an existing comment.
+
+    Args:
+        backend: The WordBackend instance.
+        comment_index: The index of the comment to reply to.
+        reply_text: The text of the reply.
+        author: The author of the reply (default: "User").
+
+    Returns:
+        None
+    """
+    if not backend.document:
+        raise RuntimeError("No document open.")
+
+    try:
+        comment = backend.document.Comments(comment_index)
+        comment.Replies.Add(Text=reply_text, Author=author)
+    except Exception as e:
+        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to reply to comment: {e}")
