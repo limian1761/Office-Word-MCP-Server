@@ -1,4 +1,187 @@
-# Office-Word-MCP-Server
+# Office-Word-MCP-Server## Installation## Usage with Claude for Desktop## Development## Troubleshooting## Contributing## License## Acknowledgments
+
+- [Model Context Protocol](https://modelcontextprotocol.io/) for the protocol specification
+- [python-docx](https://python-docx.readthedocs.io/) for Word document manipulation
+- [MCP](https://github.com/modelcontextprotocol/python-sdk) for the Python MCP implementation
+
+---
+
+_Note: This server interacts with document files on your system. Always verify that requested operations are appropriate before confirming them in Claude for Desktop or other MCP clients._
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Common Issues
+
+1. **Missing Styles**
+
+   - Some documents may lack required styles for heading and table operations
+   - The server will attempt to create missing styles or use direct formatting
+   - For best results, use templates with standard Word styles
+
+2. **Permission Issues**
+
+   - Ensure the server has permission to read/write to the document paths
+   - Use the `copy_document` function to create editable copies of locked documents
+   - Check file ownership and permissions if operations fail
+
+3. **Image Insertion Problems**
+   - Use absolute paths for image files
+   - Verify image format compatibility (JPEG, PNG recommended)
+   - Check image file size and permissions
+
+4. **Table Formatting Issues**
+
+   - **Cell index errors**: Ensure row and column indices are within table bounds (0-based indexing)
+   - **Color format problems**: Use hex colors without '#' prefix (e.g., "FF0000" for red) or standard color names
+   - **Padding unit confusion**: Specify "points" or "percent" explicitly when setting cell padding
+   - **Column width conflicts**: Auto-fit may override manual column width settings
+   - **Text formatting persistence**: Apply cell text formatting after setting cell content for best results
+
+### Code Formatting and Static Analysis
+
+This project uses several tools to maintain code quality and consistency:
+
+- [Black](https://github.com/psf/black) for code formatting
+- [isort](https://pycqa.github.io/isort/) for import sorting
+- [mypy](http://mypy-lang.org/) for static type checking
+
+To format the code and sort imports:
+
+```bash
+black word_document_server
+isort word_document_server
+```
+
+To run static type checking:
+
+```bash
+mypy word_document_server
+```
+
+These tools help ensure code consistency and catch potential type-related errors before runtime.
+
+### Configuration
+
+#### Method 1: After Local Installation
+
+1. After installation, add the server to your Claude for Desktop configuration file:
+
+```json
+{
+  "mcpServers": {
+    "word-document-server": {
+      "command": "python",
+      "args": ["/path/to/word_mcp_server.py"]
+    }
+  }
+}
+```
+
+#### Method 2: Without Installation (Using uvx)
+
+1. You can also configure Claude for Desktop to use the server without local installation by using the uvx package manager:
+
+```json
+{
+  "mcpServers": {
+    "word-document-server": {
+      "command": "uvx",
+      "args": ["--from", "office-word-mcp-server", "word_mcp_server"]
+    }
+  }
+}
+```
+
+2. Configuration file locations:
+
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+3. Restart Claude for Desktop to load the configuration.
+
+### Example Operations
+
+Once configured, you can ask Claude to perform operations like:
+
+- "Create a new document called 'report.docx' with a title page"
+- "Add a heading and three paragraphs to my document"
+- "Insert a 4x4 table with sales data"
+- "Format the word 'important' in paragraph 2 to be bold and red"
+- "Search and replace all instances of 'old term' with 'new term'"
+- "Create a custom style for section headings"
+- "Apply formatting to the table in my document"
+- "Extract all comments from my document"
+- "Filter comments by author"
+- "Make the text in table cell (1,2) bold and blue with 14pt font"
+- "Add 10 points of padding to all sides of the header cells"
+- "Create a callout table with a blue checkmark icon and white text"
+- "Set the first column width to 50 points and auto-fit the remaining columns"
+- "Apply alternating row colors to make the table more readable"
+- "Add a paragraph at the beginning of my document"
+- "Insert a heading at position 5 in my document"
+- "Add a table after paragraph 3"
+- "Show me the outline of my document"
+- "Add a caption to the first picture in my document"
+- "Add numbering to all paragraphs in my document"
+- "Add numbering to paragraphs 2 through 5"
+
+### Installing via Smithery
+
+To install Office Word Document Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@GongRzhe/Office-Word-MCP-Server):
+
+```bash
+npx -y @smithery/cli install @GongRzhe/Office-Word-MCP-Server --client claude
+```
+
+### Prerequisites
+
+- Python 3.8 or higher
+- pip package manager
+
+### Basic Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/GongRzhe/Office-Word-MCP-Server.git
+cd Office-Word-MCP-Server
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Using uv for Development
+
+This project supports [uv](https://docs.astral.sh/uv/), a fast Python package installer and resolver, for managing dependencies:
+
+```bash
+# Clone the repository
+git clone https://github.com/GongRzhe/Office-Word-MCP-Server.git
+cd Office-Word-MCP-Server
+
+# Install dependencies with uv
+uv pip install -r requirements.txt
+```
+
+### Using the Setup Script
+
+Alternatively, you can use the provided setup script which handles:
+
+- Checking prerequisites
+- Setting up a virtual environment
+- Installing dependencies
+- Generating MCP configuration
+
+```bash
+python setup_mcp.py
+```
 
 [![smithery badge](https://smithery.ai/badge/@GongRzhe/Office-Word-MCP-Server)](https://smithery.ai/server/@GongRzhe/Office-Word-MCP-Server)
 
@@ -52,6 +235,12 @@ For implementation details, see: [WdProtectionType Enumeration](https://learn.mi
 - Merge multiple documents into a single document
 - Convert Word documents to PDF format
 
+### Quick Tools
+
+- Add headings quickly with `add_heading_quick`
+- Add paragraphs quickly with `add_paragraph_quick`
+- Get document outline with `get_document_outline`
+
 ### Content Creation
 
 - Add headings with different levels
@@ -93,6 +282,16 @@ For implementation details, see: [WdProtectionType Enumeration](https://learn.mi
 - Column width management with multiple units (points, percentage, auto-fit)
 - Auto-fit capabilities for dynamic column sizing
 - Professional callout table support with icon cells and styled content
+
+### Comment Management
+
+- Add comments to document elements with `add_comment`
+- Retrieve all comments with `get_comments`
+- Delete specific comments with `delete_comment`
+- Delete all comments with `delete_all_comments`
+- Edit existing comments with `edit_comment`
+- Reply to comments with `reply_to_comment`
+- Get complete comment thread with `get_comment_thread`
 
 ### Advanced Document Manipulation
 
@@ -256,7 +455,7 @@ Once configured, you can ask Claude to perform operations like:
 
 #### 文档管理工具
 
-```python
+```
 # 打开Word文档，这是使用其他工具的前提
 open_document(file_path: str) -> str
 # 参数：file_path - .docx文件的绝对路径
@@ -277,7 +476,7 @@ accept_all_changes() -> str
 
 #### 内容操作工具
 
-```python
+```
 # 插入新段落
 insert_paragraph(locator: Dict[str, Any], text: str, position: str = "after") -> str
 # 参数：
@@ -325,7 +524,7 @@ create_bulleted_list(locator: Dict[str, Any], items: List[str], position: str = 
 
 #### 表格操作工具
 
-```python
+```
 # 获取表格单元格文本
 get_text_from_cell(locator: Dict[str, Any]) -> str
 # 参数：locator - 定位表格单元格的定位器
@@ -341,7 +540,7 @@ set_cell_value(locator: Dict[str, Any], text: str) -> str
 
 #### 页眉页脚工具
 
-```python
+```
 # 设置文档页眉文本
 set_header_text(text: str) -> str
 # 参数：text - 页眉文本
@@ -355,7 +554,7 @@ set_footer_text(text: str) -> str
 
 #### 格式设置工具
 
-```python
+```
 # 应用格式到指定元素
 apply_format(locator: Dict[str, Any], formatting: Dict[str, Any]) -> str
 # 参数：
@@ -411,7 +610,7 @@ Locator是一个字典，必须包含`target`字段，`target`内部包含以下
 
 #### 1. 打开文档
 
-```python
+```
 # 调用示例
 response = await mcp_client.call_tool(
     "open_document",
@@ -424,16 +623,16 @@ print(response)  # "Active document set to: C:/Users/username/Documents/report.d
 
 #### 2. 读取文档结构
 
-```python
+```
 # 获取文档标题结构
-headings = await mcp_client.call_tool("get_document_structure", {})
+headings = await mcp_client.call_tool("get_document_outline", {})
 print(headings)
 # 输出示例: [{"text": "Introduction", "level": 1}, {"text": "Methods", "level": 1}, ...]
 ```
 
 #### 3. 插入段落
 
-```python
+```
 # 在文档开头插入段落
 response = await mcp_client.call_tool(
     "insert_paragraph",
@@ -448,7 +647,7 @@ print(response)  # "Successfully inserted paragraph."
 
 #### 4. 查找并替换文本
 
-```python
+```
 # 查找包含特定文本的段落并替换
 response = await mcp_client.call_tool(
     "replace_text",
@@ -462,7 +661,7 @@ print(response)  # "Successfully replaced text."
 
 #### 5. 格式化文本
 
-```python
+```
 # 将第一段设置为粗体并居中对齐
 response = await mcp_client.call_tool(
     "apply_format",
@@ -476,7 +675,7 @@ print(response)  # "Formatting applied successfully."
 
 #### 6. 操作表格
 
-```python
+```
 # 在文档末尾创建一个3x4的表格
 response = await mcp_client.call_tool(
     "create_table",
@@ -510,7 +709,7 @@ print(response)  # "Successfully set cell value."
 
 #### 7. 设置页眉页脚
 
-```python
+```
 # 设置页眉文本
 response = await mcp_client.call_tool(
     "set_header_text",
@@ -528,7 +727,7 @@ print(response)  # "Footer text set successfully."
 
 #### 8. 关闭文档
 
-```python
+```
 # 关闭Word应用
 response = await mcp_client.call_tool("shutdown_word", {})
 print(response)  # "Word application shut down successfully."
@@ -543,13 +742,39 @@ print(response)  # "Word application shut down successfully."
 5. **文档检查**：使用`open_document`前确认文件存在且格式正确
 6. **资源释放**：长时间不使用时关闭Word应用实例
 
+## Development
+
+### Code Formatting and Static Analysis
+
+This project uses several tools to maintain code quality and consistency:
+
+- [Black](https://github.com/psf/black) for code formatting
+- [isort](https://pycqa.github.io/isort/) for import sorting
+- [mypy](http://mypy-lang.org/) for static type checking
+
+To format the code and sort imports:
+
+```bash
+black word_document_server
+isort word_document_server
+```
+
+To run static type checking:
+
+```bash
+mypy word_document_server
+```
+
+These tools help ensure code consistency and catch potential type-related errors before runtime.
+
 ## API Reference
 
 ### Document Creation and Properties
 
-```python
+```
 create_document(filename, title=None, author=None)
 get_document_info(filename)
+get_all_text(filename)
 get_document_outline(filename)
 list_opened_documents()
 copy_document(source_filename, destination_filename=None)
@@ -558,7 +783,7 @@ convert_to_pdf(filename, output_filename=None)
 
 ### Content Addition
 
-```python
+```
 add_heading(filename, text, level=1, paragraph_index=None)
 add_paragraph(filename, text, style=None, paragraph_index=None)
 add_table(filename, rows, cols, data=None, paragraph_index=None)
@@ -571,14 +796,14 @@ add_paragraph_numbering(filename, start_index=0, end_index=None, style="Normal")
 
 ### Content Extraction
 
-```python
+```
 get_paragraph_text_from_document(filename, paragraph_index)
 find_text_in_document(filename, text_to_find, match_case=True, whole_word=False)
 ```
 
 ### Text Formatting
 
-```python
+```
 format_text(filename, paragraph_index, start_pos, end_pos, bold=None,
             italic=None, underline=None, color=None, font_size=None, font_name=None)
 search_and_replace(filename, find_text, replace_text)
@@ -589,7 +814,7 @@ create_custom_style(filename, style_name, bold=None, italic=None,
 
 ### Table Formatting
 
-```python
+```
 format_table(filename, table_index, has_header_row=None,
              border_style=None, shading=None)
 set_table_cell_shading(filename, table_index, row_index, col_index, 
@@ -628,7 +853,7 @@ auto_fit_table_columns(filename, table_index)
 
 ### Comment Extraction
 
-```python
+```
 get_all_comments(filename)
 get_comments_by_author(filename, author)
 get_comments_for_paragraph(filename, paragraph_index)

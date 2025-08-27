@@ -1,6 +1,7 @@
 """
 AppContext for managing the Word application instance and the active document state.
 """
+
 import threading
 from typing import Optional
 
@@ -17,7 +18,7 @@ class AppContext:
     def __init__(self, word_app: win32com.client.CDispatch):
         """
         Initialize the AppContext with a running Word application instance.
-        
+
         Args:
             word_app: An active Word application dispatch object.
         """
@@ -39,6 +40,7 @@ class AppContext:
         """Clear the current active document."""
         with self._lock:
             self._active_document = None
+
 
 # Create a global instance of AppContext
 # This will be initialized when the Word application is started

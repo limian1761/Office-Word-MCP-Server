@@ -11,6 +11,7 @@ sys.path.insert(0, project_root)
 from word_document_server.com_backend import WordBackend
 from word_document_server.core_utils import MockSession, MockContext
 from word_document_server.tools.comment import add_comment, get_comments, delete_comment, delete_all_comments, edit_comment, reply_to_comment, get_comment_thread
+from word_document_server.operations.comment_operations import delete_all_comments as delete_all_comments_op
 
 print("Starting debug test for comment tools...")
 
@@ -33,7 +34,7 @@ try:
     
     # Delete all existing comments to start fresh
     print("Deleting all existing comments...")
-    delete_all_comments(ctx)
+    delete_all_comments_op(backend)
     
     # Debug 1: Try add_comment with paragraph locator (correct format)
     print("\nDebug 1: Testing add_comment with correct paragraph locator...")
@@ -62,7 +63,7 @@ try:
         print(f"Error in add_comment test: {str(e)}")
     
     # Delete all comments for next test
-    delete_all_comments(ctx)
+    delete_all_comments_op(backend)
     
     # Debug 2: Try add_comment with simplified range approach
     print("\nDebug 2: Testing add_comment with simplified approach...")
@@ -96,7 +97,7 @@ try:
         print(f"Error in simplified test: {str(e)}")
     
     # Delete all comments for next test
-    delete_all_comments(ctx)
+    delete_all_comments_op(backend)
     
     # Debug 3: Try adding a comment directly through backend and then using get_comments
     print("\nDebug 3: Adding comment directly through backend and testing get_comments...")
@@ -120,7 +121,7 @@ try:
     
     # Clean up
     print("\nCleaning up resources...")
-    delete_all_comments(ctx)
+    delete_all_comments_op(backend)
     backend.cleanup()
     print("Debug test for comment tools completed.")
     

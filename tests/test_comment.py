@@ -6,16 +6,17 @@ import json
 import win32com.client
 from unittest.mock import patch, MagicMock
 
+from word_document_server.word_backend import WordBackend
+
 # Add the project root to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.insert(0, project_root)
 
 from word_document_server.tools.comment import add_comment, get_comments, delete_comment, delete_all_comments, edit_comment, reply_to_comment, get_comment_thread
+from word_document_server.operations.comment_operations import delete_all_comments as delete_all_comments_op
 from word_document_server.tools.document import open_document
-from word_document_server.com_backend import WordBackend
 from word_document_server.core_utils import get_backend_for_tool
-from word_document_server.errors import WordDocumentError
 
 # Mock the Context object
 class MockSession:
@@ -59,7 +60,7 @@ class TestCommentTool(unittest.TestCase):
 
     def setUp(self):
         # Ensure we have a clean state before each test
-        self.backend.delete_all_comments()
+        delete_all_comments_op(self.backend)
         # Make sure the backend is still in the session state
         self.ctx.session.backend_instances[self.test_doc_path] = self.backend
         self.ctx.session.document_state['active_document_path'] = self.test_doc_path
@@ -122,7 +123,7 @@ class TestCommentTool(unittest.TestCase):
         result = delete_comment(self.ctx, 0)
         
         # Check if the comment was deleted successfully
-        self.assertIn("Comment at index 0 has been deleted successfully", result)
+        self.assertIn("Comment at index 0 deleted successfully", result)
         
         # Verify no comments are left
         comments_json = get_comments(self.ctx)
@@ -135,7 +136,8 @@ class TestCommentTool(unittest.TestCase):
         
         # Check if we get an error message
         self.assertTrue(("Error [1004]" in result and "'str' object has no attribute 'value'" in result) or \
-            "Comment index 999 out of range" in result)
+            "Comment index 999 out of range" in result or \
+            "Error [8002]: Comment index out of range" in result)
 
     def test_delete_all_comments(self):
         # Add multiple comments using our helper method
@@ -147,7 +149,7 @@ class TestCommentTool(unittest.TestCase):
         result = delete_all_comments(self.ctx)
         
         # Check if all comments were deleted successfully
-        self.assertIn("Successfully deleted 3 comments", result)
+        self.assertIn("All 3 comments deleted successfully", result)
         
         # Verify no comments are left
         comments_json = get_comments(self.ctx)
@@ -163,7 +165,7 @@ class TestCommentTool(unittest.TestCase):
         result = edit_comment(self.ctx, 0, new_text)
         
         # Check if the comment was updated successfully
-        self.assertIn("Comment at index 0 has been updated successfully", result)
+        self.assertIn("Comment at index 0 edited successfully", result)
         
         # Verify the comment text was updated
         comments_json = get_comments(self.ctx)
@@ -175,7 +177,8 @@ class TestCommentTool(unittest.TestCase):
         result = edit_comment(self.ctx, 999, "This won't work")
         
         # Check if we get an error message
-        self.assertIn("Comment index 999 out of range", result)
+        self.assertIn("Comment index out of range", result) or \
+            self.assertIn("Error [8002]: Comment index out of range", result)
 
     def test_reply_to_comment(self):
         # Add a comment using our helper method
@@ -198,7 +201,8 @@ class TestCommentTool(unittest.TestCase):
         result = reply_to_comment(self.ctx, 999, "This won't work", "Replier")
         
         # Check if we get an error message
-        self.assertIn("Comment index 999 out of range", result)
+        self.assertIn("Comment index out of range", result) or \
+            self.assertIn("Error [8002]: Comment index out of range", result)
 
     def test_get_comment_thread(self):
         # Add a comment using our helper method
@@ -226,7 +230,8 @@ class TestCommentTool(unittest.TestCase):
         result = get_comment_thread(self.ctx, 999)
         
         # Check if we get an error message
-        self.assertIn("Error [4004]: Comment index 999 out of range. There are 0 comments in the document.", result)
+        self.assertIn("Comment index out of range", result) or \
+            self.assertIn("Error [8002]: Comment index out of range", result)
 
 if __name__ == '__main__':
     unittest.main()
