@@ -399,7 +399,7 @@ def get_document_styles(backend: WordBackend) -> List[Dict[str, Any]]:
         styles.sort(key=lambda x: x["name"])
 
     except Exception as e:
-        raise WordDocumentError(f"Error retrieving document styles: {e}")
+        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Error retrieving document styles: {e}")
 
     return styles
 
@@ -465,7 +465,7 @@ def get_document_structure(backend: WordBackend) -> List[Dict[str, Any]]:
                 print(f"Warning: Failed to process paragraph: {e}")
                 continue
     except Exception as e:
-        raise WordDocumentError(f"Error retrieving document structure: {e}")
+        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Error retrieving document structure: {e}")
 
     return structure
 
@@ -496,7 +496,7 @@ def get_all_text(backend: WordBackend) -> str:
                 print(f"Warning: Failed to retrieve text from paragraph: {e}")
                 continue
     except Exception as e:
-        raise WordDocumentError(f"Error retrieving document text: {e}")
+        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Error retrieving document text: {e}")
 
     return "\n".join(text)
 
@@ -564,7 +564,7 @@ def accept_all_changes(backend: WordBackend) -> None:
                         # If assignment is not possible, just pass
                         pass
     except Exception as e:
-        raise WordDocumentError(f"Failed to accept all changes: {e}")
+        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to accept all changes: {e}")
 
 
 def find_text(

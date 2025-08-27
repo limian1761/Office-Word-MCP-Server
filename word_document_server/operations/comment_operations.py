@@ -159,3 +159,51 @@ def reply_to_comment(
         comment.Replies.Add(Text=reply_text, Author=author)
     except Exception as e:
         raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to reply to comment: {e}")
+
+
+def get_comment_thread(
+    backend: WordBackend,
+    comment_index: int,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves the thread of a comment, including the comment and all replies.
+
+    Args:
+        backend: The WordBackend instance.
+        comment_index: The index of the comment.
+
+    Returns:
+        A list of dictionaries containing comment information, each with "index", "text", "author", "start_pos", "end_pos", and "scope_text" keys.
+    """
+    if not backend.document:
+        raise RuntimeError("No document open.")
+
+    try:
+        comment = backend.document.Comments(comment_index)
+        thread = [
+            {
+                "index": comment_index,
+                "text": comment.Text,
+                "author": comment.Author,
+                "start_pos": comment.Scope.Start,
+                "end_pos": comment.Scope.End,
+                "scope_text": comment.Scope.Text,
+            }
+        ]
+
+        for i in range(1, comment.Replies.Count + 1):
+            reply = comment.Replies(i)
+            thread.append(
+                {
+                    "index": i,
+                    "text": reply.Text,
+                    "author": reply.Author,
+                    "start_pos": reply.Scope.Start,
+                    "end_pos": reply.Scope.End,
+                    "scope_text": reply.Scope.Text,
+                }
+            )
+
+        return thread
+    except Exception as e:
+        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to get comment thread: {e}")
