@@ -616,7 +616,7 @@ def find_text(
 
         return found_items
     except Exception as e:
-        raise WordDocumentError(f"Failed to find text '{text}': {e}")
+        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to find text '{text}': {e}")
 
 
 def replace_text(
