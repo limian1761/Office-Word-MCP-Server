@@ -5,7 +5,6 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp.server import Context
 from pydantic import Field
 
-from word_document_server import WordBackend, get_selection_info
 from word_document_server.core_utils import get_backend_for_tool, mcp_server
 from word_document_server.errors import (format_error_response,
                                          handle_tool_errors)
@@ -15,9 +14,11 @@ from word_document_server.operations import (enable_track_revisions,
 
 
 @mcp_server.tool()
+@require_active_document_validation
+@require_active_document_validation
 @handle_tool_errors
 def open_document(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     file_path: str = Field(description="The absolute path to the .docx file"),
 ) -> str:
     """
@@ -27,31 +28,28 @@ def open_document(
         A confirmation message with document information.
     """
     # Initialize or get session state for document
-    if not hasattr(ctx.session, "document_state"):
-        ctx.session.document_state = {}
-        ctx.session.backend_instances = {}
-
-    # Create WordBackend for this document using get_backend_for_tool utility
-    backend = get_backend_for_tool(ctx, file_path)
+    try: 
+        ctx.request_context.lifespan_context.open_document(file_path)
+    except Exception as e:
+        return format_error_response(e)
+    
+    active_doc = ctx.request_context.lifespan_context.get_active_document()
 
     # Check if document is not None
-    if backend.document is None:
+    if active_doc is None:
         raise ValueError("Failed to open document: Document object is None.")
 
     # Enable track changes by default
-    enable_track_revisions(backend)
+    active_doc.TrackRevisions = True
 
     # Get document info
     document_info = {
         "file_path": file_path,
-        "title": backend.document.Name,
-        "saved": backend.document.Saved,
+        "title": active_doc.Name,
+        "saved":active_doc.Saved,
     }
     document_info_str = json.dumps(document_info, ensure_ascii=False)
 
-    # Store the document path as the active document
-    ctx.session.document_state["active_document_path"] = file_path
-    ctx.session.backend_instances[file_path] = backend
 
     # Read agent guide content
     agent_guide_path = os.path.join(
@@ -70,7 +68,7 @@ def open_document(
 
 
 @mcp_server.tool()
-def close_document(ctx: Context = Field(description="Context object")) -> str:
+def close_document(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
     Closes the active document but keeps the Word application running.
 
@@ -78,36 +76,20 @@ def close_document(ctx: Context = Field(description="Context object")) -> str:
         A success or error message.
     """
     try:
-        # Check if we have any open documents
-        if not hasattr(ctx.session, "document_state") or not ctx.session.document_state:
-            return "No documents are currently open."
-
-        # Get active document path
-        active_doc_path = ctx.session.document_state.get("active_document_path")
-        if not active_doc_path:
-            return "No active document found."
-
-        # Get the backend for the active document
-        if active_doc_path in ctx.session.backend_instances:
-            backend = ctx.session.backend_instances[active_doc_path]
-            try:
-                # Close the document without shutting down Word
-                backend.document.Close(SaveChanges=True)
-                # Remove from backend instances
-                del ctx.session.backend_instances[active_doc_path]
-                # Clear active document path
-                ctx.session.document_state.pop("active_document_path", None)
-                return f"Document '{active_doc_path}' closed successfully."
-            except Exception as e:
-                return f"Error closing document: {e}"
-
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        try:
+            doc_path = active_doc.Path
+            active_doc.Close(SaveChanges=True)
+            return f"Document '{doc_path}' closed successfully."
+        except Exception as e:
+            return f"Error closing document: {e}"
         return "Active document backend not found."
     except Exception as e:
         return format_error_response(e)
 
 
 @mcp_server.tool()
-def shutdown_word(ctx: Context = Field(description="Context object")) -> str:
+def shutdown_word(ctx: Context[ServerSession, AppContext] = Field(description="Context object"))-> str:
     """
     Closes the document and shuts down the Word application instance.
     Should be called at the end of a session.
@@ -117,27 +99,14 @@ def shutdown_word(ctx: Context = Field(description="Context object")) -> str:
     """
     try:
         # Check if we have any open documents
-        if not hasattr(ctx.session, "document_state") or not ctx.session.document_state:
-            return "No documents are currently open."
-
-        # Close all backend instances
-        for file_path, backend in ctx.session.backend_instances.items():
-            try:
-                backend.shutdown()
-            except Exception as e:
-                return f"Error closing document '{file_path}': {e}"
-
-        # Clear session state
-        ctx.session.document_state = {}
-        ctx.session.backend_instances = {}
-
+        ctx.request_context.lifespan_context.close_document()
         return "Word application has been shut down successfully."
     except Exception as e:
         return format_error_response(e)
 
 
 @mcp_server.tool()
-def get_document_styles(ctx: Context = Field(description="Context object")) -> str:
+def get_document_styles(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
     Retrieves all available styles in the active document.
 
@@ -145,50 +114,31 @@ def get_document_styles(ctx: Context = Field(description="Context object")) -> s
         A JSON string containing a list of styles with their names and types.
     """
     # Get active document path from session state
-    from word_document_server.core_utils import validate_active_document
+    active_doc = ctx.request_context.lifespan_context.get_active_document()
+    styles = get_document_styles(active_doc)
 
-    error = validate_active_document(ctx)
-    if error:
-        return error
-
-    try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
-
-        # Get all document styles using the backend method
-        styles = get_document_styles(backend)
-
-        # Convert to JSON string
-        return json.dumps(styles, ensure_ascii=False)
-    except Exception as e:
-        return format_error_response(e)
+     # Convert to JSON string
+    return json.dumps(styles, ensure_ascii=False)
 
 
 
 
 @mcp_server.tool()
-def get_all_text(ctx: Context = Field(description="Context object")) -> str:
+def get_all_text(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
     Retrieves all text from the active document.
 
     Returns:
         A string containing all text content from the document.
     """
-    # Get active document path from session state
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        return error
-
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        # Check if session exists
+        if not hasattr(ctx, 'session'):
+            return format_error_response("No session available in context")
 
-        # Get all text using the backend method
-        text = get_all_text(backend)
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        # Get all text using the document object directly
+        text = get_all_text(active_doc)
 
         return text
     except Exception as e:
@@ -197,7 +147,7 @@ def get_all_text(ctx: Context = Field(description="Context object")) -> str:
 
 @mcp_server.tool()
 def get_elements(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     element_type: str = Field(
         description='Type of elements to retrieve. Can be: "paragraphs", "tables", "images", "headings", "styles", "comments"'
     ),
@@ -208,13 +158,6 @@ def get_elements(
     Returns:
         A JSON string containing information about the elements.
     """
-    # Get active document path from session state
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        return error
-
     # Validate element_type parameter
     supported_types = [
         "paragraphs",
@@ -224,19 +167,9 @@ def get_elements(
         "styles",
         "comments",
     ]
-    if element_type not in supported_types:
-        from word_document_server.errors import ErrorCode, WordDocumentError
-
-        e = WordDocumentError(
-            ErrorCode.ELEMENT_TYPE_ERROR,
-            f"Unsupported element type '{element_type}'. Supported types: {', '.join(supported_types)}",
-        )
-        return format_error_response(e)
-
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        # Remove backend usage, use document directly
 
         # Get elements using the backend method
         elements = get_selection_info(backend, element_type)

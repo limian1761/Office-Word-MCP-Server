@@ -1,7 +1,5 @@
 """
 Document operations for Word Document MCP Server.
-
-This module contains functions for document-level operations.
 """
 
 import re
@@ -10,38 +8,51 @@ from typing import Any, Dict, List, Optional
 import win32com.client
 
 from word_document_server.errors import ErrorCode, WordDocumentError
-from word_document_server.word_backend import WordBackend
 
 
-def get_all_paragraphs(backend: WordBackend) -> List[win32com.client.CDispatch]:
+def get_all_paragraphs(document: win32com.client.CDispatch) -> List[win32com.client.CDispatch]:
     """
-    Get all paragraphs in the document.
+    Retrieves all paragraphs from the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
 
     Returns:
-        List of paragraph COM objects.
+        A list of paragraph COM objects.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
-    return list(backend.document.Paragraphs)
+
+    paragraphs = []
+    try:
+        paragraphs_count = document.Paragraphs.Count
+        for i in range(1, paragraphs_count + 1):
+            try:
+                paragraph = document.Paragraphs(i)
+                paragraphs.append(paragraph)
+            except Exception as e:
+                print(f"Warning: Failed to retrieve paragraph at index {i}: {e}")
+                continue
+    except Exception as e:
+        print(f"Error: Failed to retrieve paragraphs: {e}")
+
+    return paragraphs
 
 
 def get_paragraphs_in_range(
-    backend: WordBackend, range_obj: win32com.client.CDispatch
+    document: win32com.client.CDispatch, range_obj: win32com.client.CDispatch
 ) -> List[win32com.client.CDispatch]:
     """
     Get all paragraphs within a specific COM Range.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
         range_obj: The COM Range object to search within.
 
     Returns:
         List of paragraph COM objects found within the range.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     paragraphs = []
@@ -50,34 +61,34 @@ def get_paragraphs_in_range(
     return paragraphs
 
 
-def get_all_tables(backend: WordBackend) -> List[win32com.client.CDispatch]:
+def get_all_tables(document: win32com.client.CDispatch) -> List[win32com.client.CDispatch]:
     """
     Get all tables in the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
 
     Returns:
         List of table COM objects.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
-    return list(backend.document.Tables)
+    return list(document.Tables)
 
 
-def get_text_from_range(backend: WordBackend, start_pos: int, end_pos: int) -> str:
+def get_text_from_range(document: win32com.client.CDispatch, start_pos: int, end_pos: int) -> str:
     """
     Get text from a specific range in the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
         start_pos: The start position of the range.
         end_pos: The end position of the range.
 
     Returns:
         The text content of the specified range.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     # Validate range parameters
@@ -87,7 +98,7 @@ def get_text_from_range(backend: WordBackend, start_pos: int, end_pos: int) -> s
         raise ValueError("end_pos must be an integer greater than start_pos")
 
     # Get the document range
-    doc_range = backend.document.Range(start_pos, end_pos)
+    doc_range = document.Range(start_pos, end_pos)
     return doc_range.Text
 
 
@@ -104,7 +115,8 @@ def get_runs_in_range(
     Returns:
         List of Run COM objects found within the range.
     """
-    if not backend.document:
+    active_doc = ctx.request_context.lifespan_context.get_active_document()
+    if not active_doc:
         raise RuntimeError("No document open.")
 
     runs = []
@@ -164,64 +176,64 @@ def get_cells_in_range(
     return cells
 
 
-def set_header_text(backend: WordBackend, text: str, header_index: int = 1):
+def set_header_text(document: win32com.client.CDispatch, text: str, header_index: int = 1):
     """
     Sets the text for a specific header in all sections of the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
         text: The text to set in the header.
         header_index: The index of the header to modify (e.g., 1 for primary header).
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     # Iterate through all sections in the document
-    for i in range(1, backend.document.Sections.Count + 1):
-        section = backend.document.Sections(i)
+    for i in range(1, document.Sections.Count + 1):
+        section = document.Sections(i)
         # Access the specified header
         header = section.Headers(header_index)
         # Set the text of the header's range
         header.Range.Text = text
 
 
-def set_footer_text(backend: WordBackend, text: str, footer_index: int = 1):
+def set_footer_text(document: win32com.client.CDispatch, text: str, footer_index: int = 1):
     """
     Sets the text for a specific footer in all sections of the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
         text: The text to set in the footer.
         footer_index: The index of the footer to modify (e.g., 1 for primary footer).
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     # Iterate through all sections in the document
-    for i in range(1, backend.document.Sections.Count + 1):
-        section = backend.document.Sections(i)
+    for i in range(1, document.Sections.Count + 1):
+        section = document.Sections(i)
         # Access the specified footer
         footer = section.Footers(footer_index)
         # Set the text of the footer's range
         footer.Range.Text = text
 
 
-def get_headings(backend: WordBackend) -> List[Dict[str, Any]]:
+def get_headings(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
     Extracts all heading paragraphs from the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
 
     Returns:
         A list of dictionaries, where each dictionary represents a heading
         with "text" and "level" keys.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     headings = []
-    for para in backend.document.Paragraphs:
+    for para in document.Paragraphs:
         style_name = para.Style.NameLocal
         # Check for both English and Chinese heading styles
         if style_name.startswith("Heading") or style_name.startswith("标题"):
@@ -237,44 +249,37 @@ def get_headings(backend: WordBackend) -> List[Dict[str, Any]]:
     return headings
 
 
-def accept_all_changes(backend: WordBackend):
+def accept_all_changes(document: win32com.client.CDispatch):
     """Accepts all tracked changes in the document."""
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
-    backend.document.AcceptAllRevisions()
+    document.AcceptAllRevisions()
 
 
-def enable_track_revisions(backend: WordBackend):
-    """Enables track changes (revision mode) in the document."""
-    if not backend.document:
-        raise RuntimeError("No document open.")
-    backend.document.TrackRevisions = True
-
-
-def disable_track_revisions(backend: WordBackend):
+def disable_track_revisions(document: win32com.client.CDispatch):
     """Disables track changes (revision mode) in the document."""
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
-    backend.document.TrackRevisions = False
+    document.TrackRevisions = False
 
 
-def get_all_styles(backend: WordBackend) -> List[Dict[str, Any]]:
+def get_all_styles(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
     Retrieves all available styles in the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
 
     Returns:
         A list of dictionaries containing style information, each with "name" and "type" keys.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     styles = []
     # Get all styles from the document
-    for i in range(1, backend.document.Styles.Count + 1):
-        style = backend.document.Styles(i)
+    for i in range(1, document.Styles.Count + 1):
+        style = document.Styles(i)
         try:
             style_info = {
                 "name": style.NameLocal,  # Local name of the style
@@ -286,19 +291,19 @@ def get_all_styles(backend: WordBackend) -> List[Dict[str, Any]]:
     return styles
 
 
-def get_protection_status(backend: WordBackend) -> Dict[str, Any]:
+def get_protection_status(document: win32com.client.CDispatch) -> Dict[str, Any]:
     """
     Checks the protection status of the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
 
     Returns:
         A dictionary containing protection status information:
         - is_protected: Boolean indicating if the document is protected
         - protection_type: String describing the type of protection
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     # Mapping of Word protection type constants to human-readable descriptions
@@ -311,7 +316,7 @@ def get_protection_status(backend: WordBackend) -> Dict[str, Any]:
         3: "Allow only reading",  # wdAllowOnlyReading: Allow read-only access
     }
 
-    protection_type = backend.document.ProtectionType
+    protection_type = document.ProtectionType
     is_protected = protection_type != -1
 
     return {
@@ -322,30 +327,30 @@ def get_protection_status(backend: WordBackend) -> Dict[str, Any]:
     }
 
 
-def unprotect_document(backend: WordBackend, password: Optional[str] = None) -> bool:
+def unprotect_document(document: win32com.client.CDispatch, password: Optional[str] = None) -> bool:
     """
     Attempts to unprotect the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
         password: Optional password to use for unprotecting the document.
 
     Returns:
         True if the document was successfully unprotected, False otherwise.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
-    protection_status = get_protection_status(backend)
+    protection_status = get_protection_status(document)
     if not protection_status["is_protected"]:
         return True  # Already unprotected
 
     try:
         # Word's Unprotect method returns True if successful
         if password:
-            result = backend.document.Unprotect(Password=password)
+            result = document.Unprotect(Password=password)
         else:
-            result = backend.document.Unprotect()
+            result = document.Unprotect()
         return result
     except Exception as e:
         print(f"Warning: Failed to unprotect document: {e}")
@@ -366,23 +371,21 @@ def _get_style_type(style_type_code: int) -> str:
     return style_types.get(style_type_code, f"Unknown ({style_type_code})")
 
 
-def get_document_styles(backend: WordBackend) -> List[Dict[str, Any]]:
+def get_document_styles(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
     Retrieves all available styles in the active document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The document com object.
 
     Returns:
         A list of styles with their names and types.
     """
-    if not backend.document:
-        raise RuntimeError("No document open.")
 
     styles = []
     try:
         # Iterate through all styles in the document
-        for style in backend.document.Styles:
+        for style in document.Styles:
             try:
                 # Skip built-in hidden styles
                 if not style.BuiltIn or style.InUse:
@@ -404,23 +407,20 @@ def get_document_styles(backend: WordBackend) -> List[Dict[str, Any]]:
     return styles
 
 
-def get_document_structure(backend: WordBackend) -> List[Dict[str, Any]]:
+def get_document_structure(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
     Provides a structured overview of the document by listing all headings.
 
     Args:
-        backend: The WordBackend instance.
-
+        document: The document com object.
     Returns:
         A list of dictionaries, each representing a heading with its text and level.
     """
-    if not backend.document:
-        raise RuntimeError("No document open.")
 
     structure = []
     try:
         # Iterate through all paragraphs
-        for paragraph in backend.document.Paragraphs:
+        for paragraph in document.Paragraphs:
             try:
                 # Get paragraph style name
                 style_name = paragraph.Style.NameLocal
@@ -469,13 +469,66 @@ def get_document_structure(backend: WordBackend) -> List[Dict[str, Any]]:
 
     return structure
 
+def get_all_inline_shapes(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
+    """
+    Get all inline shapes (including pictures) in the document.
 
-def get_all_text(backend: WordBackend) -> str:
+    Args:
+        document: Word document COM object
+
+    Returns:
+        List of dictionaries with shape info (index, type, width, height)
+    """
+    if not document:
+        raise RuntimeError("No document open.")
+
+    shapes: List[Dict[str, Any]] = []
+    try:
+        # Check if InlineShapes property exists and is accessible
+        if not hasattr(document, "InlineShapes"):
+            return shapes
+
+        # Get all inline shapes from the document
+        shapes_count = 0
+        try:
+            shapes_count = document.InlineShapes.Count
+        except Exception as e:
+            raise WordDocumentError(ErrorCode.IMAGE_ERROR, f"Failed to access InlineShapes collection: {e}")
+
+        for i in range(1, shapes_count + 1):
+            try:
+                shape = document.InlineShapes(i)
+                try:
+                    from word_document_server.utils.core_utils import get_shape_info
+                    shape_info = get_shape_info(shape, i - 1)
+                    # Add additional properties based on shape type
+                    if shape_info["type"] == "Picture":
+                        # Try to get picture format information if available
+                        if hasattr(shape, "PictureFormat"):
+                            if hasattr(shape.PictureFormat, "ColorType"):
+                                shape_info["color_type"] = _get_color_type(
+                                    shape.PictureFormat.ColorType
+                                )
+                    shapes.append(shape_info)
+                except Exception as e:
+                    print(
+                        f"Warning: Failed to retrieve shape information for index {i}: {e}"
+                    )
+                    continue
+            except Exception as e:
+                print(f"Warning: Failed to access shape at index {i}: {e}")
+                continue
+    except Exception as e:
+        print(f"Error: Failed to retrieve inline shapes: {e}")
+
+    return shapes
+
+def get_all_text(document: win32com.client.CDispatch) -> str:
     """
     Retrieves all text from the active document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
 
     Returns:
         A string containing all text content from the document.
@@ -483,13 +536,13 @@ def get_all_text(backend: WordBackend) -> str:
     Raises:
         RuntimeError: If no document is open.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     text = []
     try:
         # Iterate through all paragraphs
-        for paragraph in backend.document.Paragraphs:
+        for paragraph in document.Paragraphs:
             try:
                 text.append(paragraph.Range.Text)
             except Exception as e:
@@ -501,25 +554,25 @@ def get_all_text(backend: WordBackend) -> str:
     return "\n".join(text)
 
 
-def accept_all_changes(backend: WordBackend) -> None:
+def accept_all_changes(document: win32com.client.CDispatch) -> None:
     """
     Accepts all tracked revisions in the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
 
     Raises:
         RuntimeError: If no document is open.
         WordDocumentError: If accepting changes fails.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     try:
         # Handle the case where document is a mock dictionary (for testing)
-        if isinstance(backend.document, dict):
+        if isinstance(document, dict):
             # In mock mode, just clear the Revisions list
-            if "Revisions" in backend.document:
+            if "Revisions" in document:
                 # For tests that access Revisions via attribute
                 # Create a mock object that can be accessed via both dict and attribute
                 class MockRevisions:
@@ -542,24 +595,24 @@ def accept_all_changes(backend: WordBackend) -> None:
                         return len(self.revisions)
 
                 # If it's already a list, wrap it in our MockRevisions class
-                if isinstance(backend.document["Revisions"], list):
-                    backend.document["Revisions"] = MockRevisions(
-                        backend.document["Revisions"]
-                    )
+                if isinstance(document["Revisions"], list):
+                    document["Revisions"] = MockRevisions(
+                    document["Revisions"]
+                )
                 # Accept all changes
-                backend.document["Revisions"].AcceptAll()
-        elif hasattr(backend.document, "Revisions"):
+                document["Revisions"].AcceptAll()
+        elif hasattr(document, "Revisions"):
             # Handle real Word COM object
             # Accept all revisions if there are any
             try:
-                if hasattr(backend.document.Revisions, "AcceptAll"):
-                    backend.document.Revisions.AcceptAll()
+                if hasattr(document.Revisions, "AcceptAll"):
+                    document.Revisions.AcceptAll()
             except AttributeError:
                 # If Count is not available but Revisions is iterable
-                if hasattr(backend.document.Revisions, "__iter__"):
+                if hasattr(document.Revisions, "__iter__"):
                     # In mock mode with list-like Revisions
                     try:
-                        backend.document.Revisions = []
+                        document.Revisions = []
                     except (AttributeError, TypeError):
                         # If assignment is not possible, just pass
                         pass
@@ -568,7 +621,7 @@ def accept_all_changes(backend: WordBackend) -> None:
 
 
 def find_text(
-    backend: WordBackend,
+    ctx: Context,
     text: str,
     match_case: bool = False,
     match_whole_word: bool = False,
@@ -585,7 +638,8 @@ def find_text(
     Returns:
         A list of dictionaries containing information about each found text.
     """
-    if not backend.document:
+    active_doc = ctx.request_context.lifespan_context.get_active_document()
+    if not active_doc:
         raise RuntimeError("No document open.")
 
     if not text:
@@ -593,7 +647,7 @@ def find_text(
 
     try:
         # Use Word's Find functionality
-        finder = backend.document.Content.Find
+        finder = active_doc.Content.Find
         finder.ClearFormatting()
         finder.Text = text
         finder.MatchCase = match_case
@@ -620,7 +674,7 @@ def find_text(
 
 
 def replace_text(
-    backend: WordBackend,
+    ctx: Context,
     find_text: str,
     replace_text: str,
     match_case: bool = False,
@@ -641,7 +695,8 @@ def replace_text(
     Returns:
         The number of replacements made.
     """
-    if not backend.document:
+    active_doc = ctx.request_context.lifespan_context.get_active_document()
+    if not active_doc:
         raise RuntimeError("No document open.")
 
     if not find_text:
@@ -649,7 +704,7 @@ def replace_text(
 
     try:
         # Use Word's Replace functionality
-        finder = backend.document.Content.Find
+        finder = active_doc.Content.Find
         finder.ClearFormatting()
         finder.Text = find_text
         finder.Replacement.Text = replace_text
@@ -678,7 +733,8 @@ def replace_text(
 
 
 def get_selection_info(
-    backend: WordBackend, selection_type: str
+    ctx: Context,
+    selection_type: str
 ) -> List[Dict[str, Any]]:
     """
     Get information about elements of a specific type in the document.
@@ -696,14 +752,15 @@ def get_selection_info(
     Returns:
         A list of dictionaries containing information about the elements.
     """
-    if not backend.document:
+    active_doc = ctx.request_context.lifespan_context.get_active_document()
+    if not active_doc:
         raise RuntimeError("No document open.")
 
     elements = []
 
     try:
         if selection_type == "paragraphs":
-            for i, para in enumerate(backend.document.Paragraphs):
+            for i, para in enumerate(active_doc.Paragraphs):
                 elements.append(
                     {
                         "index": i,
@@ -715,7 +772,7 @@ def get_selection_info(
                 )
 
         elif selection_type == "tables":
-            for i, table in enumerate(backend.document.Tables):
+            for i, table in enumerate(active_doc.Tables):
                 elements.append(
                     {
                         "index": i,
@@ -728,8 +785,8 @@ def get_selection_info(
 
         elif selection_type == "images":
             # Get all inline shapes (including images)
-            for i in range(1, backend.document.InlineShapes.Count + 1):
-                shape = backend.document.InlineShapes(i)
+            for i in range(1, active_doc.InlineShapes.Count + 1):
+                shape = active_doc.InlineShapes(i)
                 elements.append(
                     {
                         "index": i - 1,
@@ -746,15 +803,15 @@ def get_selection_info(
                 )
 
         elif selection_type == "headings":
-            elements = get_headings(backend)
+            elements = get_headings(active_doc)
 
         elif selection_type == "styles":
-            elements = get_document_styles(backend)
+            elements = get_document_styles(active_doc)
 
         elif selection_type == "comments":
             # Get all comments
-            for i in range(1, backend.document.Comments.Count + 1):
-                comment = backend.document.Comments(i)
+            for i in range(1, active_doc.Comments.Count + 1):
+                comment = active_doc.Comments(i)
                 elements.append(
                     {
                         "index": i - 1,
@@ -802,16 +859,5 @@ def _get_shape_type(type_code: int) -> str:
     Returns:
         Human-readable shape type.
     """
-    # Word inline shape type constants
-    shape_types = {
-        1: "Picture",  # wdInlineShapePicture
-        2: "LinkedPicture",  # wdInlineShapeLinkedPicture
-        3: "Chart",  # wdInlineShapeChart
-        4: "Diagram",  # wdInlineShapeDiagram
-        5: "OLEControlObject",  # wdInlineShapeOLEControlObject
-        6: "OLEObject",  # wdInlineShapeOLEObject
-        7: "ActiveXControl",  # wdInlineShapeActiveXControl
-        8: "SmartArt",  # wdInlineShapeSmartArt
-        9: "3DModel",  # wdInlineShape3DModel
-    }
-    return shape_types.get(type_code, "Unknown")
+    from word_document_server.utils.core_utils import get_shape_types
+    return get_shape_types().get(type_code, "Unknown")

@@ -3,8 +3,10 @@ from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp.server import Context
 from pydantic import Field
+from word_document_server.core import ServerSession
+from word_document_server.utils.app_context import AppContext
 
-from word_document_server.core_utils import get_backend_for_tool, mcp_server
+from word_document_server.core_utils import mcp_server
 from word_document_server.errors import (CommentEmptyError, CommentIndexError,
                                          ElementNotFoundError, ReplyEmptyError,
                                          format_error_response,
@@ -19,9 +21,10 @@ from word_document_server.operations.comment_operations import (add_comment as a
 
 
 @mcp_server.tool()
+@require_active_document_validation
 @handle_tool_errors
 def add_comment(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
         description="The Locator object to find the target location for the comment"
     ),
@@ -34,70 +37,48 @@ def add_comment(
     Returns:
         A success or error message.
     """
-    # Get active document path from session state
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        raise Exception(error)
-
-    if not text:
-        raise CommentEmptyError()
-
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # Use the shared selector engine from core
         from word_document_server.core import selector
 
         # Convert locator to Selection object
-        selection = selector.select(backend, locator, expect_single=True)
+        selection = selector.select(active_doc, locator, expect_single=True)
 
         # Get the first element's range
         com_range_obj = selection._elements[0].Range
 
         # Call the backend method to add a comment
-        comment_id = add_comment_op(backend, com_range_obj, text, author)
+        comment_id = add_comment_op(active_doc, com_range_obj, text, author)
 
         # Check if document is not None before saving
-        if backend.document is None:
+        if active_doc is None:
             raise ValueError(
                 "Failed to save document after adding comment: Document object is None."
             )
 
         # Save the document
-        backend.document.Save()
+        active_doc.Save()
 
         return f"Comment added successfully with ID: {comment_id}"
     except ElementNotFoundError as e:
         return format_error_response(e)
-    except Exception as e:
-        return format_error_response(e)
+
 
 
 @mcp_server.tool()
-def get_comments(ctx: Context = Field(description="Context object")) -> str:
+def get_comments(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
     Retrieves all comments in the active document.
 
     Returns:
         A JSON string containing a list of comments with their information.
     """
-    # Get active document path from session state
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        return error
-
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
-        # Get all comments from the backend
+        # Get all comments from the document
         comments = get_comments_op(backend)
 
         # Convert to JSON string
@@ -108,7 +89,7 @@ def get_comments(ctx: Context = Field(description="Context object")) -> str:
 
 @mcp_server.tool()
 def delete_comment(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     comment_index: int = Field(
         description="The 0-based index of the comment to delete"
     ),
@@ -119,13 +100,6 @@ def delete_comment(
     Returns:
         A success or error message.
     """
-    # Get active document path from session state
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        return error
-
     try:
         backend = get_backend_for_tool(
             ctx, ctx.session.document_state["active_document_path"]
@@ -145,20 +119,13 @@ def delete_comment(
 
 
 @mcp_server.tool()
-def delete_all_comments(ctx: Context = Field(description="Context object")) -> str:
+def delete_all_comments(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
     Deletes all comments in the active document.
 
     Returns:
         A success or error message.
     """
-    # Get active document path from session state
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        return error
-
     try:
         backend = get_backend_for_tool(
             ctx, ctx.session.document_state["active_document_path"]
@@ -177,7 +144,7 @@ def delete_all_comments(ctx: Context = Field(description="Context object")) -> s
 
 @mcp_server.tool()
 def edit_comment(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     comment_index: int = Field(description="The 0-based index of the comment to edit"),
     new_text: str = Field(description="The new text for the comment"),
 ) -> str:
@@ -217,7 +184,7 @@ def edit_comment(
 
 @mcp_server.tool()
 def reply_to_comment(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     comment_index: int = Field(
         description="The 0-based index of the comment to reply to"
     ),
@@ -260,7 +227,7 @@ def reply_to_comment(
 
 @mcp_server.tool()
 def get_comment_thread(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     comment_index: int = Field(description="The 0-based index of the original comment"),
 ) -> str:
     """

@@ -6,192 +6,192 @@ This module contains functions for comment-related operations.
 
 from typing import Any, Dict, List, Optional
 
-import pythoncom
 import win32com.client
 
 from word_document_server.errors import ErrorCode, WordDocumentError
-from word_document_server.word_backend import WordBackend
+from word_document_server.utils.com_utils import handle_com_error, safe_com_call
 
 
+@handle_com_error(ErrorCode.COMMENT_ERROR, "add comment")
 def add_comment(
-    backend: WordBackend,
+    document: win32com.client.CDispatch,
     com_range_obj: win32com.client.CDispatch,
     text: str,
-    author: str = "User",
+    author: Optional[str] = None,
 ) -> win32com.client.CDispatch:
     """
-    Adds a comment to the specified range.
+    Adds a comment to the document at the specified range.
 
     Args:
-        backend: The WordBackend instance.
-        com_range_obj: The COM Range object where the comment will be inserted.
-        text: The text of the comment.
-        author: The author of the comment (default: "User").
+        document: The Word document COM object.
+        com_range_obj: The range to add the comment to.
+        text: The comment text.
+        author: Optional author name for the comment.
 
     Returns:
-        The newly created Comment COM object.
+        The newly created comment COM object.
     """
-    if not backend.document:
-        raise RuntimeError("No document open.")
-
-    if not com_range_obj:
-        raise ValueError("Invalid range object provided.")
-
-    try:
-        # Add a comment at the specified range
-        return backend.document.Comments.Add(Range=com_range_obj, Text=text)
-    except Exception as e:
-        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to add comment: {e}")
+    # Add the comment
+    comment = document.Comments.Add(com_range_obj, text)
+    
+    # Set the author if provided
+    if author:
+        comment.Author = author
+        
+    return comment
 
 
-def get_comments(backend: WordBackend) -> List[Dict[str, Any]]:
+def get_comments(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
-    Retrieves all comments in the document.
+    Retrieves all comments from the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
 
     Returns:
-        A list of dictionaries containing comment information, each with "index", "text", "author", "start_pos", "end_pos", and "scope_text" keys.
+        A list of dictionaries with comment details.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     comments: List[Dict[str, Any]] = []
     try:
-        # Check if Comments property exists and is accessible
-        if not hasattr(backend.document, "Comments"):
-            return comments
-
-        # Get all comments from the document
-        comments_count = 0
-        try:
-            comments_count = backend.document.Comments.Count
-        except Exception as e:
-            raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to access Comments collection: {e}")
-
+        comments_count = document.Comments.Count
         for i in range(1, comments_count + 1):
-            comment = backend.document.Comments(i)
-            comments.append(
-                {
-                    "index": i,
-                    "text": comment.Text,
+            try:
+                comment = document.Comments(i)
+                comment_info = {
+                    "index": i - 1,  # 0-based index
+                    "text": comment.Text(),
                     "author": comment.Author,
+                    "initials": comment.Initial,
                     "start_pos": comment.Scope.Start,
                     "end_pos": comment.Scope.End,
-                    "scope_text": comment.Scope.Text,
+                    "scope_text": comment.Scope.Text.strip(),
+                    "date": str(comment.Date),
+                    "is_virtual": comment.IsVirtual,
+                    "replies_count": comment.Replies.Count if hasattr(comment, "Replies") else 0,
                 }
-            )
+                comments.append(comment_info)
+            except Exception as e:
+                print(f"Warning: Failed to retrieve comment at index {i}: {e}")
+                continue
     except Exception as e:
-        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to retrieve comments: {e}")
+        print(f"Error: Failed to retrieve comments: {e}")
 
     return comments
 
 
-def delete_all_comments(backend: WordBackend) -> None:
+@handle_com_error(ErrorCode.COMMENT_ERROR, "delete comment")
+def delete_comment(document: win32com.client.CDispatch, index: int) -> bool:
     """
-    Deletes all comments in the document.
+    Deletes a comment at the specified index.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
+        index: The 0-based index of the comment to delete.
 
     Returns:
-        None
+        True if successful.
     """
-    if not backend.document:
-        raise RuntimeError("No document open.")
-
-    try:
-        backend.document.Comments.DeleteAll()
-    except Exception as e:
-        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Error during deletion of all comments: {e}")
+    # Get the comment at the specified index
+    comment = document.Comments(index + 1)  # COM is 1-based
+    # Delete the comment
+    comment.Delete()
+    return True
 
 
-def edit_comment(
-    backend: WordBackend,
-    comment_index: int,
-    new_text: str,
-) -> None:
+@handle_com_error(ErrorCode.COMMENT_ERROR, "delete all comments")
+def delete_all_comments(document: win32com.client.CDispatch) -> int:
     """
-    Edits the text of an existing comment.
+    Deletes all comments from the document.
 
     Args:
-        backend: The WordBackend instance.
-        comment_index: The index of the comment to edit.
+        document: The Word document COM object.
+
+    Returns:
+        Number of comments deleted.
+    """
+    count = document.Comments.Count
+    # Delete all comments
+    document.Comments.Delete()
+    return count
+
+
+@handle_com_error(ErrorCode.COMMENT_ERROR, "edit comment")
+def edit_comment(document: win32com.client.CDispatch, index: int, new_text: str) -> bool:
+    """
+    Edits a comment at the specified index.
+
+    Args:
+        document: The Word document COM object.
+        index: The 0-based index of the comment to edit.
         new_text: The new text for the comment.
 
     Returns:
-        None
+        True if successful.
     """
-    if not backend.document:
-        raise RuntimeError("No document open.")
-
-    try:
-        comment = backend.document.Comments(comment_index)
-        comment.Text = new_text
-    except Exception as e:
-        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to edit comment: {e}")
+    # Get the comment at the specified index
+    comment = document.Comments(index + 1)  # COM is 1-based
+    # Edit the comment
+    comment.Range.Text = new_text
+    return True
 
 
-def reply_to_comment(
-    backend: WordBackend,
-    comment_index: int,
-    reply_text: str,
-    author: str = "User",
-) -> None:
+@handle_com_error(ErrorCode.COMMENT_ERROR, "reply to comment")
+def reply_to_comment(document: win32com.client.CDispatch, index: int, text: str, author: Optional[str] = None) -> bool:
     """
-    Replies to an existing comment.
+    Adds a reply to a comment at the specified index.
 
     Args:
-        backend: The WordBackend instance.
-        comment_index: The index of the comment to reply to.
-        reply_text: The text of the reply.
-        author: The author of the reply (default: "User").
+        document: The Word document COM object.
+        index: The 0-based index of the comment to reply to.
+        text: The reply text.
+        author: Optional author name for the reply.
 
     Returns:
-        None
+        True if successful.
     """
-    if not backend.document:
-        raise RuntimeError("No document open.")
-
-    try:
-        comment = backend.document.Comments(comment_index)
-        comment.Replies.Add(Text=reply_text, Author=author)
-    except Exception as e:
-        raise WordDocumentError(ErrorCode.COMMENT_ERROR, f"Failed to reply to comment: {e}")
+    # Get the comment at the specified index
+    comment = document.Comments(index + 1)  # COM is 1-based
+    # Add the reply
+    reply = comment.Replies.Add(text, author)
+    return True
 
 
-def get_comment_thread(
-    backend: WordBackend,
-    comment_index: int,
-) -> List[Dict[str, Any]]:
+def get_comment_thread(document: win32com.client.CDispatch, index: int) -> List[Dict[str, Any]]:
     """
-    Retrieves the thread of a comment, including the comment and all replies.
+    Retrieves a comment and all its replies as a thread.
 
     Args:
-        backend: The WordBackend instance.
-        comment_index: The index of the comment.
+        document: The Word document COM object.
+        index: The 0-based index of the comment to retrieve.
 
     Returns:
-        A list of dictionaries containing comment information, each with "index", "text", "author", "start_pos", "end_pos", and "scope_text" keys.
+        A list of dictionaries with comment and reply details.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
     try:
-        comment = backend.document.Comments(comment_index)
+        # Get the comment at the specified index
+        comment = document.Comments(index + 1)  # COM is 1-based
+        
+        # Start with the main comment
         thread = [
             {
-                "index": comment_index,
-                "text": comment.Text,
+                "index": -1,  # Main comment has index -1 to distinguish from replies
+                "text": comment.Text(),
                 "author": comment.Author,
                 "start_pos": comment.Scope.Start,
                 "end_pos": comment.Scope.End,
                 "scope_text": comment.Scope.Text,
             }
         ]
-
-        for i in range(1, comment.Replies.Count + 1):
+        
+        # Add all replies
+        replies_count = comment.Replies.Count
+        for i in range(1, replies_count + 1):
             reply = comment.Replies(i)
             thread.append(
                 {

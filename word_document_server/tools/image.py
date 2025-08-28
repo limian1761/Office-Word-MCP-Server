@@ -1,22 +1,108 @@
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp.server import Context
 from pydantic import Field
+from word_document_server.core import ServerSession
+from word_document_server.utils.app_context import AppContext
 
 from word_document_server.core import selector as selector_engine
-from word_document_server.core_utils import get_backend_for_tool, mcp_server
+from word_document_server.core_utils import mproxy_server
 from word_document_server.errors import (ElementNotFoundError,
                                          format_error_response,
                                          handle_tool_errors)
-from word_document_server.operations import get_all_inline_shapes
+from word_document_server.errors import ErrorCode, WordDocumentError
+from word_document_server.utils.core_utils import get_shape_types
+
+
+def _get_color_type(color_code: int) -> str:
+    """
+    Converts Word picture color type code to human-readable string.
+
+    Args:
+        color_code: Color type code from Word COM interface.
+
+    Returns:
+        Human-readable color type.
+    """
+    # Word picture color type constants
+    color_types = {
+        0: "Color",  # msoPictureColorTypeColor
+        1: "Grayscale",  # msoPictureColorTypeGrayscale
+        2: "BlackAndWhite",  # msoPictureColorTypeBlackAndWhite
+        3: "Watermark",  # msoPictureColorTypeWatermark
+    }
+    return color_types.get(color_code, "Unknown")
+
+
+def get_all_inline_shapes(document) -> List[Dict[str, Any]]:
+    """
+    Retrieves all inline shapes (including pictures) in the document.
+
+    Args:
+        document: The Word document COM object.
+
+    Returns:
+        A list of dictionaries containing shape information, each with "index", "type", and "width" keys.
+    """
+    if not document:
+        raise RuntimeError("No document open.")
+
+    shapes: List[Dict[str, Any]] = []
+    try:
+        # Check if InlineShapes property exists and is accessible
+        if not hasattr(document, "InlineShapes"):
+            return shapes
+
+        # Get all inline shapes from the document
+        shapes_count = 0
+        try:
+            shapes_count = document.InlineShapes.Count
+        except Exception as e:
+            raise WordDocumentError(ErrorCode.IMAGE_ERROR, f"Failed to access InlineShapes collection: {e}")
+
+        for i in range(1, shapes_count + 1):
+            try:
+                shape = document.InlineShapes(i)
+                try:
+                    shape_info = {
+                        "index": i - 1,  # 0-based index
+                        "type": (
+                            get_shape_types().get(shape.Type, "Unknown")
+                            if hasattr(shape, "Type")
+                            else "Unknown"
+                        ),
+                        "width": shape.Width if hasattr(shape, "Width") else 0,
+                        "height": shape.Height if hasattr(shape, "Height") else 0,
+                    }
+                    # Add additional properties based on shape type
+                    if shape_info["type"] == "Picture":
+                        # Try to get picture format information if available
+                        if hasattr(shape, "PictureFormat"):
+                            if hasattr(shape.PictureFormat, "ColorType"):
+                                shape_info["color_type"] = _get_color_type(
+                                    shape.PictureFormat.ColorType
+                                )
+                    shapes.append(shape_info)
+                except Exception as e:
+                    print(
+                        f"Warning: Failed to retrieve shape information for index {i}: {e}"
+                    )
+                    continue
+            except Exception as e:
+                print(f"Warning: Failed to access shape at index {i}: {e}")
+                continue
+    except Exception as e:
+        print(f"Error: Failed to retrieve inline shapes: {e}")
+
+    return shapes
 
 
 @mcp_server.tool()
-@handle_tool_errors
+@standardize_tool_errors
 def insert_object(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
         description="The Locator object to find the anchor element"
     ),
@@ -36,12 +122,6 @@ def insert_object(
     Returns:
         A success or error message.
     """
-    # Validate active document
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        raise Exception(error)
 
     # Validate object path
     if not os.path.exists(object_path):
@@ -52,35 +132,29 @@ def insert_object(
     if object_type not in supported_types:
         return f"Unsupported object type '{object_type}'. Supported types: {', '.join(supported_types)}"
 
-    # Validate position
-    if position not in ["before", "after", "replace"]:
-        return "Invalid position. Must be 'before', 'after', or 'replace'."
+    from word_document_server.utils.core_utils import validate_insert_position
+    validation_error = validate_insert_position(position)
+    if validation_error:
+        return validation_error
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
-        selection = selector_engine.select(backend, locator, expect_single=True)
+        selection = selector_engine.select(active_doc, locator, expect_single=True)
 
         # Use the Selection's insert_object method which handles position correctly
         selection.insert_object(object_path, object_type, position)
         # Add None check for document
-        if backend.document is None:
+        if active_doc is None:
             raise ValueError("Failed to save document: No active document.")
-        backend.document.Save()
+        active_doc.Save()
         return f"Successfully inserted {object_type} object."
-    except ElementNotFoundError as e:
-        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
-    except ValueError as e:
-        return f"Invalid parameter: {e}"
-    except Exception as e:
-        return format_error_response(e)
+
 
 
 @mcp_server.tool()
 def add_caption(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
         description="The Locator object to find the target object"
     ),
@@ -100,30 +174,22 @@ def add_caption(
     Returns:
         A success or error message.
     """
-    # Validate active document
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        return error
 
     # Validate position
     if position not in ["above", "below"]:
         return "Invalid position. Must be 'above' or 'below'."
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # Convert locator to Selection object
-        selection = selector_engine.select(backend, locator, expect_single=True)
+        selection = selector_engine.select(active_doc, locator, expect_single=True)
 
         # Add caption to the selected object
         selection.add_caption(caption_text, label, position)
 
         # Save the document
-        backend.document.Save()
+        active_doc.Save()
 
         return f"Successfully added {label} caption."
     except ElementNotFoundError as e:
@@ -136,7 +202,7 @@ def add_caption(
 
 @mcp_server.tool()
 def get_image_info(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Optional[Dict[str, Any]] = Field(
         description="Optional, the Locator object to find specific images. If not provided, returns information about all images",
         default=None,
@@ -148,23 +214,16 @@ def get_image_info(
     Returns:
         A JSON string containing image information.
     """
-    # Validate active document
-    from word_document_server.core_utils import validate_active_document
 
-    error = validate_active_document(ctx)
-    if error:
-        return error
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         if locator:
             # Find specific images using locator
             from word_document_server.core import selector as selector_engine
 
-            selection = selector_engine.select(backend, locator)
+            selection = selector_engine.select(active_doc, locator)
 
             # Filter for only inline shapes (images)
             images = [
@@ -172,22 +231,28 @@ def get_image_info(
             ]
         else:
             # Get all images
-            images = get_all_inline_shapes(backend)
+            images = get_all_inline_shapes(active_doc)
 
         # Collect image information
         image_info = []
-        for i, image in enumerate(images):
-            try:
-                info = {
-                    "index": i,
-                    "type": image.Type if hasattr(image, "Type") else "Unknown",
-                    "width": image.Width if hasattr(image, "Width") else "Unknown",
-                    "height": image.Height if hasattr(image, "Height") else "Unknown",
-                }
-                image_info.append(info)
-            except Exception as e:
-                # Skip images that cause errors
-                continue
+        # Check if images are already dictionaries (from get_all_inline_shapes)
+        if images and isinstance(images[0], dict):
+            # Already processed by get_all_inline_shapes
+            image_info = images
+        else:
+            # Process raw COM objects
+            for i, image in enumerate(images):
+                try:
+                    info = {
+                        "index": i,
+                        "type": image.Type if hasattr(image, "Type") else "Unknown",
+                        "width": image.Width if hasattr(image, "Width") else "Unknown",
+                        "height": image.Height if hasattr(image, "Height") else "Unknown",
+                    }
+                    image_info.append(info)
+                except Exception as e:
+                    # Skip images that cause errors
+                    continue
 
         # Convert to JSON string
         return json.dumps(image_info, ensure_ascii=False)

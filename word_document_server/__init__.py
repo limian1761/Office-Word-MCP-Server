@@ -4,7 +4,7 @@ Word Document Server Package
 
 # Import all operations
 from .operations import *
-from .word_backend import WordBackend
+from .com_backend.word_backend import WordBackend
 
 __all__ = [
     "WordBackend",

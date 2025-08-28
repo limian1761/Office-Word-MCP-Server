@@ -60,7 +60,7 @@ class TestCommentTool(unittest.TestCase):
 
     def setUp(self):
         # Ensure we have a clean state before each test
-        delete_all_comments_op(self.backend)
+        delete_all_comments_op(self.backend.document)
         # Make sure the backend is still in the session state
         self.ctx.session.backend_instances[self.test_doc_path] = self.backend
         self.ctx.session.document_state['active_document_path'] = self.test_doc_path

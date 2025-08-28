@@ -10,8 +10,10 @@ from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp.server import Context
 from pydantic import Field
+from word_document_server.core import ServerSession
+from word_document_server.utils.app_context import AppContext
 
-from word_document_server.core_utils import get_backend_for_tool, mcp_server
+from word_document_server.core_utils import mcp_server
 from word_document_server.errors import handle_tool_errors
 from word_document_server.operations import (add_heading, add_table,
                                             get_all_paragraphs, get_all_tables,
@@ -22,7 +24,7 @@ from word_document_server.operations import (add_heading, add_table,
 @mcp_server.tool()
 @handle_tool_errors
 def add_heading_quick(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     text: str = Field(description="The heading text"),
     level: int = Field(description="The heading level (1-9)", default=1),
 ) -> str:
@@ -39,22 +41,20 @@ def add_heading_quick(
     if error:
         raise Exception(error)
 
-    backend = get_backend_for_tool(
-        ctx, ctx.session.document_state["active_document_path"]
-    )
+    active_doc = ctx.request_context.lifespan_context.get_active_document()
 
     # Add heading at the end of document
-    doc_range = backend.document.Range()
+    doc_range = active_doc.Range()
     doc_range.Collapse(Direction=0)  # Collapse to end
 
-    heading = add_heading(backend, doc_range, text, level)
+    heading = add_heading(active_doc, doc_range, text, level)
     return f"Successfully added heading: {text}"
 
 
 @mcp_server.tool()
 @handle_tool_errors
 def add_paragraph_quick(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     text: str = Field(description="The paragraph text"),
 ) -> str:
     """
@@ -70,21 +70,19 @@ def add_paragraph_quick(
     if error:
         raise Exception(error)
 
-    backend = get_backend_for_tool(
-        ctx, ctx.session.document_state["active_document_path"]
-    )
+    active_doc = ctx.request_context.lifespan_context.get_active_document()
 
     # Add paragraph at the end of document
-    doc_range = backend.document.Range()
+    doc_range = active_doc.Range()
     doc_range.Collapse(Direction=0)  # Collapse to end
 
-    paragraph = insert_paragraph_after(backend, doc_range, text)
+    paragraph = insert_paragraph_after(active_doc, doc_range, text)
     return f"Successfully added paragraph: {text}"
 
 
 @mcp_server.tool()
 @handle_tool_errors
-def get_document_outline(ctx: Context = Field(description="Context object")) -> str:
+def get_document_outline(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
     Get a simplified outline of the document - Quick Tool.
     
@@ -100,12 +98,10 @@ def get_document_outline(ctx: Context = Field(description="Context object")) -> 
     if error:
         raise Exception(error)
 
-    backend = get_backend_for_tool(
-        ctx, ctx.session.document_state["active_document_path"]
-    )
+    active_doc = ctx.request_context.lifespan_context.get_active_document()
 
     # Get document structure
-    structure = get_document_structure(backend)
+    structure = get_document_structure(active_doc)
 
     # Simplify structure to just headings
     outline = [

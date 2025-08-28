@@ -3,19 +3,17 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp.server import Context
 from pydantic import Field
 
-from word_document_server import selector
-from word_document_server.core_utils import get_backend_for_tool, mcp_server
+from word_document_server.core_utils import mcp_server
 from word_document_server.errors import (ElementNotFoundError,
                                          format_error_response,
                                          handle_tool_errors)
 from word_document_server.operations import add_table
-from word_document_server.selector import AmbiguousLocatorError
 
 
 @mcp_server.tool()
 @handle_tool_errors
 def get_text_from_cell(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
         description="The Locator object to find the target cell"
     ),
@@ -38,10 +36,8 @@ def get_text_from_cell(
         raise Exception("Locator parameter is required.")
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
-        selector_engine = selector.SelectorEngine(backend)
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        selector_engine = selector.SelectorEngine(active_doc)
         selection = selector_engine.select(locator, expect_single=True)
 
         # Verify we have exactly one cell
@@ -65,7 +61,7 @@ def get_text_from_cell(
 
 @mcp_server.tool()
 def set_cell_value(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
         description="The Locator object to find the target cell"
     ),
@@ -78,21 +74,14 @@ def set_cell_value(
         A success or error message.
     """
     # Validate active document
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        return error
 
     # Validate that locator is provided
     if not locator:
         return "Locator parameter is required."
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
-        selector_engine = selector.SelectorEngine(backend)
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        selector_engine = selector.SelectorEngine(active_doc)
         selection = selector_engine.select(locator, expect_single=True)
 
         # Verify we have exactly one cell
@@ -104,7 +93,7 @@ def set_cell_value(
         cell.Range.Text = text
 
         # Save the document
-        backend.document.Save()
+        active_doc.Save()
         return "Successfully set cell value."
     except ElementNotFoundError as e:
         return f"No cell found matching the locator: {e}. Please try simplifying your locator or use get_document_structure to check the actual document structure."
@@ -122,7 +111,7 @@ def set_cell_value(
 
 @mcp_server.tool()
 def create_table(
-    ctx: Context = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
         description="The Locator object to find the anchor point for the new table"
     ),
@@ -155,13 +144,11 @@ def create_table(
         )
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # Find the anchor point using the locator
         selector_engine = selector.SelectorEngine()
-        anchor_selection = selector_engine.select(backend, locator, expect_single=True)
+        anchor_selection = selector_engine.select(active_doc, locator, expect_single=True)
 
         # Get the COM range object from the selection
         anchor_element = anchor_selection._elements[0]
@@ -172,10 +159,10 @@ def create_table(
             com_range_obj = anchor_element.Range
 
         # Add table using the backend function
-        add_table(backend, com_range_obj, rows, cols)
+        add_table(active_doc, com_range_obj, rows, cols)
 
         # Save the document
-        backend.document.Save()
+        active_doc.Save()
         return "Successfully created table."
     except ElementNotFoundError as e:
         return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."

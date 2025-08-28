@@ -7,7 +7,7 @@ import shutil
 from typing import Optional, Tuple
 
 
-def check_file_writeable(filepath: str) -> Tuple[bool, str]:
+def is_file_writeable(filepath: str) -> Tuple[bool, str]:
     """
     Check if a file can be written to.
 
@@ -17,31 +17,32 @@ def check_file_writeable(filepath: str) -> Tuple[bool, str]:
     Returns:
         Tuple of (is_writeable, error_message)
     """
+    is_writeable = False
+    error_message = ""
+
     # If file doesn't exist, check if directory is writeable
     if not os.path.exists(filepath):
-        directory = os.path.dirname(filepath)
-        # If no directory is specified (empty string), use current directory
-        if directory == "":
-            directory = "."
+        directory = os.path.dirname(filepath) or "."
         if not os.path.exists(directory):
-            return False, f"Directory {directory} does not exist"
-        if not os.access(directory, os.W_OK):
-            return False, f"Directory {directory} is not writeable"
-        return True, ""
+            error_message = f"Directory {directory} does not exist"
+        elif not os.access(directory, os.W_OK):
+            error_message = f"Directory {directory} is not writeable"
+        else:
+            is_writeable = True
+    else:
+        # If file exists, check if it's writeable
+        if not os.access(filepath, os.W_OK):
+            error_message = f"File {filepath} is not writeable (permission denied)"
+        else:
+            # Try to open the file for writing to see if it's locked
+            try:
+                with open(filepath, "a", encoding='utf-8'):
+                    pass
+                is_writeable = True
+            except (IOError, OSError) as e:
+                error_message = f"File {filepath} is not writeable: {str(e)}"
 
-    # If file exists, check if it's writeable
-    if not os.access(filepath, os.W_OK):
-        return False, f"File {filepath} is not writeable (permission denied)"
-
-    # Try to open the file for writing to see if it's locked
-    try:
-        with open(filepath, "a"):
-            pass
-        return True, ""
-    except IOError as e:
-        return False, f"File {filepath} is not writeable: {str(e)}"
-    except Exception as e:
-        return False, f"Unknown error checking file permissions: {str(e)}"
+    return is_writeable, error_message
 
 
 def create_document_copy(
@@ -52,7 +53,8 @@ def create_document_copy(
 
     Args:
         source_path: Path to the source document
-        dest_path: Optional path for the new document. If not provided, will use source_path + '_copy.docx'
+        dest_path: Optional path for the new document. If not provided, will use 
+            source_path + '_copy.docx'
 
     Returns:
         Tuple of (success, message, new_filepath)
@@ -69,7 +71,7 @@ def create_document_copy(
         # Simple file copy
         shutil.copy2(source_path, dest_path)
         return True, f"Document copied to {dest_path}", dest_path
-    except Exception as e:
+    except (IOError, shutil.Error, OSError) as e:
         return False, f"Failed to copy document: {str(e)}", None
 
 

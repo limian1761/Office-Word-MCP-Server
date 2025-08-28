@@ -1,4 +1,7 @@
-# Error handling module for Word Document Server
+"""Custom exception definitions and error handling utilities for the document server.
+
+This module provides structured error classes and logging configuration to ensure
+consistent error reporting across the application."""
 
 import logging
 from enum import Enum
@@ -107,7 +110,7 @@ class StyleNotFoundError(WordDocumentError):
 class ImageError(WordDocumentError):
     """Base exception for image-related errors"""
 
-    pass
+
 
 
 class ImageFormatError(ImageError):
@@ -121,7 +124,7 @@ class ImageFormatError(ImageError):
 class CommentError(WordDocumentError):
     """Base exception for comment-related errors"""
 
-    pass
+
 
 
 class CommentIndexError(CommentError):
@@ -157,28 +160,28 @@ def handle_error(e: Exception) -> Tuple[int, str, Dict[str, Any]]:
         A tuple of (error_code, error_message, error_details)
     """
     # Log the error
-    logger.error(f"Error occurred: {str(e)}", exc_info=True)
+    logger.error("Error occurred: %s", str(e), exc_info=True)
 
     # Handle specific exceptions
     if isinstance(e, WordDocumentError):
         return e.error_code.value[0], e.message, e.details
 
     # Handle common exceptions
-    elif isinstance(e, FileNotFoundError):
+    if isinstance(e, FileNotFoundError):
         return (
             ErrorCode.DOCUMENT_OPEN_ERROR.value[0],
             f"File not found: {str(e)}",
             {"file_path": str(e.filename) if hasattr(e, "filename") else None},
         )
 
-    elif isinstance(e, ValueError):
+    if isinstance(e, ValueError):
         return (
             ErrorCode.INVALID_INPUT.value[0],
             f"Invalid value: {str(e)}",
             {"error_type": "ValueError"},
         )
 
-    elif isinstance(e, PermissionError):
+    if isinstance(e, PermissionError):
         return (
             ErrorCode.PERMISSION_DENIED.value[0],
             f"Permission denied: {str(e)}",
@@ -186,12 +189,11 @@ def handle_error(e: Exception) -> Tuple[int, str, Dict[str, Any]]:
         )
 
     # Handle general exceptions
-    else:
-        return (
-            ErrorCode.SERVER_ERROR.value[0],
-            f"An unexpected error occurred: {str(e)}",
-            {"error_type": type(e).__name__},
-        )
+    return (
+        ErrorCode.SERVER_ERROR.value[0],
+        f"An unexpected error occurred: {str(e)}",
+        {"error_type": type(e).__name__},
+    )
 
 
 def format_error_response(e: Exception) -> str:
@@ -261,9 +263,9 @@ def handle_tool_errors(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception as e:
+        except (IOError, ConnectionError, TimeoutError) as e:
             # Log the error with context
-            logger.error(f"Error in tool {func.__name__}: {str(e)}", exc_info=True)
+            logger.error("Error in tool %s: %s", func.__name__, str(e), exc_info=True)
             # Return formatted error response
             return format_error_response(e)
 

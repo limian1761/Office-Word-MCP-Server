@@ -10,11 +10,11 @@ import json
 import re
 from typing import Any, Callable, Dict, List, Optional
 
-import win32com.client
-
-from word_document_server.errors import ElementNotFoundError, WordDocumentError, ErrorCode
+from word_document_server.errors import ElementNotFoundError, WordDocumentError
 from word_document_server.selection import Selection
-from word_document_server.word_backend import WordBackend
+from word_document_server.operations.word_backend import WordBackend
+from word_document_server.utils.core_utils import get_shape_types
+from pywintypes import com_error
 
 
 # Custom Exception types for clarity
@@ -34,6 +34,37 @@ class SelectorEngine:
     It parses a locator, finds matching COM objects, and returns them
     wrapped in a Selection object.
     """
+
+    def __init__(self):
+        """Initializes the selector engine."""
+        self._filter_map: Dict[str, Callable] = {
+            # Existing filters
+        }
+    def parse_locator(self, locator: str) -> Dict[str, Any]:
+        """Parse locator string into components.
+
+        Args:
+            locator: Locator string in format "type:value[filters]".
+
+        Returns:
+            Dictionary with locator components.
+        """
+        if ':' not in locator:
+            raise LocatorSyntaxError(f"Invalid locator format: {locator}")
+        locator_type, value = locator.split(':', 1)
+        filters = {}
+        if '[' in value and ']' in value:
+            value, filter_str = value.split('[', 1)
+            filter_str = filter_str.rstrip(']')
+            for filter_part in filter_str.split(','):
+                if '=' in filter_part:
+                    key, val = filter_part.split('=', 1)
+                    filters[key.strip()] = val.strip()
+        return {
+            'type': locator_type.strip(),
+            'value': value.strip(),
+            'filters': filters
+        }
 
     def __init__(self):
         """Initializes the selector engine."""
@@ -270,158 +301,80 @@ class SelectorEngine:
         """
         Gets the initial list of elements, either globally or from a specific range.
         """
-        candidates = []
-
         if search_range:
-            # Range-specific search
-            if element_type == "paragraph":
-                try:
-                    candidates = backend.get_paragraphs_in_range(search_range)
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get paragraphs in range: {e}")
-            elif element_type == "table":
-                try:
-                    candidates = backend.get_tables_in_range(search_range)
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get tables in range: {e}")
-            elif element_type == "cell":
-                try:
-                    candidates = backend.get_cells_in_range(search_range)
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get cells in range: {e}")
-            elif element_type == "run":
-                try:
-                    candidates = backend.get_runs_in_range(search_range)
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get runs in range: {e}")
-            elif element_type == "inline_shape" or element_type == "image":
-                # For images in a specific range, iterate through all inline shapes and check if they are within the range
-                try:
-                    doc_range = backend.document.Range(0, backend.document.Content.End)
-                    all_shapes = []
-                    # Safely get all inline shapes
-                    if (
-                        hasattr(backend.document, "InlineShapes")
-                        and backend.document.InlineShapes is not None
-                    ):
-                        for i in range(1, backend.document.InlineShapes.Count + 1):
-                            try:
-                                shape = backend.document.InlineShapes(i)
-                                all_shapes.append(shape)
-                            except Exception as e:
-                                print(
-                                    f"Warning: Failed to access shape at index {i}: {e}"
-                                )
-                                continue
-                    # Filter shapes that are within the search range
-                    candidates = [
-                        shape
-                        for shape in all_shapes
-                        if hasattr(shape, "Range")
-                        and shape.Range.Start >= search_range.Start
-                        and shape.Range.End <= search_range.End
-                    ]
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get inline shapes in range: {e}")
-        else:
-            # Global search
-            if element_type == "document_start":
-                try:
-                    # Return a range at the start of the document
-                    candidates = [backend.document.Range(0, 0)]
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get document start: {e}")
-            elif element_type == "document_end":
-                try:
-                    # Return a range at the end of the document
-                    end_pos = backend.document.Content.End
-                    candidates = [backend.document.Range(end_pos, end_pos)]
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get document end: {e}")
-            elif element_type == "text":
-                try:
-                    # For "text" type, use paragraphs as base elements
-                    all_paragraphs = backend.get_all_paragraphs()
-                    candidates = all_paragraphs
-                except Exception as e:
-                    raise WordDocumentError(f"Failed to get text elements: {e}")
-            elif element_type == "paragraph":
-                try:
-                    candidates = backend.get_all_paragraphs()
-                except Exception as e:
-                    from word_document_server.errors import ErrorCode
+            return self._get_range_specific_candidates(backend, element_type, search_range)
+        return self._get_global_candidates(backend, element_type)
 
-                    raise WordDocumentError(
-                        ErrorCode.PARAGRAPH_SELECTION_FAILED,
-                        f"Failed to get all paragraphs: {e}",
-                    )
-            elif element_type == "table":
-                try:
-                    candidates = backend.get_all_tables()
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get all tables: {e}")
-            elif element_type == "heading":
-                try:
-                    all_paragraphs = backend.get_all_paragraphs()
-                    candidates = [
-                        p
-                        for p in all_paragraphs
-                        if hasattr(p, "Style")
-                        and hasattr(p.Style, "NameLocal")
-                        and (
-                            p.Style.NameLocal.startswith("Heading")
-                            or p.Style.NameLocal.startswith("标题")
-                        )
-                    ]
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get heading paragraphs: {e}")
-            elif element_type == "cell":
-                try:
-                    doc_range = backend.document.Range(0, backend.document.Content.End)
-                    candidates = backend.get_cells_in_range(doc_range)
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get all cells: {e}")
-            elif element_type == "run":
-                try:
-                    doc_range = backend.document.Range(0, backend.document.Content.End)
-                    candidates = backend.get_runs_in_range(doc_range)
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get all runs: {e}")
-            elif element_type == "inline_shape" or element_type == "image":
-                # Get all inline shapes (including images) in the document
-                try:
-                    candidates = []
-                    if (
-                        hasattr(backend.document, "InlineShapes")
-                        and backend.document.InlineShapes is not None
-                    ):
-                        for i in range(1, backend.document.InlineShapes.Count + 1):
-                            try:
-                                shape = backend.document.InlineShapes(i)
-                                candidates.append(shape)
-                            except Exception as e:
-                                print(
-                                    f"Warning: Failed to access shape at index {i}: {e}"
-                                )
-                                continue
-                except Exception as e:
-                    raise WordDocumentError(f"Failed to get all inline shapes: {e}")
+    def _get_range_specific_candidates(self, backend: WordBackend, element_type: str, search_range: Any) -> List[Any]:
+        """Get candidates from specific range"""
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        element_handlers = {
+            "paragraph": active_doc.get_paragraphs_in_range,
+            "table": active_doc.get_tables_in_range,
+            "cell": active_doc.get_cells_in_range,
+            "run": active_doc.get_runs_in_range
+        }
 
-        if not candidates and element_type not in [
-            "paragraph",
-            "table",
-            "heading",
-            "cell",
-            "run",
-            "inline_shape",
-            "image",
-            "document_start",
-            "document_end",
-            "text",
-        ]:
-            raise LocatorSyntaxError(f"Unsupported element type: {element_type}.")
+        if element_type in element_handlers:
+            try:
+                return element_handlers[element_type](search_range)
+            except Exception as e:
+                raise WordDocumentError(
+                    ErrorCode.SERVER_ERROR, 
+                    f"Failed to get {element_type}s in range: {e}"
+                ) from e
 
-        return candidates
+        if element_type in ("inline_shape", "image"):
+            return self._get_inline_shapes_in_range(active_doc, search_range)
+
+        return []
+
+    def _get_global_candidates(self, backend: WordBackend, element_type: str) -> List[Any]:
+        """Get candidates from global document scope"""
+        handlers = {
+            "document_start": lambda: [backend.document.Range(0, 0)],
+            "document_end": lambda: [backend.document.Range(backend.document.Content.End, backend.document.Content.End)],
+            "text": backend.get_all_paragraphs,
+            "paragraph": backend.get_all_paragraphs,
+            "table": backend.get_all_tables
+        }
+
+        if element_type not in handlers:
+            return []
+
+        try:
+            return handlers[element_type]()
+        except Exception as e:
+            error_codes = {
+                "paragraph": ErrorCode.PARAGRAPH_SELECTION_FAILED,
+                "document_start": ErrorCode.SERVER_ERROR,
+                "document_end": ErrorCode.SERVER_ERROR
+            }
+            error_code = error_codes.get(element_type, ErrorCode.SERVER_ERROR)
+            raise WordDocumentError(error_code, f"Failed to get {element_type} elements: {e}") from e
+
+    def _get_inline_shapes_in_range(self, active_doc, search_range: Any) -> List[Any]:
+        """Get inline shapes within specified range"""
+        try:
+            inline_shapes = getattr(active_doc, 'InlineShapes', None)
+            if not inline_shapes:
+                return []
+
+            all_shapes = []
+            for i in range(1, inline_shapes.Count + 1):
+                try:
+                    shape = active_doc.InlineShapes(i)
+                    all_shapes.append(shape)
+                except com_error as e:
+                    print(f"Warning: Failed to access shape at index {i}: {e}") 
+            return [shape for shape in all_shapes if hasattr(shape, "Range") and 
+                   shape.Range.Start >= search_range.Start and 
+                   shape.Range.End <= search_range.End]
+        except Exception as e:
+            raise WordDocumentError(
+                ErrorCode.SERVER_ERROR, 
+                f"Failed to get inline shapes in range: {e}"
+            ) 
 
     def _apply_filters(
         self, elements: List[Any], filters: List[Dict[str, Any]]
@@ -497,17 +450,8 @@ class SelectorEngine:
             List of elements matching the specified shape type.
         """
         # Map of Word inline shape type constants to human-readable names
-        shape_types = {
-            1: "Picture",
-            2: "LinkedPicture",
-            3: "Chart",
-            4: "Diagram",
-            5: "OLEControlObject",
-            6: "OLEObject",
-            7: "ActiveXControl",
-            8: "SmartArt",
-            9: "3DModel",
-        }
+
+        shape_types = get_shape_types()
 
         # Find the type code that matches the shape_type string
         type_codes = [
