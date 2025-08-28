@@ -8,115 +8,21 @@ import logging
 
 import win32com.client
 
-from word_document_server.errors import ErrorCode, WordDocumentError
+from word_document_server.utils.errors import ErrorCode, WordDocumentError
+from word_document_server.com_backend.com_utils import handle_com_error
 
 
-def insert_text_before_element(element, text: str, style: Optional[str], document) -> bool:
-    """元操作：在单个元素前插入文本
-
-    Args:
-        element: 单个文档元素对象
-        text: 插入文本内容
-        style: 可选样式名称
-        document: 文档对象
-
-    Returns:
-        bool: 操作成功状态
-    """
-    try:
-        anchor_range = element.Range
-        new_range = anchor_range.Duplicate
-        new_range.Collapse(1)  # wdCollapseStart = 1
-        new_range.InsertAfter(text + "\r")
-        
-        # 应用样式
-        if style:
-            paragraph = new_range.Paragraphs(1)
-            paragraph.Style = style
-        
-        return True
-    except Exception as e:
-        logging.error(f"在元素前插入文本失败: {str(e)}")
-        return False
-
-
-def insert_text_after_element(element, text: str, style: Optional[str], document) -> bool:
-    """元操作：在单个元素后插入文本
-
-    Args:
-        element: 单个文档元素对象
-        text: 插入文本内容
-        style: 可选样式名称
-        document: 文档对象
-
-    Returns:
-        bool: 操作成功状态
-    """
-    try:
-        anchor_range = element.Range
-        new_range = anchor_range.Duplicate
-        new_range.Collapse(0)  # wdCollapseEnd = 0
-        new_range.InsertAfter("\r" + text)
-        
-        # 应用样式
-        if style:
-            paragraph = new_range.Paragraphs(1)
-            paragraph.Style = style
-        
-        return True
-    except Exception as e:
-        logging.error(f"在元素后插入文本失败: {str(e)}")
-        return False
-
-
-def set_picture_element_color_type(element, color_code: int) -> bool:
-    """元操作：设置单个图片元素的颜色类型
-
-    Args:
-        element: 单个图片元素对象
-        color_code: 颜色类型代码（0-3）
-
-    Returns:
-        bool: 操作成功状态
-    """
-    try:
-        if hasattr(element, "Type") and (element.Type == 1 or element.Type == 2):
-            if hasattr(element, "PictureFormat") and hasattr(element.PictureFormat, "ColorType"):
-                element.PictureFormat.ColorType = color_code
-                return True
-        return False
-    except Exception as e:
-        logging.error(f"设置图片颜色类型失败: {str(e)}")
-        return False
-
-
-def add_table(
-    document: win32com.client.CDispatch, com_range_obj: win32com.client.CDispatch, rows: int, cols: int
-):
-    """
-    Adds a table after a given range.
-
-    Args:
-        document: The Word document COM object.
-        com_range_obj: The range to insert the table after.
-        rows: Number of rows for the table.
-        cols: Number of columns for the table.
-    """
-    try:
-        com_range_obj.Tables.Add(com_range_obj, rows, cols)
-    except Exception as e:
-        raise WordDocumentError(ErrorCode.TABLE_ERROR, f"Failed to add table: {e}")
-sm
+# === Text Element Operations ===
 
 def get_element_text(element: win32com.client.CDispatch) -> str:
     """
-    Gets the text content of a single element.
+    Get the text content of a single element.
 
     Args:
         element: The COM object representing the element.
 
     Returns:
-        The text content of the element.
+        str: The text content of the element.
     """
     element_text = ""
     if hasattr(element, "Text"):
@@ -124,3 +30,200 @@ def get_element_text(element: win32com.client.CDispatch) -> str:
     elif hasattr(element, "Range") and hasattr(element.Range, "Text"):
         element_text = element.Range.Text
     return element_text
+
+
+@handle_com_error(ErrorCode.SERVER_ERROR, "insert text before element")
+def insert_text_before_element(document: win32com.client.CDispatch, element: win32com.client.CDispatch, text: str, style: Optional[str] = None) -> bool:
+    """Insert text before a single element
+
+    Args:
+        document: Document object.
+        element: Single document element object.
+        text: Text to insert.
+        style: Optional style name.
+
+    Returns:
+        bool: Operation success status.
+    """
+    anchor_range = element.Range
+    new_range = anchor_range.Duplicate
+    new_range.Collapse(1)  # wdCollapseStart = 1
+    new_range.InsertAfter(text + "\r")
+    
+    # Apply style
+    if style:
+        paragraph = new_range.Paragraphs(1)
+        paragraph.Style = style
+    
+    return True
+
+
+@handle_com_error(ErrorCode.SERVER_ERROR, "insert text after element")
+def insert_text_after_element(document: win32com.client.CDispatch, element: win32com.client.CDispatch, text: str, style: Optional[str] = None) -> bool:
+    """Insert text after a single element
+
+    Args:
+        document: Document object.
+        element: Single document element object.
+        text: Text to insert.
+        style: Optional style name.
+
+    Returns:
+        bool: Operation success status.
+    """
+    anchor_range = element.Range
+    new_range = anchor_range.Duplicate
+    new_range.Collapse(0)  # wdCollapseEnd = 0
+    new_range.InsertAfter("\r" + text)
+    
+    # Apply style
+    if style:
+        paragraph = new_range.Paragraphs(1)
+        paragraph.Style = style
+    
+    return True
+
+
+@handle_com_error(ErrorCode.SERVER_ERROR, "replace element text")
+def replace_element_text(document: win32com.client.CDispatch, element: win32com.client.CDispatch, new_text: str, style: Optional[str] = None) -> bool:
+    """Replace the text content of a single element
+
+    Args:
+        document: Document object.
+        element: Single document element object.
+        new_text: Replacement text.
+        style: Optional style name.
+
+    Returns:
+        bool: Operation success status.
+    """
+    if hasattr(element, "Range"):
+        element.Range.Text = new_text
+        
+        # Apply style
+        if style and hasattr(element, "Style"):
+            element.Style = style
+                
+        return True
+    return False
+
+@handle_com_error(ErrorCode.SERVER_ERROR, "delete element")
+def delete_element(element: win32com.client.CDispatch) -> bool:
+    """Delete a single element
+
+    Args:
+        element: The COM object representing the element to delete.
+
+    Returns:
+        bool: Operation success status.
+    """
+    if hasattr(element, "Range"):
+        element.Range.Delete()
+        return True
+    return False
+
+@handle_com_error(ErrorCode.IMAGE_FORMAT_ERROR, "get element image info")
+def get_element_image_info(element: win32com.client.CDispatch) -> Dict[str, Any]:
+    """Get information about an image element
+
+    Args:
+        element: The COM object representing the image element.
+
+    Returns:
+        Dict: Dictionary containing image information.
+    """
+    image_info = {}
+    if hasattr(element, "Width"):
+        image_info["width"] = element.Width
+    if hasattr(element, "Height"):
+        image_info["height"] = element.Height
+    if hasattr(element, "PictureFormat"):
+        image_info["has_picture_format"] = True
+    return image_info
+
+@handle_com_error(ErrorCode.SERVER_ERROR, "insert object relative to element")
+def insert_object_relative_to_element(
+    document: win32com.client.CDispatch,
+    target_element: win32com.client.CDispatch,
+    object_path: str,
+    position: str = "after"
+) -> bool:
+    """Insert an object relative to a target element
+
+    Args:
+        document: Document object.
+        target_element: Target element to insert relative to.
+        object_path: Path to the object file.
+        position: Position relative to target element ("before" or "after").
+
+    Returns:
+        bool: Operation success status.
+    """
+    try:
+        range_obj = target_element.Range.Duplicate
+        if position == "after":
+            range_obj.Collapse(0)  # wdCollapseEnd
+        else:
+            range_obj.Collapse(1)  # wdCollapseStart
+        range_obj.InsertFile(FileName=object_path)
+        return True
+    except Exception:
+        return False
+
+
+# === Image Element Operations ===
+
+@handle_com_error(ErrorCode.SERVER_ERROR, "set picture element color type")
+def set_picture_element_color_type(document: win32com.client.CDispatch, element: win32com.client.CDispatch, color_code: int) -> bool:
+    """Set the color type of a single image element
+
+    Args:
+        document: Document object.
+        element: Single image element object.
+        color_code: Color type code (0-3).
+
+    Returns:
+        bool: Operation success status.
+    """
+    if hasattr(element, "Type") and (element.Type == 1 or element.Type == 2):
+        if hasattr(element, "PictureFormat") and hasattr(element.PictureFormat, "ColorType"):
+            element.PictureFormat.ColorType = color_code
+            return True
+    return False
+
+
+# === Caption Operations ===
+
+@handle_com_error(ErrorCode.SERVER_ERROR, "add element caption")
+def add_element_caption(document: win32com.client.CDispatch, element: win32com.client.CDispatch, caption_text: str, label: str = "Figure", position: str = "below") -> bool:
+    """Add a caption to an element
+
+    Args:
+        document: Document object.
+        element: Element object to add caption to.
+        caption_text: Caption text.
+        label: Label (e.g. "Figure", "Table").
+        position: Position ("above" or "below").
+
+    Returns:
+        bool: Operation success status.
+    """
+    anchor_range = element.Range
+    new_range = anchor_range.Duplicate
+    
+    if position.lower() == "above":
+        new_range.Collapse(1)  # wdCollapseStart = 1
+    else:  # below
+        new_range.Collapse(0)  # wdCollapseEnd = 0
+        
+    # Add caption paragraph
+    caption_paragraph = new_range.Paragraphs.Add()
+    caption_range = caption_paragraph.Range
+    
+    # Insert caption text
+    if position.lower() == "above":
+        caption_range.InsertBefore(f"{label} {caption_text}")
+    else:  # below
+        caption_range.InsertAfter(f"{label} {caption_text}")
+        
+    return True

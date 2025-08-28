@@ -2,14 +2,19 @@
 Document operations for Word Document MCP Server.
 """
 
+import logging
 import re
 from typing import Any, Dict, List, Optional
 
 import win32com.client
 
-from word_document_server.errors import ErrorCode, WordDocumentError
+from word_document_server.utils.errors import ErrorCode, WordDocumentError
+from word_document_server.com_backend.com_utils import handle_com_error
 
 
+# === Paragraph Operations ===
+
+@handle_com_error(ErrorCode.SERVER_ERROR, "get all paragraphs")
 def get_all_paragraphs(document: win32com.client.CDispatch) -> List[win32com.client.CDispatch]:
     """
     Retrieves all paragraphs from the document.
@@ -24,17 +29,14 @@ def get_all_paragraphs(document: win32com.client.CDispatch) -> List[win32com.cli
         raise RuntimeError("No document open.")
 
     paragraphs = []
-    try:
-        paragraphs_count = document.Paragraphs.Count
-        for i in range(1, paragraphs_count + 1):
-            try:
-                paragraph = document.Paragraphs(i)
-                paragraphs.append(paragraph)
-            except Exception as e:
-                print(f"Warning: Failed to retrieve paragraph at index {i}: {e}")
-                continue
-    except Exception as e:
-        print(f"Error: Failed to retrieve paragraphs: {e}")
+    paragraphs_count = document.Paragraphs.Count
+    for i in range(1, paragraphs_count + 1):
+        try:
+            paragraph = document.Paragraphs(i)
+            paragraphs.append(paragraph)
+        except Exception as e:
+            logging.warning(f"Failed to retrieve paragraph at index {i}: {e}")
+            continue
 
     return paragraphs
 
@@ -61,6 +63,35 @@ def get_paragraphs_in_range(
     return paragraphs
 
 
+def get_paragraphs_info(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
+    """
+    Get information about all paragraphs in the document.
+
+    Args:
+        document: The Word document COM object.
+
+    Returns:
+        A list of dictionaries containing information about each paragraph.
+    """
+    if not document:
+        raise RuntimeError("No document open.")
+
+    elements = []
+    for i, para in enumerate(document.Paragraphs):
+        elements.append(
+            {
+                "index": i,
+                "text": para.Range.Text.strip(),
+                "style": para.Style.NameLocal,
+                "start": para.Range.Start,
+                "end": para.Range.End,
+            }
+        )
+    return elements
+
+
+# === Table Operations ===
+
 def get_all_tables(document: win32com.client.CDispatch) -> List[win32com.client.CDispatch]:
     """
     Get all tables in the document.
@@ -75,6 +106,53 @@ def get_all_tables(document: win32com.client.CDispatch) -> List[win32com.client.
         raise RuntimeError("No document open.")
     return list(document.Tables)
 
+
+def get_tables_info(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
+    """
+    Get information about all tables in the document.
+
+    Args:
+        document: The Word document COM object.
+
+    Returns:
+        A list of dictionaries containing information about each table.
+    """
+    if not document:
+        raise RuntimeError("No document open.")
+
+    elements = []
+    for i, table in enumerate(document.Tables):
+        elements.append(
+            {
+                "index": i,
+                "rows": table.Rows.Count,
+                "columns": table.Columns.Count,
+                "start": table.Range.Start,
+                "end": table.Range.End,
+            }
+        )
+    return elements
+
+
+def add_table(
+    document: win32com.client.CDispatch, com_range_obj: win32com.client.CDispatch, rows: int, cols: int
+):
+    """
+    Adds a table after a given range.
+
+    Args:
+        document: The Word document COM object.
+        com_range_obj: The range to insert the table after.
+        rows: Number of rows for the table.
+        cols: Number of columns for the table.
+    """
+    try:
+        com_range_obj.Tables.Add(com_range_obj, rows, cols)
+    except Exception as e:
+        raise WordDocumentError(ErrorCode.TABLE_ERROR, f"Failed to add table: {e}")
+
+
+# === Text Operations ===
 
 def get_text_from_range(document: win32com.client.CDispatch, start_pos: int, end_pos: int) -> str:
     """
@@ -102,79 +180,143 @@ def get_text_from_range(document: win32com.client.CDispatch, start_pos: int, end
     return doc_range.Text
 
 
-def get_runs_in_range(
-    backend: WordBackend, range_obj: win32com.client.CDispatch
-) -> List[win32com.client.CDispatch]:
+@handle_com_error(ErrorCode.SERVER_ERROR, "get all text")
+def get_all_text(document: win32com.client.CDispatch) -> str:
     """
-    Get all runs within a specific COM Range.
+    Retrieves all text from the document.
 
     Args:
-        backend: The WordBackend instance.
-        range_obj: The COM Range object to search within.
+        document: The Word document COM object.
 
     Returns:
-        List of Run COM objects found within the range.
+        A string containing all text content from the document.
+
+    Raises:
+        RuntimeError: If no document is open.
+        WordDocumentError: If there's an error retrieving the document text.
     """
-    active_doc = ctx.request_context.lifespan_context.get_active_document()
-    if not active_doc:
+    if not document:
         raise RuntimeError("No document open.")
 
-    runs = []
-    for run in range_obj.Runs:
-        runs.append(run)
-    return runs
+    text: List[str] = []
+    for paragraph in document.Paragraphs:
+        try:
+            text.append(paragraph.Range.Text)
+        except Exception as e:
+            logging.warning(f"Failed to retrieve text from paragraph: {e}")
+            continue
+
+    return "\n".join(text)
 
 
-def get_tables_in_range(
-    backend: WordBackend, range_obj: win32com.client.CDispatch
-) -> List[win32com.client.CDispatch]:
+@handle_com_error(ErrorCode.SERVER_ERROR, "find text")
+def find_text(
+    document: win32com.client.CDispatch,
+    text: str,
+    match_case: bool = False,
+    match_whole_word: bool = False,
+) -> List[Dict[str, Any]]:
     """
-    Get all tables within a specific COM Range.
+    Find all occurrences of text in the document.
 
     Args:
-        backend: The WordBackend instance.
-        range_obj: The COM Range object to search within.
+        document: The Word document COM object.
+        text: The text to search for.
+        match_case: Whether to match case.
+        match_whole_word: Whether to match whole words only.
 
     Returns:
-        List of table COM objects found within the range.
+        A list of dictionaries containing the found text and positions.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
-    tables = []
-    for table in range_obj.Tables:
-        tables.append(table)
-    return tables
+    if not text:
+        raise ValueError("Text to find cannot be empty.")
+
+    found_items = []
+    try:
+        # Use Word's Find functionality
+        finder = document.Content.Find
+        finder.ClearFormatting()
+        finder.Text = text
+        finder.Replacement.Text = ""
+        finder.MatchCase = match_case
+        finder.MatchWholeWord = match_whole_word
+        finder.MatchWildcards = False
+        finder.MatchSoundsLike = False
+        finder.MatchAllWordForms = False
+
+        # Find all occurrences
+        finder.Execute()
+        while finder.Found:
+            range_obj = finder.Parent
+            found_items.append(
+                {"text": range_obj.Text, "start": range_obj.Start, "end": range_obj.End}
+            )
+            # Continue searching from current position
+            finder.Execute()
+
+        return found_items
+    except Exception as e:
+        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to find text '{text}': {e}")
 
 
-def get_cells_in_range(
-    backend: WordBackend, range_obj: win32com.client.CDispatch
-) -> List[win32com.client.CDispatch]:
+@handle_com_error(ErrorCode.SERVER_ERROR, "replace text")
+def replace_text(
+    document: win32com.client.CDispatch,
+    find_text: str,
+    replace_text: str,
+    match_case: bool = False,
+    match_whole_word: bool = False,
+    replace_all: bool = True,
+) -> Any:
     """
-    Get all cells within a specific COM Range.
-
-    This iterates through all tables in the range and then all cells in each table.
+    Replace occurrences of text in the document.
 
     Args:
-        backend: The WordBackend instance.
-        range_obj: The COM Range object to search within.
+        document: The Word document COM object.
+        find_text: The text to search for.
+        replace_text: The text to replace with.
+        match_case: Whether to match case.
+        match_whole_word: Whether to match whole words only.
+        replace_all: Whether to replace all occurrences or just the first one.
 
     Returns:
-        List of cell COM objects found within the range.
+        The number of replacements made.
     """
-    if not backend.document:
+    if not document:
         raise RuntimeError("No document open.")
 
-    cells = []
-    # A more robust way to iterate COM collections.
-    tables_in_range = range_obj.Tables
-    for i in range(1, tables_in_range.Count + 1):
-        table = tables_in_range(i)
-        for row in range(1, table.Rows.Count + 1):
-            for col in range(1, table.Columns.Count + 1):
-                cells.append(table.Cell(row, col))
-    return cells
+    if not find_text:
+        raise ValueError("Text to find cannot be empty.")
 
+    # Use Word's Replace functionality
+    finder = document.Content.Find
+    finder.ClearFormatting()
+    finder.Text = find_text
+    finder.Replacement.Text = replace_text
+    finder.MatchCase = match_case
+    finder.MatchWholeWord = match_whole_word
+    finder.MatchWildcards = False
+    finder.MatchSoundsLike = False
+    finder.MatchAllWordForms = False
+
+    if replace_all:
+        # Replace all occurrences
+        count = finder.Execute(Replace=2)  # 2 = ReplaceAll
+    else:
+        # Replace first occurrence only
+        if finder.Execute():
+            finder.Parent.Text = replace_text
+            count = 1
+        else:
+            count = 0
+
+    return count
+
+
+# === Header/Footer Operations ===
 
 def set_header_text(document: win32com.client.CDispatch, text: str, header_index: int = 1):
     """
@@ -218,6 +360,8 @@ def set_footer_text(document: win32com.client.CDispatch, text: str, footer_index
         footer.Range.Text = text
 
 
+# === Heading Operations ===
+
 def get_headings(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
     Extracts all heading paragraphs from the document.
@@ -249,19 +393,70 @@ def get_headings(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     return headings
 
 
-def accept_all_changes(document: win32com.client.CDispatch):
-    """Accepts all tracked changes in the document."""
-    if not document:
-        raise RuntimeError("No document open.")
-    document.AcceptAllRevisions()
+def get_document_structure(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
+    """
+    Provides a structured overview of the document by listing all headings.
+
+    Args:
+        document: The document com object.
+    Returns:
+        A list of dictionaries, each representing a heading with its text and level.
+    """
+
+    structure = []
+    try:
+        # Iterate through all paragraphs
+        for paragraph in document.Paragraphs:
+            try:
+                # Get paragraph style name
+                style_name = paragraph.Style.NameLocal
+
+                # 添加调试信息
+                print(f"段落样式: {style_name}")
+
+                # Check if it's a heading style (supports both English and Chinese styles)
+                # 优化匹配逻辑，不区分大小写并移除多余空格
+                style_name_clean = style_name.strip().lower()
+                heading_match = None
+                level = None
+
+                # 检查英文标题样式 (Heading 1-9)
+                if style_name_clean.startswith("heading "):
+                    heading_match = style_name_clean.split(" ")
+                    if len(heading_match) > 1:
+                        try:
+                            level = int(heading_match[1])
+                        except ValueError:
+                            pass
+
+                # 检查中文标题样式 (标题 1-9 或 标题1-9)
+                if "标题" in style_name_clean:
+                    # 尝试匹配"标题 X"或"标题X"格式
+                    import re
+
+                    cn_heading_match = re.search(r"标题\s*(\d+)", style_name_clean)
+                    if cn_heading_match:
+                        level = int(cn_heading_match.group(1))
+
+                if level and 1 <= level <= 9:
+                    # Get heading text
+                    text = paragraph.Range.Text.strip()
+
+                    if text:
+                        structure.append({"text": text, "level": level})
+                        print(f"添加标题: {text} (级别: {level})")
+                    else:
+                        print(f"跳过空标题段落 (样式: {style_name})")
+            except Exception as e:
+                print(f"Warning: Failed to process paragraph: {e}")
+                continue
+    except Exception as e:
+        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Error retrieving document structure: {e}")
+
+    return structure
 
 
-def disable_track_revisions(document: win32com.client.CDispatch):
-    """Disables track changes (revision mode) in the document."""
-    if not document:
-        raise RuntimeError("No document open.")
-    document.TrackRevisions = False
-
+# === Style Operations ===
 
 def get_all_styles(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
@@ -290,6 +485,58 @@ def get_all_styles(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
             print(f"Warning: Failed to retrieve style information: {e}")
     return styles
 
+
+def get_document_styles(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
+    """
+    Retrieves all available styles in the active document.
+
+    Args:
+        document: The document com object.
+
+    Returns:
+        A list of styles with their names and types.
+    """
+
+    styles = []
+    try:
+        # Iterate through all styles in the document
+        for style in document.Styles:
+            try:
+                # Skip built-in hidden styles
+                if not style.BuiltIn or style.InUse:
+                    style_info = {
+                        "name": style.NameLocal,
+                        "type": style.Type,  # wdStyleTypeParagraph (1), wdStyleTypeCharacter (2), etc.
+                    }
+                    styles.append(style_info)
+            except Exception as e:
+                print(f"Warning: Failed to retrieve style info: {e}")
+                continue
+
+        # Sort styles by name
+        styles.sort(key=lambda x: x["name"])
+
+    except Exception as e:
+        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Error retrieving document styles: {e}")
+
+    return styles
+
+
+def _get_style_type(style_type_code: int) -> str:
+    """
+    Converts a style type code to a human-readable string.
+
+    Args:
+        style_type_code: The style type code from Word's COM API.
+
+    Returns:
+        A human-readable string representing the style type.
+    """
+    style_types = {1: "Paragraph", 2: "Character", 3: "Table", 4: "List"}
+    return style_types.get(style_type_code, f"Unknown ({style_type_code})")
+
+
+# === Protection Operations ===
 
 def get_protection_status(document: win32com.client.CDispatch) -> Dict[str, Any]:
     """
@@ -357,202 +604,7 @@ def unprotect_document(document: win32com.client.CDispatch, password: Optional[s
         return False
 
 
-def _get_style_type(style_type_code: int) -> str:
-    """
-    Converts a style type code to a human-readable string.
-
-    Args:
-        style_type_code: The style type code from Word's COM API.
-
-    Returns:
-        A human-readable string representing the style type.
-    """
-    style_types = {1: "Paragraph", 2: "Character", 3: "Table", 4: "List"}
-    return style_types.get(style_type_code, f"Unknown ({style_type_code})")
-
-
-def get_document_styles(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
-    """
-    Retrieves all available styles in the active document.
-
-    Args:
-        document: The document com object.
-
-    Returns:
-        A list of styles with their names and types.
-    """
-
-    styles = []
-    try:
-        # Iterate through all styles in the document
-        for style in document.Styles:
-            try:
-                # Skip built-in hidden styles
-                if not style.BuiltIn or style.InUse:
-                    style_info = {
-                        "name": style.NameLocal,
-                        "type": style.Type,  # wdStyleTypeParagraph (1), wdStyleTypeCharacter (2), etc.
-                    }
-                    styles.append(style_info)
-            except Exception as e:
-                print(f"Warning: Failed to retrieve style info: {e}")
-                continue
-
-        # Sort styles by name
-        styles.sort(key=lambda x: x["name"])
-
-    except Exception as e:
-        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Error retrieving document styles: {e}")
-
-    return styles
-
-
-def get_document_structure(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
-    """
-    Provides a structured overview of the document by listing all headings.
-
-    Args:
-        document: The document com object.
-    Returns:
-        A list of dictionaries, each representing a heading with its text and level.
-    """
-
-    structure = []
-    try:
-        # Iterate through all paragraphs
-        for paragraph in document.Paragraphs:
-            try:
-                # Get paragraph style name
-                style_name = paragraph.Style.NameLocal
-
-                # 添加调试信息
-                print(f"段落样式: {style_name}")
-
-                # Check if it's a heading style (supports both English and Chinese styles)
-                # 优化匹配逻辑，不区分大小写并移除多余空格
-                style_name_clean = style_name.strip().lower()
-                heading_match = None
-                level = None
-
-                # 检查英文标题样式 (Heading 1-9)
-                if style_name_clean.startswith("heading "):
-                    heading_match = style_name_clean.split(" ")
-                    if len(heading_match) > 1:
-                        try:
-                            level = int(heading_match[1])
-                        except ValueError:
-                            pass
-
-                # 检查中文标题样式 (标题 1-9 或 标题1-9)
-                if "标题" in style_name_clean:
-                    # 尝试匹配"标题 X"或"标题X"格式
-                    import re
-
-                    cn_heading_match = re.search(r"标题\s*(\d+)", style_name_clean)
-                    if cn_heading_match:
-                        level = int(cn_heading_match.group(1))
-
-                if level and 1 <= level <= 9:
-                    # Get heading text
-                    text = paragraph.Range.Text.strip()
-
-                    if text:
-                        structure.append({"text": text, "level": level})
-                        print(f"添加标题: {text} (级别: {level})")
-                    else:
-                        print(f"跳过空标题段落 (样式: {style_name})")
-            except Exception as e:
-                print(f"Warning: Failed to process paragraph: {e}")
-                continue
-    except Exception as e:
-        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Error retrieving document structure: {e}")
-
-    return structure
-
-def get_all_inline_shapes(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
-    """
-    Get all inline shapes (including pictures) in the document.
-
-    Args:
-        document: Word document COM object
-
-    Returns:
-        List of dictionaries with shape info (index, type, width, height)
-    """
-    if not document:
-        raise RuntimeError("No document open.")
-
-    shapes: List[Dict[str, Any]] = []
-    try:
-        # Check if InlineShapes property exists and is accessible
-        if not hasattr(document, "InlineShapes"):
-            return shapes
-
-        # Get all inline shapes from the document
-        shapes_count = 0
-        try:
-            shapes_count = document.InlineShapes.Count
-        except Exception as e:
-            raise WordDocumentError(ErrorCode.IMAGE_ERROR, f"Failed to access InlineShapes collection: {e}")
-
-        for i in range(1, shapes_count + 1):
-            try:
-                shape = document.InlineShapes(i)
-                try:
-                    from word_document_server.utils.core_utils import get_shape_info
-                    shape_info = get_shape_info(shape, i - 1)
-                    # Add additional properties based on shape type
-                    if shape_info["type"] == "Picture":
-                        # Try to get picture format information if available
-                        if hasattr(shape, "PictureFormat"):
-                            if hasattr(shape.PictureFormat, "ColorType"):
-                                shape_info["color_type"] = _get_color_type(
-                                    shape.PictureFormat.ColorType
-                                )
-                    shapes.append(shape_info)
-                except Exception as e:
-                    print(
-                        f"Warning: Failed to retrieve shape information for index {i}: {e}"
-                    )
-                    continue
-            except Exception as e:
-                print(f"Warning: Failed to access shape at index {i}: {e}")
-                continue
-    except Exception as e:
-        print(f"Error: Failed to retrieve inline shapes: {e}")
-
-    return shapes
-
-def get_all_text(document: win32com.client.CDispatch) -> str:
-    """
-    Retrieves all text from the active document.
-
-    Args:
-        document: The Word document COM object.
-
-    Returns:
-        A string containing all text content from the document.
-
-    Raises:
-        RuntimeError: If no document is open.
-    """
-    if not document:
-        raise RuntimeError("No document open.")
-
-    text = []
-    try:
-        # Iterate through all paragraphs
-        for paragraph in document.Paragraphs:
-            try:
-                text.append(paragraph.Range.Text)
-            except Exception as e:
-                print(f"Warning: Failed to retrieve text from paragraph: {e}")
-                continue
-    except Exception as e:
-        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Error retrieving document text: {e}")
-
-    return "\n".join(text)
-
+# === Track Changes Operations ===
 
 def accept_all_changes(document: win32com.client.CDispatch) -> None:
     """
@@ -620,127 +672,197 @@ def accept_all_changes(document: win32com.client.CDispatch) -> None:
         raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to accept all changes: {e}")
 
 
-def find_text(
-    ctx: Context,
-    text: str,
-    match_case: bool = False,
-    match_whole_word: bool = False,
-) -> List[Dict[str, Any]]:
+def disable_track_revisions(document: win32com.client.CDispatch):
+    """Disables track changes (revision mode) in the document."""
+    if not document:
+        raise RuntimeError("No document open.")
+    document.TrackRevisions = False
+
+
+# === Image/Shape Operations ===
+
+def get_all_inline_shapes(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
-    Find all occurrences of text in the document.
+    Get all inline shapes (including pictures) in the document.
 
     Args:
-        backend: The WordBackend instance.
-        text: The text to search for.
-        match_case: Whether to match case.
-        match_whole_word: Whether to match whole words only.
+        document: Word document COM object
 
     Returns:
-        A list of dictionaries containing information about each found text.
+        List of dictionaries with shape info (index, type, width, height)
     """
-    active_doc = ctx.request_context.lifespan_context.get_active_document()
-    if not active_doc:
+    if not document:
         raise RuntimeError("No document open.")
 
-    if not text:
-        raise ValueError("Text to find cannot be empty.")
-
+    shapes: List[Dict[str, Any]] = []
     try:
-        # Use Word's Find functionality
-        finder = active_doc.Content.Find
-        finder.ClearFormatting()
-        finder.Text = text
-        finder.MatchCase = match_case
-        finder.MatchWholeWord = match_whole_word
-        finder.MatchWildcards = False
-        finder.MatchSoundsLike = False
-        finder.MatchAllWordForms = False
+        # Check if InlineShapes property exists and is accessible
+        if not hasattr(document, "InlineShapes"):
+            return shapes
 
-        found_items = []
-        # Start from the beginning of the document
-        finder.Execute()
+        # Get all inline shapes from the document
+        shapes_count = 0
+        try:
+            shapes_count = document.InlineShapes.Count
+        except Exception as e:
+            raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to access InlineShapes collection: {e}")
 
-        while finder.Found:
-            range_obj = finder.Parent
-            found_items.append(
-                {"text": range_obj.Text, "start": range_obj.Start, "end": range_obj.End}
-            )
-            # Move to the next occurrence
-            finder.Execute()
-
-        return found_items
+        for i in range(1, shapes_count + 1):
+            try:
+                shape = document.InlineShapes(i)
+                try:
+                    from word_document_server.utils.core_utils import get_shape_info
+                    shape_info = get_shape_info(shape, i - 1)
+                    # Add additional properties based on shape type
+                    if shape_info["type"] == "Picture":
+                        # Try to get picture format information if available
+                        if hasattr(shape, "PictureFormat"):
+                            if hasattr(shape.PictureFormat, "ColorType"):
+                                color_type = shape.PictureFormat.ColorType
+                                color_type_map = {
+                                    -1: "Unset",     # msoPictureColorTypeUnset
+                                    0: "Mixed",      # msoPictureColorTypeMixed
+                                    1: "BlackWhite", # msoPictureBlackAndWhite
+                                    2: "Grayscale",  # msoPictureGrayscale
+                                    3: "FullColor",  # msoPictureFullColor
+                                }
+                                if color_type in color_type_map:
+                                    shape_info["color_type"] = color_type_map[color_type]
+                                else:
+                                    shape_info["color_type"] = f"Unknown ({color_type})"
+                    shapes.append(shape_info)
+                except Exception as e:
+                    print(
+                        f"Warning: Failed to retrieve shape information for index {i}: {e}"
+                    )
+                    continue
+            except Exception as e:
+                print(f"Warning: Failed to access shape at index {i}: {e}")
+                continue
     except Exception as e:
-        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to find text '{text}': {e}")
+        print(f"Error: Failed to retrieve inline shapes: {e}")
+
+    return shapes
 
 
-def replace_text(
-    ctx: Context,
-    find_text: str,
-    replace_text: str,
-    match_case: bool = False,
-    match_whole_word: bool = False,
-    replace_all: bool = True,
-) -> int:
+def get_images_info(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
-    Replace occurrences of text in the document.
+    Get information about all inline shapes (including images) in the document.
 
     Args:
-        backend: The WordBackend instance.
-        find_text: The text to search for.
-        replace_text: The text to replace with.
-        match_case: Whether to match case.
-        match_whole_word: Whether to match whole words only.
-        replace_all: Whether to replace all occurrences or just the first one.
+        document: The Word document COM object.
 
     Returns:
-        The number of replacements made.
+        A list of dictionaries containing information about each image.
     """
-    active_doc = ctx.request_context.lifespan_context.get_active_document()
-    if not active_doc:
+    if not document:
         raise RuntimeError("No document open.")
 
-    if not find_text:
-        raise ValueError("Text to find cannot be empty.")
-
-    try:
-        # Use Word's Replace functionality
-        finder = active_doc.Content.Find
-        finder.ClearFormatting()
-        finder.Text = find_text
-        finder.Replacement.Text = replace_text
-        finder.MatchCase = match_case
-        finder.MatchWholeWord = match_whole_word
-        finder.MatchWildcards = False
-        finder.MatchSoundsLike = False
-        finder.MatchAllWordForms = False
-
-        if replace_all:
-            # Replace all occurrences
-            count = finder.Execute(Replace=2)  # 2 = ReplaceAll
-        else:
-            # Replace first occurrence only
-            if finder.Execute():
-                finder.Parent.Text = replace_text
-                count = 1
-            else:
-                count = 0
-
-        return count
-    except Exception as e:
-        raise WordDocumentError(
-            f"Failed to replace text '{find_text}' with '{replace_text}': {e}"
+    elements = []
+    # Get all inline shapes (including images)
+    for i in range(1, document.InlineShapes.Count + 1):
+        shape = document.InlineShapes(i)
+        elements.append(
+            {
+                "index": i - 1,
+                "type": (
+                    _get_shape_type(shape.Type)
+                    if hasattr(shape, "Type")
+                    else "Unknown"
+                ),
+                "width": shape.Width if hasattr(shape, "Width") else 0,
+                "height": shape.Height if hasattr(shape, "Height") else 0,
+                "start": shape.Range.Start if hasattr(shape, "Range") else 0,
+                "end": shape.Range.End if hasattr(shape, "Range") else 0,
+            }
         )
+    return elements
 
+
+@handle_com_error(ErrorCode.IMAGE_FORMAT_ERROR, "set picture element color type")
+def set_picture_element_color_type(document: win32com.client.CDispatch, element: win32com.client.CDispatch, color_code: int) -> bool:
+    """
+    Set the color type of a single image element.
+
+    Args:
+        document: Document object.
+        element: Single image element object.
+        color_code: Color type code (0-3).
+
+    Returns:
+        bool: Operation success status.
+    """
+    try:
+        if hasattr(element, "Type") and (element.Type == 1 or element.Type == 2):  # InlineShape type constants
+            if hasattr(element, "PictureFormat") and hasattr(element.PictureFormat, "ColorType"):
+                element.PictureFormat.ColorType = color_code
+                return True
+        return False
+    except Exception as e:
+        logging.error(f"Failed to set picture color type: {str(e)}")
+        return False
+
+
+# === Comment Operations ===
+
+def get_comments_info(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
+    """
+    Get information about all comments in the document.
+
+    Args:
+        document: The Word document COM object.
+
+    Returns:
+        A list of dictionaries containing information about each comment.
+    """
+    if not document:
+        raise RuntimeError("No document open.")
+
+    elements = []
+    # Get all comments
+    for i in range(1, document.Comments.Count + 1):
+        comment = document.Comments(i)
+        elements.append(
+            {
+                "index": i - 1,
+                "text": comment.Range.Text if hasattr(comment, "Range") else "",
+                "author": (
+                    comment.Author if hasattr(comment, "Author") else "Unknown"
+                ),
+                "start": (
+                    comment.Scope.Start
+                    if hasattr(comment, "Scope")
+                    and hasattr(comment.Scope, "Start")
+                    else 0
+                ),
+                "end": (
+                    comment.Scope.End
+                    if hasattr(comment, "Scope")
+                    and hasattr(comment.Scope, "End")
+                    else 0
+                ),
+                "scope_text": (
+                    comment.Scope.Text.strip()
+                    if hasattr(comment, "Scope")
+                    and hasattr(comment.Scope, "Text")
+                    else ""
+                ),
+            }
+        )
+    return elements
+
+
+# === Selection Info Operations ===
 
 def get_selection_info(
-    ctx: Context,
+    document: win32com.client.CDispatch,
     selection_type: str
 ) -> List[Dict[str, Any]]:
     """
     Get information about elements of a specific type in the document.
 
     Args:
-        backend: The WordBackend instance.
+        document: The Word document COM object.
         selection_type: Type of elements to retrieve. Can be:
             - "paragraphs": All paragraphs
             - "tables": All tables
@@ -752,93 +874,29 @@ def get_selection_info(
     Returns:
         A list of dictionaries containing information about the elements.
     """
-    active_doc = ctx.request_context.lifespan_context.get_active_document()
-    if not active_doc:
+    if not document:
         raise RuntimeError("No document open.")
 
     elements = []
 
     try:
         if selection_type == "paragraphs":
-            for i, para in enumerate(active_doc.Paragraphs):
-                elements.append(
-                    {
-                        "index": i,
-                        "text": para.Range.Text.strip(),
-                        "style": para.Style.NameLocal,
-                        "start": para.Range.Start,
-                        "end": para.Range.End,
-                    }
-                )
+            elements = get_paragraphs_info(document)
 
         elif selection_type == "tables":
-            for i, table in enumerate(active_doc.Tables):
-                elements.append(
-                    {
-                        "index": i,
-                        "rows": table.Rows.Count,
-                        "columns": table.Columns.Count,
-                        "start": table.Range.Start,
-                        "end": table.Range.End,
-                    }
-                )
+            elements = get_tables_info(document)
 
         elif selection_type == "images":
-            # Get all inline shapes (including images)
-            for i in range(1, active_doc.InlineShapes.Count + 1):
-                shape = active_doc.InlineShapes(i)
-                elements.append(
-                    {
-                        "index": i - 1,
-                        "type": (
-                            _get_shape_type(shape.Type)
-                            if hasattr(shape, "Type")
-                            else "Unknown"
-                        ),
-                        "width": shape.Width if hasattr(shape, "Width") else 0,
-                        "height": shape.Height if hasattr(shape, "Height") else 0,
-                        "start": shape.Range.Start if hasattr(shape, "Range") else 0,
-                        "end": shape.Range.End if hasattr(shape, "Range") else 0,
-                    }
-                )
+            elements = get_images_info(document)
 
         elif selection_type == "headings":
-            elements = get_headings(active_doc)
+            elements = get_headings(document)
 
         elif selection_type == "styles":
-            elements = get_document_styles(active_doc)
+            elements = get_document_styles(document)
 
         elif selection_type == "comments":
-            # Get all comments
-            for i in range(1, active_doc.Comments.Count + 1):
-                comment = active_doc.Comments(i)
-                elements.append(
-                    {
-                        "index": i - 1,
-                        "text": comment.Range.Text if hasattr(comment, "Range") else "",
-                        "author": (
-                            comment.Author if hasattr(comment, "Author") else "Unknown"
-                        ),
-                        "start": (
-                            comment.Scope.Start
-                            if hasattr(comment, "Scope")
-                            and hasattr(comment.Scope, "Start")
-                            else 0
-                        ),
-                        "end": (
-                            comment.Scope.End
-                            if hasattr(comment, "Scope")
-                            and hasattr(comment.Scope, "End")
-                            else 0
-                        ),
-                        "scope_text": (
-                            comment.Scope.Text.strip()
-                            if hasattr(comment, "Scope")
-                            and hasattr(comment.Scope, "Text")
-                            else ""
-                        ),
-                    }
-                )
+            elements = get_comments_info(document)
 
         else:
             raise ValueError(f"Unsupported selection type: {selection_type}")
@@ -848,6 +906,8 @@ def get_selection_info(
 
     return elements
 
+
+# === Utility Functions ===
 
 def _get_shape_type(type_code: int) -> str:
     """
@@ -861,3 +921,59 @@ def _get_shape_type(type_code: int) -> str:
     """
     from word_document_server.utils.core_utils import get_shape_types
     return get_shape_types().get(type_code, "Unknown")
+
+
+# === Text Element Operations ===
+
+@handle_com_error(ErrorCode.SERVER_ERROR, "get element text")
+def get_element_text(element: win32com.client.CDispatch) -> Any:
+    """
+    Gets the text content of a single element.
+
+    Args:
+        element: The COM object representing the element.
+
+    Returns:
+        str: The text content of the element.
+    """
+    element_text = ""
+    if hasattr(element, "Text"):
+        element_text = element.Text()
+    elif hasattr(element, "Range") and hasattr(element.Range, "Text"):
+        element_text = element.Range.Text
+    return element_text
+
+
+@handle_com_error(ErrorCode.SERVER_ERROR, "get document info")
+def get_document_info(document: win32com.client.CDispatch) -> str:
+    """
+    Gets basic information about the document.
+
+    Args:
+        document: The Word document COM object.
+
+    Returns:
+        A JSON string with document information.
+    """
+    if not document:
+        raise RuntimeError("No document open.")
+
+    try:
+        # Get document properties
+        info: Dict[str, Any] = {
+            "name": document.Name,
+            "path": document.Path,
+            "saved": bool(document.Saved),
+            "paragraphs_count": document.Paragraphs.Count,
+            "characters_count": document.Characters.Count,
+            "words_count": document.Words.Count,
+            "pages_count": document.Range().Information(4),  # 4 = wdNumberOfPagesInDocument
+            "comments_count": document.Comments.Count,
+            "tables_count": document.Tables.Count,
+        }
+        
+        # Convert to JSON string
+        import json
+        return json.dumps(info, ensure_ascii=False, indent=2)
+    except Exception as e:
+        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get document info: {e}")

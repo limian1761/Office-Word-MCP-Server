@@ -1,10 +1,13 @@
 from typing import Any, Dict, Optional
 
-from mcp.server.fastmcp.server import Context
+from mcp.server.session import ServerSession
+from mcp.server.fastmcp import Context
 from pydantic import Field
 
-from word_document_server.core_utils import mcp_server
-from word_document_server.errors import (ElementNotFoundError,
+from word_document_server.mcp_service.core import mcp_server
+from word_document_server.utils.app_context import AppContext
+from word_document_server.selector import selector
+from word_document_server.utils.errors import (ElementNotFoundError,
                                          format_error_response,
                                          handle_tool_errors)
 from word_document_server.operations import add_table

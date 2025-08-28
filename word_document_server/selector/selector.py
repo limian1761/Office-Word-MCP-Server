@@ -10,11 +10,11 @@ import json
 import re
 from typing import Any, Callable, Dict, List, Optional
 
-from word_document_server.errors import ElementNotFoundError, WordDocumentError
-from word_document_server.selection import Selection
-from word_document_server.operations.word_backend import WordBackend
+from word_document_server.utils.errors import ElementNotFoundError, WordDocumentError, ErrorCode
+from word_document_server.selector.selection import Selection
 from word_document_server.utils.core_utils import get_shape_types
 from pywintypes import com_error
+from word_document_server.utils.app_context import ctx
 
 
 # Custom Exception types for clarity
@@ -38,8 +38,20 @@ class SelectorEngine:
     def __init__(self):
         """Initializes the selector engine."""
         self._filter_map: Dict[str, Callable] = {
-            # Existing filters
+            "contains_text": self._filter_by_contains_text,
+            "text_matches_regex": self._filter_by_text_matches_regex,
+            "style": self._filter_by_style,
+            "is_bold": self._filter_by_is_bold,
+            "index_in_parent": self._filter_by_index,
+            "row_index": self._filter_by_row_index,
+            "column_index": self._filter_by_column_index,
+            "is_list_item": self._filter_by_is_list_item,
+            "table_index": self._filter_by_table_index,
+            "shape_type": self._filter_by_shape_type,
         }
+        # Simple cache for selections
+        self._selection_cache: Dict[str, Selection] = {}
+
     def parse_locator(self, locator: str) -> Dict[str, Any]:
         """Parse locator string into components.
 
@@ -66,29 +78,15 @@ class SelectorEngine:
             'filters': filters
         }
 
-    def __init__(self):
-        """Initializes the selector engine."""
-        self._filter_map: Dict[str, Callable] = {
-            "contains_text": self._filter_by_contains_text,
-            "text_matches_regex": self._filter_by_text_matches_regex,
-            "style": self._filter_by_style,
-            "is_bold": self._filter_by_is_bold,
-            "index_in_parent": self._filter_by_index,
-            "row_index": self._filter_by_row_index,
-            "column_index": self._filter_by_column_index,
-            "is_list_item": self._filter_by_is_list_item,
-            "table_index": self._filter_by_table_index,
-            "shape_type": self._filter_by_shape_type,
-        }
-        # Simple cache for selections
-        self._selection_cache: Dict[str, Selection] = {}
-
-    def _get_cache_key(self, backend: WordBackend, locator: Dict[str, Any]) -> str:
+    def _get_cache_key(self, document: Any, locator: Dict[str, Any]) -> str:
         """
-        Generate a cache key for a given backend and locator.
+        Generate a cache key for a given document and locator.
         """
         # Create a unique key based on document path and locator
-        doc_path = backend.file_path or "new_document"
+        try:
+            doc_path = document.FullName if hasattr(document, 'FullName') else "new_document"
+        except Exception:
+            doc_path = "new_document"
         locator_str = json.dumps(locator, sort_keys=True)
         key_str = f"{doc_path}:{locator_str}"
         return hashlib.md5(key_str.encode()).hexdigest()
@@ -99,18 +97,17 @@ class SelectorEngine:
         """
         if "target" not in locator:
             from word_document_server.utils.file_utils import get_doc_path
-
             raise LocatorSyntaxError("Locator must have a 'target'.")
 
     def select(
-        self, backend: WordBackend, locator: Dict[str, Any], expect_single: bool = False
+        self, document: Any, locator: Dict[str, Any], expect_single: bool = False
     ) -> Selection:
         """
         Selects elements in the document based on a locator query.
         This is the main entry point for the selector.
         """
         # Try to get from cache first
-        cache_key = self._get_cache_key(backend, locator)
+        cache_key = self._get_cache_key(document, locator)
         if cache_key in self._selection_cache:
             return self._selection_cache[cache_key]
 
@@ -140,7 +137,7 @@ class SelectorEngine:
 
         # If no anchor, perform a global search from the start of the document
         if "anchor" not in locator:
-            elements = self._select_core(backend, modified_target)
+            elements = self._select_core(document, modified_target)
         else:
             # If anchor and relation are present, perform a relational search
             if "relation" not in locator:
@@ -150,7 +147,7 @@ class SelectorEngine:
 
             # 1. Find the anchor element(s) first
             anchor_spec = locator["anchor"]
-            anchor_element = self._find_anchor(backend, anchor_spec)
+            anchor_element = self._find_anchor(document, anchor_spec)
 
             if not anchor_element:
                 raise ElementNotFoundError(
@@ -160,7 +157,7 @@ class SelectorEngine:
             # 2. Perform the relational selection
             relation = locator["relation"]
             elements = self._select_relative_to_anchor(
-                backend, anchor_element, modified_target, relation
+                document, anchor_element, modified_target, relation
             )
 
         if not elements:
@@ -176,13 +173,13 @@ class SelectorEngine:
             elements = self._apply_filters(elements, locator["filters"])
 
         # Cache the result
-        selection = Selection(elements, backend)
+        selection = Selection(elements, document)
         self._selection_cache[cache_key] = selection
 
         return selection
 
     def _find_anchor(
-        self, backend: WordBackend, anchor_spec: Dict[str, Any]
+        self, document: Any, anchor_spec: Dict[str, Any]
     ) -> Optional[Any]:
         """Finds a single anchor element based on its specification."""
         if "type" not in anchor_spec:
@@ -192,10 +189,10 @@ class SelectorEngine:
 
         # Handle special anchor types
         if anchor_type == "start_of_document":
-            return backend.document.Range(0, 0)
+            return document.Range(0, 0)
         if anchor_type == "end_of_document":
-            end_pos = backend.document.Content.End
-            return backend.document.Range(end_pos, end_pos)
+            end_pos = document.Content.End
+            return document.Range(end_pos, end_pos)
 
         # For object-based anchors, find all candidates and then filter
         identifier = anchor_spec.get("identifier", {})
@@ -214,14 +211,14 @@ class SelectorEngine:
                 anchor_target_spec["filters"].append({"index_in_parent": value})
             # Add other identifier mappings here (e.g., level for headings)
 
-        anchor_candidates = self._select_core(backend, anchor_target_spec)
+        anchor_candidates = self._select_core(document, anchor_target_spec)
 
         # For now, we always use the first matching anchor candidate
         return anchor_candidates[0] if anchor_candidates else None
 
     def _select_core(
         self,
-        backend: WordBackend,
+        document: Any,
         target_spec: Dict[str, Any],
         search_range: Optional[Any] = None,
     ) -> List[Any]:
@@ -236,7 +233,7 @@ class SelectorEngine:
         filters = target_spec.get("filters", [])
 
         candidate_elements = self._get_initial_candidates(
-            backend, element_type, search_range
+            document, element_type, search_range
         )
         filtered_elements = self._apply_filters(candidate_elements, filters)
 
@@ -244,7 +241,7 @@ class SelectorEngine:
 
     def _select_relative_to_anchor(
         self,
-        backend: WordBackend,
+        document: Any,
         anchor_element: Any,
         target_spec: Dict[str, Any],
         relation: Dict[str, Any],
@@ -255,18 +252,18 @@ class SelectorEngine:
         if relation_type == "all_occurrences_within":
             # The search scope is the anchor element's own range
             anchor_range = anchor_element.Range
-            return self._select_core(backend, target_spec, search_range=anchor_range)
+            return self._select_core(document, target_spec, search_range=anchor_range)
 
         elif relation_type == "first_occurrence_after":
             # The search scope is from the end of the anchor to the end of the document
-            doc_end = backend.document.Content.End
-            search_range = backend.document.Range(
+            doc_end = document.Content.End
+            search_range = document.Range(
                 Start=anchor_element.Range.End, End=doc_end
             )
 
             # Find all occurrences after, then return the first one
             all_after = self._select_core(
-                backend, target_spec, search_range=search_range
+                document, target_spec, search_range=search_range
             )
             return all_after[:1] if all_after else []
 
@@ -274,18 +271,18 @@ class SelectorEngine:
             # The search scope is the parent of the anchor element
             parent_element = anchor_element.Parent
             parent_range = parent_element.Range
-            return self._select_core(backend, target_spec, search_range=parent_range)
+            return self._select_core(document, target_spec, search_range=parent_range)
 
         elif relation_type == "immediately_following":
             # Find the element that immediately follows the anchor element
             # We'll search for elements that start right after the anchor element ends
             anchor_end = anchor_element.Range.End
             # Create a minimal search range just after the anchor
-            search_range = backend.document.Range(Start=anchor_end, End=anchor_end + 1)
+            search_range = document.Range(Start=anchor_end, End=anchor_end + 1)
 
             # Find all occurrences after, then return the first one
             all_after = self._select_core(
-                backend, target_spec, search_range=search_range
+                document, target_spec, search_range=search_range
             )
             return all_after[:1] if all_after else []
 
@@ -294,7 +291,7 @@ class SelectorEngine:
 
     def _get_initial_candidates(
         self,
-        backend: WordBackend,
+        document: Any,
         element_type: str,
         search_range: Optional[Any] = None,
     ) -> List[Any]:
@@ -302,10 +299,10 @@ class SelectorEngine:
         Gets the initial list of elements, either globally or from a specific range.
         """
         if search_range:
-            return self._get_range_specific_candidates(backend, element_type, search_range)
-        return self._get_global_candidates(backend, element_type)
+            return self._get_range_specific_candidates(document, element_type, search_range)
+        return self._get_global_candidates(document, element_type)
 
-    def _get_range_specific_candidates(self, backend: WordBackend, element_type: str, search_range: Any) -> List[Any]:
+    def _get_range_specific_candidates(self, document: Any, element_type: str, search_range: Any) -> List[Any]:
         """Get candidates from specific range"""
         active_doc = ctx.request_context.lifespan_context.get_active_document()
         element_handlers = {
@@ -329,14 +326,14 @@ class SelectorEngine:
 
         return []
 
-    def _get_global_candidates(self, backend: WordBackend, element_type: str) -> List[Any]:
+    def _get_global_candidates(self, document: Any, element_type: str) -> List[Any]:
         """Get candidates from global document scope"""
         handlers = {
-            "document_start": lambda: [backend.document.Range(0, 0)],
-            "document_end": lambda: [backend.document.Range(backend.document.Content.End, backend.document.Content.End)],
-            "text": backend.get_all_paragraphs,
-            "paragraph": backend.get_all_paragraphs,
-            "table": backend.get_all_tables
+            "document_start": lambda: [document.Range(0, 0)],
+            "document_end": lambda: [document.Range(document.Content.End, document.Content.End)],
+            "text": self.get_all_paragraphs,
+            "paragraph": self.get_all_paragraphs,
+            "table": self.get_all_tables
         }
 
         if element_type not in handlers:
@@ -352,6 +349,16 @@ class SelectorEngine:
             }
             error_code = error_codes.get(element_type, ErrorCode.SERVER_ERROR)
             raise WordDocumentError(error_code, f"Failed to get {element_type} elements: {e}") from e
+
+    def get_all_paragraphs(self) -> List[Any]:
+        """Get all paragraphs in the document"""
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        return list(active_doc.Paragraphs)
+
+    def get_all_tables(self) -> List[Any]:
+        """Get all tables in the document"""
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        return list(active_doc.Tables)
 
     def _get_inline_shapes_in_range(self, active_doc, search_range: Any) -> List[Any]:
         """Get inline shapes within specified range"""

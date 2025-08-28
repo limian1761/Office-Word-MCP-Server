@@ -8,17 +8,18 @@ following the Occam's Razor principle of simplicity.
 import json
 from typing import Any, Dict, Optional
 
-from mcp.server.fastmcp.server import Context
+from mcp.server.session import ServerSession
 from pydantic import Field
-from word_document_server.core import ServerSession
-from word_document_server.utils.app_context import AppContext
 
-from word_document_server.core_utils import mcp_server
-from word_document_server.errors import handle_tool_errors
+from word_document_server.mcp_service.core import mcp_server
+from word_document_server.utils.app_context import AppContext
+from mcp.server.fastmcp import Context
+from word_document_server.utils.errors import handle_tool_errors
 from word_document_server.operations import (add_heading, add_table,
                                             get_all_paragraphs, get_all_tables,
                                             get_all_text,
-                                            insert_paragraph_after)
+                                            insert_paragraph_after,
+                                            get_document_structure)
 
 
 @mcp_server.tool()

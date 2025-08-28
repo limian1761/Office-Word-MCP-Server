@@ -5,49 +5,71 @@ This module contains all the modularized MCP tools organized by functionality.
 """
 
 # Import all tool modules to register their tools with the MCP server
-from . import (comment, document, image, quick_tools, table,  # Add quick tools
+from . import (comment, document, image, quick_tools, table,
                text)
 # Document level tools
-from .document import (get_all_text, shutdown_word)
-from .document import close_document, open_document
-from .quick_tools import get_document_outline
+from .document import (get_all_text_tool, shutdown_word, close_document, open_document,
+                       get_document_styles_tool, get_elements)
 # Image manipulation tools
 from .image import add_caption, get_image_info, insert_object
 # Table manipulation tools
-from .table import add_table, get_text_from_cell, set_cell_value
+from .table import get_text_from_cell, set_cell_value, create_table
 # Text manipulation tools
-from .text import (apply_format, batch_apply_format, create_bulleted_list,
-                   delete_element, find_text, get_text, insert_paragraph,
-                   replace_text)
+from .text import (apply_formatting, batch_apply_format, create_bulleted_list,
+                   find_text, get_text, insert_paragraph, replace_text)
+# Comment tools
+from .comment import (add_comment, get_comments, delete_comment, delete_all_comments,
+                     edit_comment, reply_to_comment, get_comment_thread)
+# Quick tools
+from .quick_tools import (add_heading_quick, add_paragraph_quick, get_document_outline)
 
 __all__ = [
+    # Modules
     "comment",
     "document",
     "image",
     "table",
     "text",
-    "quick_tools",  # Export quick tools
+    "quick_tools",
+    
+    # Document tools
+    "open_document",
+    "close_document",
+    "shutdown_word",
+    "get_all_text_tool",
+    "get_document_styles_tool",
+    "get_elements",
+    
     # Text tools
     "get_text",
     "insert_paragraph",
-    "delete_element",
-    "apply_format",
+    "apply_formatting",
     "batch_apply_format",
     "find_text",
     "replace_text",
     "create_bulleted_list",
+    
     # Table tools
     "get_text_from_cell",
     "set_cell_value",
-    "insert_table",
+    "create_table",
+    
     # Image tools
     "get_image_info",
     "insert_object",
     "add_caption",
-    # Document tools
-    "open_document",
-    "shutdown_word",
-    "get_all_text",
-    "get_document_outline",
-    "open_document",
+    
+    # Comment tools
+    "add_comment",
+    "get_comments",
+    "delete_comment",
+    "delete_all_comments",
+    "edit_comment",
+    "reply_to_comment",
+    "get_comment_thread",
+    
+    # Quick tools
+    "add_heading_quick",
+    "add_paragraph_quick",
+    "get_document_outline"
 ]

@@ -1,20 +1,22 @@
-import json
 import os
+import json
 from typing import Any, Dict, Optional
 
-from mcp.server.fastmcp.server import Context
+from mcp.server.fastmcp import Context
+from mcp.server.session import ServerSession
 from pydantic import Field
 
-from word_document_server.core_utils import get_backend_for_tool, mcp_server
-from word_document_server.errors import (format_error_response,
+from word_document_server.mcp_service.core import mcp_server
+from word_document_server.utils.app_context import AppContext
+from word_document_server.utils.core_utils import require_active_document_validation
+from word_document_server.utils.errors import (format_error_response,
                                          handle_tool_errors)
-from word_document_server.operations import (enable_track_revisions,
-                                             get_all_text,
-                                             get_document_styles)
+from word_document_server.operations import (get_all_text,
+                                             get_document_styles,
+                                             get_selection_info)
 
 
 @mcp_server.tool()
-@require_active_document_validation
 @require_active_document_validation
 @handle_tool_errors
 def open_document(
@@ -77,6 +79,8 @@ def close_document(ctx: Context[ServerSession, AppContext] = Field(description="
     """
     try:
         active_doc = ctx.request_context.lifespan_context.get_active_document()
+        if active_doc is None:
+            return "No active document to close."
         try:
             doc_path = active_doc.Path
             active_doc.Close(SaveChanges=True)
@@ -106,7 +110,7 @@ def shutdown_word(ctx: Context[ServerSession, AppContext] = Field(description="C
 
 
 @mcp_server.tool()
-def get_document_styles(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
+def get_document_styles_tool(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
     Retrieves all available styles in the active document.
 
@@ -115,6 +119,10 @@ def get_document_styles(ctx: Context[ServerSession, AppContext] = Field(descript
     """
     # Get active document path from session state
     active_doc = ctx.request_context.lifespan_context.get_active_document()
+    
+    if active_doc is None:
+        return json.dumps({"error": "No active document found"}, ensure_ascii=False)
+    
     styles = get_document_styles(active_doc)
 
      # Convert to JSON string
@@ -124,7 +132,7 @@ def get_document_styles(ctx: Context[ServerSession, AppContext] = Field(descript
 
 
 @mcp_server.tool()
-def get_all_text(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
+def get_all_text_tool(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
     Retrieves all text from the active document.
 
@@ -134,9 +142,13 @@ def get_all_text(ctx: Context[ServerSession, AppContext] = Field(description="Co
     try:
         # Check if session exists
         if not hasattr(ctx, 'session'):
-            return format_error_response("No session available in context")
+            return format_error_response(ValueError("No session available in context"))
 
         active_doc = ctx.request_context.lifespan_context.get_active_document()
+        
+        if active_doc is None:
+            return json.dumps({"error": "No active document found"}, ensure_ascii=False)
+        
         # Get all text using the document object directly
         text = get_all_text(active_doc)
 
@@ -167,14 +179,19 @@ def get_elements(
         "styles",
         "comments",
     ]
+    if element_type not in supported_types:
+        return json.dumps({"error": f"Unsupported element type: {element_type}. Supported types are: {', '.join(supported_types)}"}, ensure_ascii=False)
+    
     try:
         active_doc = ctx.request_context.lifespan_context.get_active_document()
-        # Remove backend usage, use document directly
+        
+        if active_doc is None:
+            return json.dumps({"error": "No active document found"}, ensure_ascii=False)
 
-        # Get elements using the backend method
-        elements = get_selection_info(backend, element_type)
+        # Get elements using the document method
+        elements = get_selection_info(active_doc, element_type)
 
         # Convert to JSON string
-        return json.dumps(elements, ensure_ascii=False)
+        return json.dumps(elements, ensure_ascii=False) if elements else json.dumps({"error": "Failed to get selection info"}, ensure_ascii=False)
     except Exception as e:
         return format_error_response(e)

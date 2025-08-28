@@ -1,14 +1,15 @@
 import json
 import logging
+from functools import wraps
 from typing import Any, Dict, List, Optional
-from mcp.server.fastmcp.server import Context
 from pydantic import Field
 
-# Use the shared selector engine from core
-from word_document_server.core import selector
-from word_document_server.core_utils import mcp_server
-from functools import wraps
-from word_document_server.errors import (ElementNotFoundError,
+from mcp.server.session import ServerSession
+
+from word_document_server.mcp_service.core import mcp_server, selector
+from word_document_server.utils.app_context import AppContext
+from word_document_server.utils.core_utils import validate_active_document, parse_color_hex
+from word_document_server.utils.errors import (ElementNotFoundError,
                                          WordDocumentError,
                                          format_error_response,
                                          handle_tool_errors)
@@ -472,13 +473,13 @@ def find_text(
         return "Invalid input: Text to find cannot be empty."
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # Find text using the backend method with all parameters
+        # Assuming op_find_text is imported and can accept document object
+        from word_document_server.operations.text_formatting import find_text as op_find_text
         found_items = op_find_text(
-            backend, 
+            active_doc, 
             find_text, 
             match_case=bool(match_case), 
             match_whole_word=bool(match_whole_word),
@@ -517,11 +518,10 @@ def replace_text(
         return "new_text must be a string."
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        from word_document_server.utils.selector import SelectorEngine, ElementNotFoundError, AmbiguousLocatorError
         selector = SelectorEngine()
-        selection = selector.select(backend, locator)
+        selection = selector.select(active_doc, locator)
 
         # Validate that we have elements to replace text in
         if not selection._elements:
@@ -532,7 +532,7 @@ def replace_text(
             element.Range.Text = new_text
 
         # Save the document
-        backend.document.Save()
+        active_doc.Save()
 
         count = len(selection._elements)
         if count == 1:
@@ -576,17 +576,16 @@ def create_bulleted_list(
         return "Position must be 'before' or 'after'."
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        from word_document_server.utils.selector import SelectorEngine, ElementNotFoundError, AmbiguousLocatorError
         selector = SelectorEngine()
-        selection = selector.select(backend, locator, expect_single=True)
+        selection = selector.select(active_doc, locator, expect_single=True)
 
         # Create bulleted list
         selection.create_bulleted_list(items, position)
 
         # Save the document
-        backend.document.Save()
+        active_doc.Save()
         return "Successfully created bulleted list."
     except ElementNotFoundError as e:
         return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_structure to check the actual document structure."

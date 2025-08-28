@@ -10,7 +10,7 @@ from typing import Any, Callable, TypeVar
 
 import win32com.client
 
-from word_document_server.errors import ErrorCode, WordDocumentError
+from word_document_server.utils.errors import ErrorCode, WordDocumentError
 
 T = TypeVar('T')
 
@@ -46,7 +46,7 @@ def safe_com_call(error_code: ErrorCode, operation_name: str):
         operation_name: Name of the operation for error messages
     
     Usage:
-        with safe_com_call(ErrorCode.TEXT_FORMATTING_ERROR, "set bold formatting"):
+        with safe_com_call(ErrorCode.FORMATTING_ERROR, "set bold formatting"):
             com_range_obj.Bold = 1
     """
     class SafeComCall:

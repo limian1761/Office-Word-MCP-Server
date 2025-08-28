@@ -6,10 +6,7 @@ This package contains all the specialized operation modules.
 
 from .comment_operations import *
 from .document_operations import *
-from .image_operations import *
-from .table_operations import *
 from .text_formatting import *
-from .text_operations import *
 from .element_operations import *
 
 __all__ = [
@@ -19,26 +16,19 @@ __all__ = [
     "get_all_tables",
     "get_text_from_range",
     "get_runs_in_range",
-    "get_tables_in_range",
-    "get_cells_in_range",
     "set_header_text",
     "set_footer_text",
     "get_headings",
-    "enable_track_revisions",
     "get_all_styles",
     "get_protection_status",
     "unprotect_document",
     "get_document_styles",
     "get_all_text",
-    "get_document_outline",
-    "open_document",
     "find_text",
     "replace_text",
     "get_selection_info",
     "get_all_inline_shapes",
     "get_comments",
-    "get_comments_by_range",
-    "get_all_elements",
     
     # Element-level operations
     "add_heading",
@@ -49,7 +39,6 @@ __all__ = [
     "set_font_color_for_range",
     "set_font_name_for_range",
     "insert_paragraph_after",
-    "create_bulleted_list_relative_to",
     "set_alignment_for_range",
     "add_comment",
     "delete_comment",
@@ -62,11 +51,6 @@ __all__ = [
     "insert_text_before_element",
     "insert_text_after_element",
     "add_element_caption",
-    "delete_element",
-    "get_element_image_info",
-    "insert_object_relative_to_element",
-    "get_all_inline_shapes", "get_element_text",
-    "set_bold_for_range", "set_italic_for_range", "set_font_size_for_range",
-    "set_font_name_for_range", "set_font_color_for_range", "set_alignment_for_range",
+    "get_element_text",
     "set_paragraph_style"
 ]

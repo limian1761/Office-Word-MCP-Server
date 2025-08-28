@@ -10,7 +10,7 @@ from typing import Optional
 import logging
 
 import win32com.client
-from win32com.client import com_error  # pylint: disable=no-name-in-module
+from pythoncom import com_error  # pylint: disable=no-name-in-module
 
 class WordBackend:
     """

@@ -11,7 +11,7 @@ sys.path.insert(0, project_root)
 import pytest
 from word_document_server.tools.image import add_caption, get_image_info, insert_object
 from word_document_server.tools.document import open_document, close_document, shutdown_word
-from word_document_server.core_utils import MockContext
+from word_document_server.utils.core_utils import MockContext
 
 @pytest.fixture
 def image_test_setup():

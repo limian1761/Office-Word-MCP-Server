@@ -5,7 +5,7 @@ Selection Abstraction Layer for Word Document MCP Server.
 from typing import Any, Dict, List, Optional
 import win32com.client
 
-from word_document_server.errors import ErrorCode, WordDocumentError
+from word_document_server.utils.errors import ErrorCode, WordDocumentError
 from word_document_server.operations import (
     set_bold_for_range, set_italic_for_range, set_font_size_for_range, 
     set_font_name_for_range, set_font_color_for_range, set_alignment_for_range,
@@ -229,11 +229,11 @@ class Selection:
             for element in self._elements:
                 # 调用元操作处理单个元素
                 success = add_element_caption(
+                    document=self._document,
                     element=element,
-                    label=label,
                     caption_text=caption_text,
-                    position=position,
-                    style=self._document.Styles("Caption")
+                    label=label,
+                    position=position
                 )
                 results.append(success)
             return results
@@ -264,10 +264,10 @@ class Selection:
         if position == "before":
             # 使用元操作在首个元素前插入文本
             success = insert_text_before_element(
+                document=self._document,
                 element=self._elements[0],
                 text=text,
-                style=style,
-                document=self._document
+                style=style
             )
             if not success:
                 import logging
@@ -276,10 +276,10 @@ class Selection:
         elif position == "after":
             # 使用元操作在最后元素后插入文本
             success = insert_text_after_element(
+                document=self._document,
                 element=self._elements[-1],
                 text=text,
-                style=style,
-                document=self._document
+                style=style
             )
             if not success:
                 import logging
@@ -288,7 +288,7 @@ class Selection:
         elif position == "replace":
             # Replace the text of all elements in the selection
             for element in self._elements:
-                replace_element_text(element, new_text=text, style=style)
+                replace_element_text(self._document, element, new_text=text, style=style)
 
         else:
             raise ValueError(
@@ -308,7 +308,7 @@ class Selection:
             new_text: The new text to replace the existing content.
         """
         for element in self._elements:
-            replace_element_text(element, new_text)
+            replace_element_text(self._document, element, new_text)
 
     def set_picture_color_type(self, color_type: str) -> None:
         """
@@ -332,4 +332,4 @@ class Selection:
         color_code = color_types[color_type]
 
         for element in self._elements:
-            set_picture_element_color_type(element, color_code)
+            set_picture_element_color_type(self._document, element, color_code)

@@ -10,7 +10,7 @@ sys.path.insert(0, project_root)
 
 from word_document_server.tools.table import get_text_from_cell, set_cell_value, create_table
 from word_document_server.tools.document import open_document, close_document, shutdown_word
-from word_document_server.core_utils import MockContext
+from word_document_server.utils.core_utils import MockContext
 
 class TestTableTool(unittest.TestCase):
     def setUp(self):

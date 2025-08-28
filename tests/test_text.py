@@ -10,9 +10,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.insert(0, project_root)
 
-from word_document_server.tools.text import insert_paragraph, replace_text, batch_apply_format, apply_format, find_text
+from word_document_server.tools.text import insert_paragraph, replace_text, batch_apply_format, apply_formatting as apply_format, find_text
 from word_document_server.tools.document import open_document
-from word_document_server.errors import WordDocumentError
+from word_document_server.utils.errors import WordDocumentError
 
 # Test fixture
 import pytest
@@ -20,7 +20,7 @@ import pytest
 @pytest.fixture
 def text_test_setup():
     # Create a mock context
-    from word_document_server.core_utils import MockContext, MockSession
+    from word_document_server.utils.core_utils import MockContext, MockSession
     ctx = MockContext()
     
     # Get the absolute path to the test document

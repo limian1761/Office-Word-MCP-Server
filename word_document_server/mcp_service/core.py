@@ -12,7 +12,9 @@ from dataclasses import dataclass
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 
-from word_document_server.selector import SelectorEngine
+from word_document_server.selector.selector import SelectorEngine
+from word_document_server.com_backend.word_backend import WordBackend
+from word_document_server.utils.app_context import AppContext
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:

@@ -3,11 +3,12 @@ from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp.server import Context
 from pydantic import Field
-from word_document_server.core import ServerSession
+from mcp.server.session import ServerSession
 from word_document_server.utils.app_context import AppContext
 
-from word_document_server.core_utils import mcp_server
-from word_document_server.errors import (CommentEmptyError, CommentIndexError,
+from word_document_server.mcp_service.core import mcp_server
+from word_document_server.utils.core_utils import require_active_document_validation, validate_active_document
+from word_document_server.utils.errors import (CommentEmptyError, CommentIndexError,
                                          ElementNotFoundError, ReplyEmptyError,
                                          format_error_response,
                                          handle_tool_errors)
@@ -79,7 +80,7 @@ def get_comments(ctx: Context[ServerSession, AppContext] = Field(description="Co
         active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # Get all comments from the document
-        comments = get_comments_op(backend)
+        comments = get_comments_op(active_doc)
 
         # Convert to JSON string
         return json.dumps(comments, ensure_ascii=False)
@@ -101,15 +102,18 @@ def delete_comment(
         A success or error message.
     """
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        error = validate_active_document(ctx)
+        if error:
+            return error
+
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # Call the backend method to delete the comment
-        delete_comment_op(backend, comment_index)
+        delete_comment_op(active_doc, comment_index)
 
         # Save the document
-        backend.document.Save()
+        if active_doc is not None:
+            active_doc.Save()
 
         return f"Comment at index {comment_index} deleted successfully."
     except IndexError:
@@ -127,15 +131,18 @@ def delete_all_comments(ctx: Context[ServerSession, AppContext] = Field(descript
         A success or error message.
     """
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        error = validate_active_document(ctx)
+        if error:
+            return error
+
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # Call the backend method to delete all comments
-        deleted_count = delete_all_comments_op(backend)
+        deleted_count = delete_all_comments_op(active_doc)
 
         # Save the document
-        backend.document.Save()
+        if active_doc is not None:
+            active_doc.Save()
 
         return f"All {deleted_count} comments deleted successfully."
     except Exception as e:
@@ -154,9 +161,6 @@ def edit_comment(
     Returns:
         A success or error message.
     """
-    # Get active document path from session state
-    from word_document_server.core_utils import validate_active_document
-
     error = validate_active_document(ctx)
     if error:
         return error
@@ -165,15 +169,14 @@ def edit_comment(
         return format_error_response(CommentEmptyError())
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # Call the backend method to edit the comment
-        edit_comment_op(backend, comment_index, new_text)
+        edit_comment_op(active_doc, comment_index, new_text)
 
         # Save the document
-        backend.document.Save()
+        if active_doc is not None:
+            active_doc.Save()
 
         return f"Comment at index {comment_index} edited successfully."
     except IndexError:
@@ -197,9 +200,6 @@ def reply_to_comment(
     Returns:
         A success or error message.
     """
-    # Get active document path from session state
-    from word_document_server.core_utils import validate_active_document
-
     error = validate_active_document(ctx)
     if error:
         return error
@@ -208,15 +208,14 @@ def reply_to_comment(
         return format_error_response(ReplyEmptyError())
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # Call the backend method to reply to the comment
-        reply_to_comment_op(backend, comment_index, reply_text, author)
+        reply_to_comment_op(active_doc, comment_index, reply_text, author)
 
         # Save the document
-        backend.document.Save()
+        if active_doc is not None:
+            active_doc.Save()
 
         return f"Reply added to comment at index {comment_index} successfully."
     except IndexError:
@@ -236,20 +235,15 @@ def get_comment_thread(
     Returns:
         A JSON string containing the original comment and all replies.
     """
-    # Get active document path from session state
-    from word_document_server.core_utils import validate_active_document
-
     error = validate_active_document(ctx)
     if error:
         return error
 
     try:
-        backend = get_backend_for_tool(
-            ctx, ctx.session.document_state["active_document_path"]
-        )
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # Call the backend method to get the comment thread
-        thread = get_comment_thread_op(backend, comment_index)
+        thread = get_comment_thread_op(active_doc, comment_index)
 
         # Convert to JSON string
         return json.dumps(thread, ensure_ascii=False)

@@ -2,17 +2,16 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from mcp.server.fastmcp.server import Context
+from mcp.server.fastmcp import Context
+from mcp.server.session import ServerSession
 from pydantic import Field
-from word_document_server.core import ServerSession
-from word_document_server.utils.app_context import AppContext
 
-from word_document_server.core import selector as selector_engine
-from word_document_server.core_utils import mproxy_server
-from word_document_server.errors import (ElementNotFoundError,
-                                         format_error_response,
-                                         handle_tool_errors)
-from word_document_server.errors import ErrorCode, WordDocumentError
+from word_document_server.mcp_service.core import mcp_server, selector
+from word_document_server.utils.app_context import AppContext
+from word_document_server.utils.errors import (ElementNotFoundError,
+                                           format_error_response,
+                                          handle_tool_errors)
+from word_document_server.utils.errors import ErrorCode, WordDocumentError
 from word_document_server.utils.core_utils import get_shape_types
 
 
@@ -60,7 +59,7 @@ def get_all_inline_shapes(document) -> List[Dict[str, Any]]:
         try:
             shapes_count = document.InlineShapes.Count
         except Exception as e:
-            raise WordDocumentError(ErrorCode.IMAGE_ERROR, f"Failed to access InlineShapes collection: {e}")
+            raise WordDocumentError(ErrorCode.IMAGE_NOT_FOUND, f"Failed to access InlineShapes collection: {e}")
 
         for i in range(1, shapes_count + 1):
             try:
@@ -100,7 +99,7 @@ def get_all_inline_shapes(document) -> List[Dict[str, Any]]:
 
 
 @mcp_server.tool()
-@standardize_tool_errors
+@handle_tool_errors
 def insert_object(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
@@ -139,8 +138,11 @@ def insert_object(
 
     try:
         active_doc = ctx.request_context.lifespan_context.get_active_document()
+        if active_doc is None:
+            raise ValueError("No active document.")
 
-        selection = selector_engine.select(active_doc, locator, expect_single=True)
+        # Convert locator to Selection object
+        selection = selector.select(active_doc, locator, expect_single=True)
 
         # Use the Selection's insert_object method which handles position correctly
         selection.insert_object(object_path, object_type, position)
@@ -149,6 +151,8 @@ def insert_object(
             raise ValueError("Failed to save document: No active document.")
         active_doc.Save()
         return f"Successfully inserted {object_type} object."
+    except Exception as e:
+        return f"Error inserting {object_type} object: {str(e)}"
 
 
 
@@ -181,9 +185,11 @@ def add_caption(
 
     try:
         active_doc = ctx.request_context.lifespan_context.get_active_document()
+        if active_doc is None:
+            raise ValueError("No active document.")
 
         # Convert locator to Selection object
-        selection = selector_engine.select(active_doc, locator, expect_single=True)
+        selection = selector.select(active_doc, locator, expect_single=True)
 
         # Add caption to the selected object
         selection.add_caption(caption_text, label, position)
@@ -218,6 +224,8 @@ def get_image_info(
 
     try:
         active_doc = ctx.request_context.lifespan_context.get_active_document()
+        if active_doc is None:
+            raise ValueError("No active document.")
 
         if locator:
             # Find specific images using locator

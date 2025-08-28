@@ -3,14 +3,14 @@ Utility functions shared across multiple Word document server modules.
 """
 
 from typing import Any, Dict, List, Optional
+import functools
 
 # 添加session上下文管理功能
 from mcp.server.fastmcp.server import Context
 
-from word_document_server.mcp_service.core import mcp_server
-from word_document_server.errors import (WordDocumentError,
+from word_document_server.utils.errors import (WordDocumentError,
                                          format_error_response,
-                                         ErrorCode)
+                                         ErrorCode, ElementNotFoundError)
 
 def validate_locator(locator: Dict[str, Any]) -> Optional[str]:
     """
@@ -151,7 +151,7 @@ def require_active_document_validation(func):
         if not ctx:
             return "Context object not found in function parameters."
 
-        from word_document_server.utils.core_utils import validate_active_document
+        # 直接使用同一文件中定义的validate_active_document函数
         error = validate_active_document(ctx)
         if error:
             return error
