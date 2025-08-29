@@ -7,10 +7,8 @@ such as the MCP server instance and the selector engine, to avoid circular depen
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.fastmcp import FastMCP
 
 from word_document_server.selector.selector import SelectorEngine
 from word_document_server.com_backend.word_backend import WordBackend
@@ -26,7 +24,6 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     finally:
         # Cleanup on shutdown
         await wordBackend.disconnect()
-
 
 
 # --- MCP Server Initialization ---

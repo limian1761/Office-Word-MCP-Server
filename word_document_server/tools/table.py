@@ -1,19 +1,12 @@
 from typing import Any, Dict, Optional
 
-from mcp.server.session import ServerSession
-from mcp.server.fastmcp import Context
-from pydantic import Field
-
-from word_document_server.mcp_service.core import mcp_server
-from word_document_server.utils.app_context import AppContext
-from word_document_server.selector import selector
-from word_document_server.utils.errors import (ElementNotFoundError,
-                                         format_error_response,
-                                         handle_tool_errors)
+from word_document_server.tools.tool_imports import *
+from word_document_server.tools.base_tool import BaseWordTool
 from word_document_server.operations import add_table
 
 
 @mcp_server.tool()
+@require_active_document_validation
 @handle_tool_errors
 def get_text_from_cell(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
@@ -27,20 +20,14 @@ def get_text_from_cell(
     Returns:
         The text content of the cell or an error message.
     """
-    # Validate active document
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        raise Exception(error)
 
     # Validate that locator is provided
     if not locator:
         raise Exception("Locator parameter is required.")
 
     try:
-        active_doc = ctx.request_context.lifespan_context.get_active_document()
-        selector_engine = selector.SelectorEngine(active_doc)
+        active_doc = BaseWordTool.get_active_document(ctx)
+        selector_engine = BaseWordTool.get_selector().SelectorEngine(active_doc)
         selection = selector_engine.select(locator, expect_single=True)
 
         # Verify we have exactly one cell
@@ -53,7 +40,7 @@ def get_text_from_cell(
 
         return text
     except ElementNotFoundError as e:
-        return f"No cell found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
+        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
     except AmbiguousLocatorError as e:
         return f"The locator matched multiple cells: {e}. Please refine your locator to match a single cell."
     except AttributeError:
@@ -63,6 +50,7 @@ def get_text_from_cell(
 
 
 @mcp_server.tool()
+@require_active_document_validation
 def set_cell_value(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
@@ -113,6 +101,7 @@ def set_cell_value(
 
 
 @mcp_server.tool()
+@require_active_document_validation
 def create_table(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
@@ -127,13 +116,6 @@ def create_table(
     Returns:
         A success or error message.
     """
-    # Validate active document
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        return error
-
     # Validate rows and cols parameters
     if not isinstance(rows, int) or rows <= 0:
         return "Invalid 'rows' parameter. Must be a positive integer."
@@ -171,3 +153,4 @@ def create_table(
         return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
     except Exception as e:
         return format_error_response(e)
+

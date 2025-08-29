@@ -51,12 +51,6 @@ def get_text(
         description="Optional, the Locator object to find the target element(s)",
         default=None,
     ),
-    start_pos: Optional[int] = Field(
-        description="Optional, the start position for text extraction", default=None
-    ),
-    end_pos: Optional[int] = Field(
-        description="Optional, the end position for text extraction", default=None
-    ),
 ) -> str:
     """
     Gets text from the active document.
@@ -69,41 +63,74 @@ def get_text(
     # If locator is provided, use it to find elements and get their text
     if locator:
         try:
-            from word_document_server.utils.selector import AmbiguousLocatorError
             selection = selector.select(active_doc, locator)
             return selection.get_text()
-        except AmbiguousLocatorError as e:
-            raise Exception(f"Ambiguous locator - multiple elements found: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Error retrieving text with locator: {str(e)}")
-
-    # If start_pos and end_pos are provided, get text from range
-    elif start_pos is not None and end_pos is not None:
-        try:
-            # Ensure positions are within document bounds
-            doc_range = active_doc.Range()
-            doc_length = doc_range.End
-
-            if start_pos < 0 or end_pos < 0:
-                raise Exception("Start and end positions must be non-negative.")
-            if start_pos >= doc_length or end_pos > doc_length:
-                raise Exception(
-                    f"Position out of bounds. Document length: {doc_length}"
-                )
-            if start_pos >= end_pos:
-                raise Exception("Start position must be less than end position.")
-
-            range_obj = active_doc.Range(Start=start_pos, End=end_pos)
-            return range_obj.Text
-        except Exception as e:
-            raise Exception(f"Error retrieving text from range: {str(e)}")
+        except ElementNotFoundError as e:
+            return format_error_response(e)
 
     # If no parameters provided, get all text
     else:
         try:
-            return get_all_text(active_doc)
+            # Create a selection with the entire document
+            from word_document_server.selector.selection import Selection
+            selection = Selection([active_doc], active_doc)
+            return selection.get_all_text()
         except Exception as e:
-            raise Exception(f"Error retrieving all text: {str(e)}")
+            return format_error_response(e)
+
+
+@mcp_server.tool()
+@require_active_document
+@standardize_tool_errors
+def insert_text(
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
+    locator: Dict[str, Any] = Field(
+        description="The Locator object to find the anchor element"
+    ),
+    text: str = Field(description="The text to insert"),
+    position: str = Field(
+        description='"before", "after", or "replace" the anchor element', default="after"
+    ),
+    style: str = Field(
+        description="Optional, the paragraph style name to apply", default=None
+    ),
+) -> str:
+    """
+    Inserts text relative to an anchor element.
+
+    Returns:
+        A success or error message.
+    """
+    try:
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        from word_document_server.utils.selector import SelectorEngine, AmbiguousLocatorError
+        selector = SelectorEngine()
+        
+        # Convert locator to Selection object
+        selection = selector.select(active_doc, locator, expect_single=True)
+
+        # Validate position parameter
+        from word_document_server.utils.core_utils import validate_insert_position
+        pos_error = validate_insert_position(position)
+        if pos_error:
+            return pos_error
+
+        # Use the Selection method to insert text
+        selection.insert_text(text, position, style)
+
+        # Save the document
+        active_doc.Save()
+
+        return "Successfully inserted text."
+
+    except AmbiguousLocatorError as e:
+        return f"Ambiguous locator - multiple elements found: {str(e)}"
+    except ElementNotFoundError as e:
+        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
+    except ValueError as e:
+        return f"Invalid parameter: {e}"
+    except Exception as e:
+        return format_error_response(e)
 
 
 @mcp_server.tool()
@@ -116,7 +143,7 @@ def insert_paragraph(
     ),
     text: str = Field(description="The text to insert"),
     position: str = Field(
-        description='"before" or "after" the anchor element', default="after"
+        description='"before", "after", or "replace" the anchor element', default="after"
     ),
     style: str = Field(
         description="Optional, the paragraph style name to apply", default=None
@@ -180,18 +207,19 @@ def insert_paragraph(
                         new_paragraph.Style = active_doc.Styles(i)
                         style_found = True
                         break
+                
+                # If style still not found, return a warning but don't fail the operation
                 if not style_found:
-                    return f"Style '{style}' not found in document. Paragraph inserted but style not applied."
+                    active_doc.Save()
+                    return f"Successfully inserted paragraph, but style '{style}' was not found."
 
         # Save the document
         active_doc.Save()
-
         return "Successfully inserted paragraph."
-
     except AmbiguousLocatorError as e:
-        return f"Ambiguous locator - multiple elements found: {str(e)}"
+        return f"Ambiguous locator - multiple elements found: {e}. Please refine your locator to match a single element."
     except ElementNotFoundError as e:
-        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
+        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_structure to check the actual document structure."
     except ValueError as e:
         return f"Invalid parameter: {e}"
     except Exception as e:
@@ -217,7 +245,6 @@ def apply_formatting(
         A success or error message.
     """
 
-
     # Validate formatting parameter
     if not isinstance(formatting, dict):
         return "Formatting must be a dictionary."
@@ -232,93 +259,14 @@ def apply_formatting(
         if not selection._elements:
             return "No elements found matching the locator. Please try simplifying your locator or use get_document_structure to check the actual document structure."
 
-        applied_formats = []
-
-        # Apply formatting to each element
-        for element in selection._elements:
-            # Apply bold formatting
-            if "bold" in formatting:
-                if not isinstance(formatting["bold"], bool):
-                    return "'bold' must be a boolean value."
-                element.Range.Font.Bold = formatting["bold"]
-                applied_formats.append(
-                    f"bold={'enabled' if formatting['bold'] else 'disabled'}"
-                )
-
-            # Apply italic formatting
-            if "italic" in formatting:
-                if not isinstance(formatting["italic"], bool):
-                    return "'italic' must be a boolean value."
-                element.Range.Font.Italic = formatting["italic"]
-                applied_formats.append(
-                    f"italic={'enabled' if formatting['italic'] else 'disabled'}"
-                )
-
-            # Apply font size
-            if "font_size" in formatting:
-                size = formatting["font_size"]
-                if not isinstance(size, int) or size <= 0:
-                    return "'font_size' must be a positive integer."
-                element.Range.Font.Size = size
-                applied_formats.append(f"font_size={size}")
-
-            # Apply font color
-            if "font_color" in formatting:
-                color = formatting["font_color"]
-                if not isinstance(color, str) or not color:
-                    return "'font_color' must be a non-empty string."
-                    
-                try:
-                    set_font_color_for_range(active_doc, element.Range, color)
-                    applied_formats.append(f"font_color={color}")
-                except Exception as e:
-                    return f"Failed to set font color: {str(e)}"
-
-            # Apply font name
-            if "font_name" in formatting:
-                name = formatting["font_name"]
-                if not isinstance(name, str) or not name:
-                    return "'font_name' must be a non-empty string."
-                element.Range.Font.Name = name
-                applied_formats.append(f"font_name={name}")
-
-            # Apply alignment
-            if "alignment" in formatting:
-                from word_document_server.operations.text_formatting import set_alignment_for_range
-                try:
-                    set_alignment_for_range(active_doc, element.Range, formatting["alignment"])
-                except Exception as e:
-                    return f"Operation {i}: Failed to set alignment: {str(e)}"
-
-            # Apply paragraph style
-            if "paragraph_style" in formatting:
-                style_name = formatting["paragraph_style"]
-                if not isinstance(style_name, str) or not style_name:
-                    return "'paragraph_style' must be a non-empty string."
-                try:
-                    element.Style = style_name
-                    applied_formats.append(f"paragraph_style={style_name}")
-                except:
-                    # If applying style fails, try to find it in the document styles
-                    style_found = False
-                    for i in range(1, active_doc.Styles.Count + 1):
-                        if (
-                            active_doc.Styles(i).NameLocal.lower()
-                            == style_name.lower()
-                        ):
-                            element.Style = active_doc.Styles(i)
-                            style_found = True
-                            break
-                    if not style_found:
-                        return f"Style '{style_name}' not found in document."
+        # Use the new Selection method to apply formatting
+        selection.apply_format(formatting)
 
         # Save the document
         active_doc.Save()
-        return f"Successfully applied formatting ({', '.join(applied_formats)}) to {len(selection._elements)} element(s)."
-    except ElementNotFoundError as e:
-        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
-    except ValueError as e:
-        return f"Invalid parameter: {e}"
+
+        return "Formatting applied successfully."
+
     except Exception as e:
         return format_error_response(e)
 
@@ -468,7 +416,6 @@ def find_text(
         A JSON string containing information about each found text.
     """
 
-
     if not find_text:
         return "Invalid input: Text to find cannot be empty."
 
@@ -495,7 +442,6 @@ def find_text(
         return json.dumps(result, ensure_ascii=False)
     except Exception as e:
         return format_error_response(e)
-
 
 @mcp_server.tool()
 @require_active_document
@@ -558,7 +504,7 @@ def create_bulleted_list(
         description="A list of strings, where each string is a list item"
     ),
     position: str = Field(
-        description='"before" or "after" the anchor element', default="after"
+        description='"before", "after", or "replace" the anchor element', default="after"
     ),
 ) -> str:
     """
@@ -572,8 +518,8 @@ def create_bulleted_list(
     # Validate parameters
     if not isinstance(items, list) or not items:
         return "Items must be a non-empty list of strings."
-    if position not in ["before", "after"]:
-        return "Position must be 'before' or 'after'."
+    if position not in ["before", "after", "replace"]:
+        return "Position must be 'before', 'after', or 'replace'."
 
     try:
         active_doc = ctx.request_context.lifespan_context.get_active_document()

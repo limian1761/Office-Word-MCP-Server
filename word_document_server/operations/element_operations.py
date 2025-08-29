@@ -8,7 +8,7 @@ import logging
 
 import win32com.client
 
-from word_document_server.utils.errors import ErrorCode, WordDocumentError
+from word_document_server.utils.core_utils import ErrorCode, WordDocumentError
 from word_document_server.com_backend.com_utils import handle_com_error
 
 

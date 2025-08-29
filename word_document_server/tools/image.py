@@ -8,16 +8,17 @@ from pydantic import Field
 
 from word_document_server.mcp_service.core import mcp_server, selector
 from word_document_server.utils.app_context import AppContext
-from word_document_server.utils.errors import (ElementNotFoundError,
+from word_document_server.utils.core_utils import (ElementNotFoundError,
                                            format_error_response,
                                           handle_tool_errors)
-from word_document_server.utils.errors import ErrorCode, WordDocumentError
+from word_document_server.utils.core_utils import ErrorCode, WordDocumentError
 from word_document_server.utils.core_utils import get_shape_types
 
 
-def _get_color_type(color_code: int) -> str:
+def get_color_type(color_code: int) -> str:
     """
     Converts Word picture color type code to human-readable string.
+    This function is moved here from core_utils.py to avoid duplication.
 
     Args:
         color_code: Color type code from Word COM interface.
@@ -99,7 +100,7 @@ def get_all_inline_shapes(document) -> List[Dict[str, Any]]:
 
 
 @mcp_server.tool()
-@handle_tool_errors
+@require_active_document_validation
 def insert_object(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
@@ -157,6 +158,7 @@ def insert_object(
 
 
 @mcp_server.tool()
+@require_active_document_validation
 def add_caption(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     locator: Dict[str, Any] = Field(
@@ -168,7 +170,7 @@ def add_caption(
         default="Figure",
     ),
     position: str = Field(
-        description='Where to place the caption relative to the object. Supported values: "above", "below"',
+        description='Where to place the caption relative to the object ("above" or "below")',
         default="below",
     ),
 ) -> str:
@@ -178,91 +180,89 @@ def add_caption(
     Returns:
         A success or error message.
     """
-
     # Validate position
-    if position not in ["above", "below"]:
-        return "Invalid position. Must be 'above' or 'below'."
+    from word_document_server.utils.core_utils import validate_position
+    pos_error = validate_position(position)
+    if pos_error:
+        return pos_error
 
     try:
         active_doc = ctx.request_context.lifespan_context.get_active_document()
-        if active_doc is None:
-            raise ValueError("No active document.")
+        selector_engine = selector.SelectorEngine()
+        selection = selector_engine.select(active_doc, locator, expect_single=True)
 
-        # Convert locator to Selection object
-        selection = selector.select(active_doc, locator, expect_single=True)
-
-        # Add caption to the selected object
+        # Add caption using the Selection method
         selection.add_caption(caption_text, label, position)
 
         # Save the document
         active_doc.Save()
+        return "Successfully added caption."
+    except Exception as e:
+        return f"Error adding caption: {str(e)}"
 
-        return f"Successfully added {label} caption."
-    except ElementNotFoundError as e:
-        return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
-    except ValueError as e:
-        return f"Invalid parameter: {e}"
+
+@mcp_server.tool()
+@require_active_document_validation
+def get_images_info(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
+    """
+    Retrieves information about all images (inline shapes) in the active document.
+
+    Returns:
+        A JSON string containing a list of images with their information.
+    """
+    try:
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+
+        # Get all inline shapes using Selection method
+        from word_document_server.selector.selection import Selection
+        selection = Selection([active_doc], active_doc)
+        images_info = selection.get_image_info()
+
+        # Convert to JSON string
+        return json.dumps(images_info, ensure_ascii=False)
     except Exception as e:
         return format_error_response(e)
 
 
 @mcp_server.tool()
-def get_image_info(
+@require_active_document_validation
+def set_image_color_type(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
-    locator: Optional[Dict[str, Any]] = Field(
-        description="Optional, the Locator object to find specific images. If not provided, returns information about all images",
-        default=None,
+    locator: Dict[str, Any] = Field(
+        description="The Locator object to find the target image(s)"
+    ),
+    color_type: int = Field(
+        description="The color type to set (0=Color, 1=Grayscale, 2=BlackAndWhite, 3=Watermark)"
     ),
 ) -> str:
     """
-    Retrieves information about images in the document.
+    Sets the color type for images found by the locator.
 
     Returns:
-        A JSON string containing image information.
+        A success or error message.
     """
-
-
     try:
         active_doc = ctx.request_context.lifespan_context.get_active_document()
-        if active_doc is None:
-            raise ValueError("No active document.")
+        
+        # Use the shared selector engine from core
+        from word_document_server.mcp_service.core import selector
 
-        if locator:
-            # Find specific images using locator
-            from word_document_server.core import selector as selector_engine
+        # Convert locator to Selection object
+        selection = selector.select(active_doc, locator)
 
-            selection = selector_engine.select(active_doc, locator)
+        # Validate that we have elements to modify
+        if not selection._elements:
+            return "No images found matching the locator. Please try simplifying your locator."
 
-            # Filter for only inline shapes (images)
-            images = [
-                element for element in selection._elements if hasattr(element, "Type")
-            ]
-        else:
-            # Get all images
-            images = get_all_inline_shapes(active_doc)
+        # Use the new Selection method to set color type
+        selection.set_picture_color_type(color_type)
 
-        # Collect image information
-        image_info = []
-        # Check if images are already dictionaries (from get_all_inline_shapes)
-        if images and isinstance(images[0], dict):
-            # Already processed by get_all_inline_shapes
-            image_info = images
-        else:
-            # Process raw COM objects
-            for i, image in enumerate(images):
-                try:
-                    info = {
-                        "index": i,
-                        "type": image.Type if hasattr(image, "Type") else "Unknown",
-                        "width": image.Width if hasattr(image, "Width") else "Unknown",
-                        "height": image.Height if hasattr(image, "Height") else "Unknown",
-                    }
-                    image_info.append(info)
-                except Exception as e:
-                    # Skip images that cause errors
-                    continue
+        # Save the document
+        active_doc.Save()
 
-        # Convert to JSON string
-        return json.dumps(image_info, ensure_ascii=False)
+        return "Image color type updated successfully."
     except Exception as e:
         return format_error_response(e)
+
+from word_document_server.tools.tool_imports import *
+from word_document_server.tools.base_tool import BaseWordTool

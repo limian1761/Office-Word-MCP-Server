@@ -61,6 +61,34 @@
       }
     },
     {
+      "name": "insert_text",
+      "title": "Insert Text",
+      "description": "Inserts text with the given text relative to the element found by the locator.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["locator", "text"],
+        "properties": {
+          "locator": {
+            "type": "object",
+            "description": "The Locator object to find the anchor element."
+          },
+          "text": {
+            "type": "string",
+            "description": "The text to insert."
+          },
+          "position": {
+            "type": "string",
+            "description": "\"before\", \"after\", or \"replace\" the located element.",
+            "default": "after"
+          },
+          "style": {
+            "type": "string",
+            "description": "Optional, the paragraph style name to apply."
+          }
+        }
+      }
+    },
+    {
       "name": "get_text_from_cell",
       "title": "Get Text From Cell",
       "description": "Retrieves the text from a single table cell found by the locator.",

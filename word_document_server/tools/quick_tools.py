@@ -14,7 +14,7 @@ from pydantic import Field
 from word_document_server.mcp_service.core import mcp_server
 from word_document_server.utils.app_context import AppContext
 from mcp.server.fastmcp import Context
-from word_document_server.utils.errors import handle_tool_errors
+from word_document_server.utils.core_utils import handle_tool_errors, require_active_document_validation
 from word_document_server.operations import (add_heading, add_table,
                                             get_all_paragraphs, get_all_tables,
                                             get_all_text,
@@ -23,7 +23,7 @@ from word_document_server.operations import (add_heading, add_table,
 
 
 @mcp_server.tool()
-@handle_tool_errors
+@require_active_document_validation
 def add_heading_quick(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     text: str = Field(description="The heading text"),
@@ -35,13 +35,6 @@ def add_heading_quick(
     Returns:
         Success message
     """
-    # Validate active document
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        raise Exception(error)
-
     active_doc = ctx.request_context.lifespan_context.get_active_document()
 
     # Add heading at the end of document
@@ -53,6 +46,7 @@ def add_heading_quick(
 
 
 @mcp_server.tool()
+@require_active_document_validation
 @handle_tool_errors
 def add_paragraph_quick(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
@@ -64,13 +58,6 @@ def add_paragraph_quick(
     Returns:
         Success message
     """
-    # Validate active document
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        raise Exception(error)
-
     active_doc = ctx.request_context.lifespan_context.get_active_document()
 
     # Add paragraph at the end of document
@@ -82,6 +69,7 @@ def add_paragraph_quick(
 
 
 @mcp_server.tool()
+@require_active_document_validation
 @handle_tool_errors
 def get_document_outline(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
@@ -92,13 +80,6 @@ def get_document_outline(ctx: Context[ServerSession, AppContext] = Field(descrip
     Returns:
         JSON string with document outline containing heading text and levels.
     """
-    # Validate active document
-    from word_document_server.core_utils import validate_active_document
-
-    error = validate_active_document(ctx)
-    if error:
-        raise Exception(error)
-
     active_doc = ctx.request_context.lifespan_context.get_active_document()
 
     # Get document structure

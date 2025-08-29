@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Union
 import win32com.client
 from win32com.client import CDispatch
 
-from word_document_server.utils.errors import ErrorCode, WordDocumentError
+from word_document_server.utils.core_utils import ErrorCode, WordDocumentError
 from word_document_server.com_backend.com_utils import handle_com_error
 import logging
 

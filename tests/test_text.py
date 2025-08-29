@@ -12,7 +12,7 @@ sys.path.insert(0, project_root)
 
 from word_document_server.tools.text import insert_paragraph, replace_text, batch_apply_format, apply_formatting as apply_format, find_text
 from word_document_server.tools.document import open_document
-from word_document_server.utils.errors import WordDocumentError
+from word_document_server.utils.core_utils import WordDocumentError
 
 # Test fixture
 import pytest

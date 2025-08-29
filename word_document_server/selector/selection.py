@@ -4,8 +4,9 @@ Selection Abstraction Layer for Word Document MCP Server.
 
 from typing import Any, Dict, List, Optional
 import win32com.client
+import json
 
-from word_document_server.utils.errors import ErrorCode, WordDocumentError
+from word_document_server.utils.core_utils import ErrorCode, WordDocumentError
 from word_document_server.operations import (
     set_bold_for_range, set_italic_for_range, set_font_size_for_range, 
     set_font_name_for_range, set_font_color_for_range, set_alignment_for_range,
@@ -14,6 +15,17 @@ from word_document_server.operations import (
     delete_element, get_element_image_info, insert_object_relative_to_element,
     get_all_inline_shapes, get_element_text, set_paragraph_style
 )
+from word_document_server.tools.image import get_color_type
+from word_document_server.operations.comment_operations import (
+    add_comment as add_comment_op,
+    get_comments as get_comments_op,
+    delete_comment as delete_comment_op,
+    delete_all_comments as delete_all_comments_op,
+    edit_comment as edit_comment_op,
+    reply_to_comment as reply_to_comment_op,
+    get_comment_thread as get_comment_thread_op
+)
+from word_document_server.operations.document_operations import get_all_text
 
 
 class Selection:
@@ -99,237 +111,253 @@ class Selection:
         # Create a copy of the elements list to avoid issues during iteration
         elements_to_delete = list(self._elements)
         deleted_count = 0
-        errors = []
 
-        try:
-            for element in elements_to_delete:
-                try:
-                    # Use element_operations to handle deletion
-                    success = delete_element(element)
-                    if success:
-                        deleted_count += 1
-                    else:
-                        errors.append("Element deletion returned False")
-
-                except Exception as inner_e:
-                    error_msg = f"Failed to delete element: {str(inner_e)}"
-                    errors.append(error_msg)
-                    import logging
-
-                    logging.error(error_msg)
-
-            # If we had errors but still deleted some elements, it's a partial success
-            if errors and deleted_count > 0:
-                raise RuntimeError(
-                    f"Partial deletion success. Deleted {deleted_count} elements, but encountered errors: {', '.join(errors)}"
+        for element in elements_to_delete:
+            try:
+                delete_element(element)
+                deleted_count += 1
+            except Exception as e:
+                raise WordDocumentError(
+                    ErrorCode.ELEMENT_NOT_FOUND,
+                    f"Failed to delete element: {str(e)}"
                 )
-            elif errors and deleted_count == 0:
-                raise RuntimeError(f"Failed to delete any elements. Errors: {', '.join(errors)}")
 
-        except Exception as e:
-            raise RuntimeError(f"Error during deletion: {str(e)}")
-
-    def get_image_info(self) -> List[Dict[str, Any]]:
+    def insert_text_before(self, text: str) -> None:
         """
-        Gets information about all inline shapes (including images) in the selection.
-
-        Returns:
-            A list of dictionaries containing information about each inline shape.
-        """
-        # If the selection contains the entire document, get all inline shapes
-        if len(self._elements) == 1 and hasattr(self._elements[0], 'InlineShapes'):
-            return get_all_inline_shapes(self._elements[0])
-            
-        # Otherwise, filter for inline shapes in the selection
-        image_info_list = []
-        for element in self._elements:
-            if hasattr(element, "Type"):  # This is likely an inline shape
-                element_info = get_element_image_info(element)
-                image_info_list.append(element_info)
-
-        return image_info_list
-
-    def insert_object(
-        self, object_path: str, object_type: str = "image", position: str = "after"
-    ) -> None:
-        """
-        Inserts an object (image, file, or OLE object) relative to the selection.
-
-        Args:
-            object_path: Path to the object file to insert.
-            object_type: Type of object to insert ("image", "file", or "ole").
-            position: Where to insert relative to the anchor element.
-                     Supported values: "before", "after", "replace".
-        """
-        if not self._elements:
-            raise ValueError("Cannot insert object: No anchor element selected.")
-
-        if len(self._elements) > 1:
-            raise ValueError(
-                "Cannot insert object: Multiple elements selected. Please select a single element as anchor."
-            )
-
-        anchor_element = self._elements[0]
-
-        # Validate position parameter
-        if position not in ["before", "after", "replace"]:
-            raise ValueError("Position must be 'before', 'after', or 'replace'.")
-
-        # Use the operation function to insert object
-        success = insert_object_relative_to_element(
-            element=anchor_element,
-            object_path=object_path,
-            object_type=object_type,
-            position=position
-        )
-        
-        if not success:
-            raise RuntimeError("Failed to insert object")
-
-    def insert_image(self, image_path: str, position: str = "after") -> None:
-        """
-        Inserts an inline picture at the location of the selection.
-
-        Args:
-            image_path: Path to the image file to insert.
-            position: Where to insert relative to the anchor element.
-                     Supported values: "before", "after", "replace".
-        """
-        self.insert_object(image_path, "image", position)
-
-    from typing import Literal
-
-    def add_caption(
-        self,
-        caption_text: str,
-        label: str = "Figure",
-        position: Literal["above", "below"] = "below",
-    ) -> None:
-        """
-        Adds a caption to the selected object (picture, table, etc.).
-
-        Args:
-            caption_text: The caption text to add.
-            label: The label for the caption (e.g., "Figure", "Table", "Equation").
-            position: Where to place the caption relative to the object.
-                     Supported values: "above", "below".
-        """
-        if not self._elements:
-            raise ValueError("Cannot add caption: No element selected.")
-        if len(self._elements) > 1:
-            raise ValueError(
-                "Cannot add caption: Multiple elements selected. Please select a single element."
-            )
-
-        # Validate position parameter
-        if position not in ["above", "below"]:
-            raise ValueError("Position must be 'above' or 'below'.")
-        results = []
-        try:
-            for element in self._elements:
-                # 调用元操作处理单个元素
-                success = add_element_caption(
-                    document=self._document,
-                    element=element,
-                    caption_text=caption_text,
-                    label=label,
-                    position=position
-                )
-                results.append(success)
-            return results
-        except Exception as e:
-            results.append(False)
-            import logging
-            logging.warning(f"Batch caption operation failed: {str(e)}")
-            return results
-
-    def insert_text(
-        self, text: str, position: str = "after", style: str = None
-    ) -> "Selection":
-        """
-        Inserts text relative to the selection.
+        Insert text before each element in the selection.
 
         Args:
             text: The text to insert.
-            position: "before", "after", or "replace".
-            style: Optional, the paragraph style name to apply.
-
-        Returns:
-            A new Selection object representing the inserted text.
         """
-        if not self._elements:
-            # Cannot insert relative to an empty selection
-            raise ValueError("Cannot insert text relative to an empty selection.")
+        for element in self._elements:
+            insert_text_before_element(self._document, element, text)
 
-        if position == "before":
-            # 使用元操作在首个元素前插入文本
-            success = insert_text_before_element(
-                document=self._document,
-                element=self._elements[0],
-                text=text,
-                style=style
-            )
-            if not success:
-                import logging
-                logging.warning("Failed to insert text before element")
+    def insert_text_after(self, text: str) -> None:
+        """
+        Insert text after each element in the selection.
 
-        elif position == "after":
-            # 使用元操作在最后元素后插入文本
-            success = insert_text_after_element(
-                document=self._document,
-                element=self._elements[-1],
-                text=text,
-                style=style
-            )
-            if not success:
-                import logging
-                logging.warning("Failed to insert text after element")
-
-        elif position == "replace":
-            # Replace the text of all elements in the selection
-            for element in self._elements:
-                replace_element_text(self._document, element, new_text=text, style=style)
-
-        else:
-            raise ValueError(
-                f"Invalid position '{position}'. Must be 'before', 'after', or 'replace'."
-            )
-
-        # For now, returning self. A more advanced implementation might return a
-        # new Selection object representing the newly inserted text.
-        return self
+        Args:
+            text: The text to insert.
+        """
+        for element in self._elements:
+            insert_text_after_element(self._document, element, text)
 
     def replace_text(self, new_text: str) -> None:
         """
-        Replaces the text content of the selected elements with new text.
-        Preserves paragraph structure by handling paragraph breaks intelligently.
+        Replace the text of each element in the selection.
 
         Args:
-            new_text: The new text to replace the existing content.
+            new_text: The new text to replace with.
         """
         for element in self._elements:
-            replace_element_text(self._document, element, new_text)
+            replace_element_text(element, new_text)
 
-    def set_picture_color_type(self, color_type: str) -> None:
+    def add_caption(self, caption_text: str, caption_style: str = "Caption", 
+                   position: str = "below") -> None:
         """
-        Sets the color type for all picture elements in the selection.
+        Add a caption to each element in the selection.
 
         Args:
-            color_type: The color type to set ("color", "grayscale", "black_and_white", "watermark").
+            caption_text: The caption text to add.
+            caption_style: The style to apply to the caption.
+            position: Where to place the caption ("above" or "below").
         """
-        color_types = {
-            "color": 0,  # msoPictureColorTypeColor
-            "grayscale": 1,  # msoPictureColorTypeGrayscale
-            "black_and_white": 2,  # msoPictureColorTypeBlackAndWhite
-            "watermark": 3,  # msoPictureColorTypeWatermark
-        }
-
-        if color_type not in color_types:
-            raise ValueError(
-                f"Invalid color type '{color_type}'. Must be one of: {', '.join(color_types.keys())}"
-            )
-
-        color_code = color_types[color_type]
-
         for element in self._elements:
-            set_picture_element_color_type(self._document, element, color_code)
+            add_element_caption(self._document, element, caption_text, caption_style, position)
+
+    def set_picture_color_type(self, color_type: int) -> None:
+        """
+        Set the color type for picture elements in the selection.
+
+        Args:
+            color_type: The color type to set (uses Word constants).
+        """
+        for element in self._elements:
+            if hasattr(element, 'PictureFormat'):
+                set_picture_element_color_type(element, color_type)
+
+    def get_image_info(self) -> List[Dict[str, Any]]:
+        """
+        Get information about image elements in the selection.
+
+        Returns:
+            A list of dictionaries containing image information.
+        """
+        images_info = []
+        for i, element in enumerate(self._elements):
+            try:
+                info = get_element_image_info(element, i)
+                if info:
+                    images_info.append(info)
+            except Exception:
+                # Skip elements that are not images
+                continue
+        return images_info
+
+    def insert_paragraph(self, text: str, position: str = "after", style: Optional[str] = None) -> None:
+        """
+        Insert a paragraph relative to elements in the selection.
+
+        Args:
+            text: The text to insert.
+            position: Where to insert the paragraph ("before", "after", or "replace").
+            style: Optional style to apply to the new paragraph.
+        """
+        for element in self._elements:
+            if position == "replace":
+                # Delete the element first
+                element.Range.Delete()
+                # Use the element's range as the insertion point
+                insertion_range = element.Range
+            elif position == "before":
+                # Collapse the range to the start
+                insertion_range = element.Range.Duplicate
+                insertion_range.Collapse(1)  # wdCollapseStart = 1
+            else:  # position == "after"
+                # Collapse the range to the end
+                insertion_range = element.Range.Duplicate
+                insertion_range.Collapse(0)  # wdCollapseEnd = 0
+
+            # Insert the text followed by a paragraph mark
+            insertion_range.InsertAfter(text + "\r")  # \r is Word's paragraph mark
+
+            # Apply style if specified
+            if style:
+                # Get the newly inserted paragraph to apply style
+                try:
+                    # Try to apply the style to the new paragraph
+                    new_paragraph = self._document.Paragraphs(self._document.Paragraphs.Count)
+                    new_paragraph.Style = style
+                except Exception:
+                    # If applying style fails, try to find it in the document styles
+                    style_found = False
+                    for i in range(1, self._document.Styles.Count + 1):
+                        if self._document.Styles(i).NameLocal.lower() == style.lower():
+                            new_paragraph.Style = self._document.Styles(i)
+                            style_found = True
+                            break
+
+    def add_comment(self, text: str, author: str = "User") -> int:
+        """
+        Add a comment to the first element in the selection.
+
+        Args:
+            text: The comment text.
+            author: The comment author.
+
+        Returns:
+            The comment ID.
+        """
+        if not self._elements:
+            raise ValueError("No elements in selection to add comment to.")
+        
+        com_range_obj = self._elements[0].Range
+        return add_comment_op(self._document, com_range_obj, text, author)
+
+    def get_all_text(self) -> str:
+        """
+        Get all text from the document.
+
+        Returns:
+            All text in the document.
+        """
+        return get_all_text(self._document)
+
+    def find_text(
+        self, 
+        text: str, 
+        match_case: bool = False, 
+        match_whole_word: bool = False,
+        match_wildcards: bool = False,
+        ignore_punct: bool = False,
+        ignore_space: bool = False
+    ) -> List[Dict[str, Any]]:
+        """
+        Find all occurrences of text in the document and return locator data for each match.
+
+        Args:
+            text: The text to search for.
+            match_case: Whether to match case.
+            match_whole_word: Whether to match whole words only.
+            match_wildcards: Whether to allow wildcard characters.
+            ignore_punct: Whether to ignore punctuation differences.
+            ignore_space: Whether to ignore space differences.
+
+        Returns:
+            A list of dictionaries containing locator information for each found text.
+        """
+        if not self._document:
+            raise RuntimeError("No document open.")
+
+        if not text:
+            raise ValueError("Text to find cannot be empty.")
+
+        try:
+            # Use Word's Find functionality
+            finder = self._document.Content.Find
+            finder.ClearFormatting()
+            finder.Text = text
+            finder.MatchCase = match_case
+            finder.MatchWholeWord = match_whole_word
+            finder.MatchWildcards = match_wildcards
+            finder.IgnorePunct = ignore_punct
+            finder.IgnoreSpace = ignore_space
+            finder.MatchSoundsLike = False
+            finder.MatchAllWordForms = False
+
+            found_items = []
+            match_index = 0
+            
+            # Find all occurrences
+            while finder.Execute():
+                range_obj = finder.Parent
+                
+                # Create locator data for this match
+                locator_data = {
+                    "target": {
+                        "type": "range",
+                        "filters": [
+                            {"range_start": range_obj.Start},
+                            {"range_end": range_obj.End}
+                        ]
+                    },
+                    "text": range_obj.Text,
+                    "start": range_obj.Start,
+                    "end": range_obj.End,
+                    "match_index": match_index
+                }
+                
+                found_items.append(locator_data)
+                match_index += 1
+
+            return found_items
+        except Exception as e:
+            raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to find text '{text}': {e}")
+
+    def create_bulleted_list(self, items: List[str], position: str = "after") -> None:
+        """
+        Creates a new bulleted list relative to elements in the selection.
+
+        Args:
+            items: A list of strings to become the list items.
+            position: "before", "after", or "replace" the anchor element(s).
+        """
+        from word_document_server.operations.text_formatting import create_bulleted_list_relative_to
+        
+        for element in self._elements:
+            if position == "replace":
+                # Delete the element first
+                element.Range.Delete()
+                # Use the element's range as the insertion point
+                insertion_range = element.Range
+            elif position == "before":
+                # Collapse the range to the start
+                insertion_range = element.Range.Duplicate
+                insertion_range.Collapse(1)  # wdCollapseStart = 1
+            else:  # position == "after"
+                # Collapse the range to the end
+                insertion_range = element.Range.Duplicate
+                insertion_range.Collapse(0)  # wdCollapseEnd = 0
+
+            # Create the bulleted list at the insertion point
+            create_bulleted_list_relative_to(self._document, insertion_range, items, "after")

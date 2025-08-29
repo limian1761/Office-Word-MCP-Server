@@ -9,8 +9,10 @@ from pydantic import Field
 from word_document_server.mcp_service.core import mcp_server
 from word_document_server.utils.app_context import AppContext
 from word_document_server.utils.core_utils import require_active_document_validation
-from word_document_server.utils.errors import (format_error_response,
+from word_document_server.utils.core_utils import (format_error_response,
                                          handle_tool_errors)
+from word_document_server.tools.tool_imports import *
+from word_document_server.tools.base_tool import BaseWordTool
 from word_document_server.operations import (get_all_text,
                                              get_document_styles,
                                              get_selection_info)
@@ -110,7 +112,7 @@ def shutdown_word(ctx: Context[ServerSession, AppContext] = Field(description="C
 
 
 @mcp_server.tool()
-def get_document_styles_tool(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
+def get_document_styles(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
     Retrieves all available styles in the active document.
 
@@ -129,10 +131,8 @@ def get_document_styles_tool(ctx: Context[ServerSession, AppContext] = Field(des
     return json.dumps(styles, ensure_ascii=False)
 
 
-
-
 @mcp_server.tool()
-def get_all_text_tool(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
+def get_all_text(ctx: Context[ServerSession, AppContext] = Field(description="Context object")) -> str:
     """
     Retrieves all text from the active document.
 

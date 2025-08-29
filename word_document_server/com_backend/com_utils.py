@@ -10,7 +10,7 @@ from typing import Any, Callable, TypeVar
 
 import win32com.client
 
-from word_document_server.utils.errors import ErrorCode, WordDocumentError
+from word_document_server.utils.core_utils import ErrorCode, WordDocumentError
 
 T = TypeVar('T')
 
@@ -31,7 +31,7 @@ def handle_com_error(error_code: ErrorCode, operation_name: str):
             except Exception as e:
                 raise WordDocumentError(
                     error_code, 
-                    f"Failed to {operation_name}: {e}"
+                    f"Failed to {operation_name}: {str(e)}"
                 )
         return wrapper
     return decorator

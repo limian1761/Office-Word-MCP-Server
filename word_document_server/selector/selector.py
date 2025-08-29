@@ -10,11 +10,11 @@ import json
 import re
 from typing import Any, Callable, Dict, List, Optional
 
-from word_document_server.utils.errors import ElementNotFoundError, WordDocumentError, ErrorCode
+from word_document_server.utils.core_utils import ElementNotFoundError, WordDocumentError, ErrorCode
 from word_document_server.selector.selection import Selection
 from word_document_server.utils.core_utils import get_shape_types
+from word_document_server.tools.image import get_color_type
 from pywintypes import com_error
-from word_document_server.utils.app_context import ctx
 
 
 # Custom Exception types for clarity
@@ -48,6 +48,8 @@ class SelectorEngine:
             "is_list_item": self._filter_by_is_list_item,
             "table_index": self._filter_by_table_index,
             "shape_type": self._filter_by_shape_type,
+            "range_start": self._filter_by_range_start,
+            "range_end": self._filter_by_range_end,
         }
         # Simple cache for selections
         self._selection_cache: Dict[str, Selection] = {}
@@ -328,9 +330,18 @@ class SelectorEngine:
 
     def _get_global_candidates(self, document: Any, element_type: str) -> List[Any]:
         """Get candidates from global document scope"""
+        # Handle special element types
+        if element_type == "document_start":
+            return [document.Range(0, 0)]
+        elif element_type == "document_end":
+            end_pos = document.Content.End
+            return [document.Range(end_pos, end_pos)]
+        elif element_type == "range":
+            # For range type, we return the entire document range
+            # Actual start and end positions should be handled via filters
+            return [document.Range(0, document.Content.End)]
+        
         handlers = {
-            "document_start": lambda: [document.Range(0, 0)],
-            "document_end": lambda: [document.Range(document.Content.End, document.Content.End)],
             "text": self.get_all_paragraphs,
             "paragraph": self.get_all_paragraphs,
             "table": self.get_all_tables
@@ -545,3 +556,37 @@ class SelectorEngine:
             and hasattr(el.Range, "ListFormat")
             and el.Range.ListFormat.ListString != ""
         ]
+
+    def _filter_by_range_start(self, elements: List[Any], start_pos: int) -> List[Any]:
+        """Filters range elements by start position."""
+        # For range elements, adjust the start position
+        filtered = []
+        for el in elements:
+            if hasattr(el, 'Start') and hasattr(el, 'End'):
+                # Create a new range with adjusted start position
+                try:
+                    doc = el.Document
+                    new_range = doc.Range(max(start_pos, el.Start), el.End)
+                    filtered.append(new_range)
+                except Exception:
+                    # If we can't create a new range, keep the original
+                    if el.Start <= start_pos <= el.End:
+                        filtered.append(el)
+        return filtered
+
+    def _filter_by_range_end(self, elements: List[Any], end_pos: int) -> List[Any]:
+        """Filters range elements by end position."""
+        # For range elements, adjust the end position
+        filtered = []
+        for el in elements:
+            if hasattr(el, 'Start') and hasattr(el, 'End'):
+                # Create a new range with adjusted end position
+                try:
+                    doc = el.Document
+                    new_range = doc.Range(el.Start, min(end_pos, el.End))
+                    filtered.append(new_range)
+                except Exception:
+                    # If we can't create a new range, keep the original
+                    if el.Start <= end_pos <= el.End:
+                        filtered.append(el)
+        return filtered
