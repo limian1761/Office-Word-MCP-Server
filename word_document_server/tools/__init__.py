@@ -1,74 +1,25 @@
-"""
-Tools module for the Word Document MCP Server.
+"""Office Word MCP Server 工具模块
 
-This module contains all the modularized MCP tools organized by functionality.
+包含所有Word文档操作相关的函数。
 """
 
-# Import all tool modules to register their tools with the MCP server
-from . import (comment, document, image, quick_tools, table,
-               text)
-# Document level tools
-from .document import (shutdown_word, close_document, open_document,
-                       get_document_styles, get_elements)
-# Image manipulation tools
-from .image import add_caption, get_image_info, insert_object
-# Table manipulation tools
-from .table import get_text_from_cell, set_cell_value, create_table
-# Text manipulation tools
-from .text import (apply_formatting, batch_apply_format, create_bulleted_list,
-                   find_text, get_text, insert_paragraph, replace_text, insert_text)
-# Comment tools
-from .comment import (add_comment, get_comments, delete_comment,
-                     edit_comment, reply_to_comment, get_comment_thread)
-# Quick tools
-from .quick_tools import (add_heading_quick, add_paragraph_quick, get_document_outline)
+# 导出各个工具模块的函数
+from .comment_tools import comment_tools
+from .document_tools import document_tools
+from .element_tools import element_tools
+from .image_tools import image_tools
+from .objects_tools import objects_tools
+from .styles_tools import styles_tools
+from .table_tools import table_tools
+from .text_tools import text_tools
 
 __all__ = [
-    # Modules
-    "comment",
-    "document",
-    "image",
-    "table",
-    "text",
-    "quick_tools",
-    
-    # Document tools
-    "open_document",
-    "close_document",
-    "shutdown_word",
-    "get_document_styles",
-    "get_elements",
-    
-    # Text tools
-    "get_text",
-    "insert_paragraph",
-    "insert_text",
-    "apply_formatting",
-    "batch_apply_format",
-    "find_text",
-    "replace_text",
-    "create_bulleted_list",
-    
-    # Table tools
-    "get_text_from_cell",
-    "set_cell_value",
-    "create_table",
-    
-    # Image tools
-    "get_image_info",
-    "insert_object",
-    "add_caption",
-    
-    # Comment tools
-    "add_comment",
-    "get_comments",
-    "delete_comment",
-    "edit_comment",
-    "reply_to_comment",
-    "get_comment_thread",
-    
-    # Quick tools
-    "add_heading_quick",
-    "add_paragraph_quick",
-    "get_document_outline"
+    "comment_tools",
+    "document_tools",
+    "element_tools",
+    "image_tools",
+    "objects_tools",
+    "styles_tools",
+    "table_tools",
+    "text_tools",
 ]

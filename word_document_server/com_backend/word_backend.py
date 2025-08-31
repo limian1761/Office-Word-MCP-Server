@@ -6,11 +6,12 @@ providing a clean, Pythonic API for higher-level components. It is designed
 to be used as a context manager to ensure proper resource management.
 """
 
-from typing import Optional
 import logging
+from typing import Optional
 
 import win32com.client
 from pythoncom import com_error  # pylint: disable=no-name-in-module
+
 
 class WordBackend:
     """
@@ -29,15 +30,16 @@ class WordBackend:
         """
         self.visible = visible
         self.word_app: Optional[win32com.client.CDispatch] = None
+        self.document: Optional[win32com.client.CDispatch] = None
 
     @staticmethod
-    async def connect(visible: bool = True) -> 'WordBackend':
+    async def connect(visible: bool = True) -> "WordBackend":
         """
         Static method to connect to Word application and open/create document.
-        
+
         Args:
             visible (bool): Whether to make the Word application visible.
-            
+
         Returns:
             WordBackend: Connected WordBackend instance
         """
@@ -49,15 +51,20 @@ class WordBackend:
         """
         Method to disconnect from Word application and cleanup resources.
         """
-        if self.word_app.Documents.Count > 0:
-            self.word_app.Documents.Close()
-        if self.word_app:
-            self.word_app.Quit()
+        # 只关闭文档，不退出Word应用，避免应用意外关闭
+        if self.document:
+            try:
+                # 关闭当前文档
+                self.document.Close(SaveChanges=0)  # 0 = wdDoNotSaveChanges
+            except Exception as e:
+                logging.warning(f"关闭文档时出错: {e}")
+            finally:
+                self.document = None
+        
+        # 不再退出Word应用，让应用保持运行状态
         self.word_app = None
-
-        # We no longer quit the app here to allow for multiple tool calls.
-        # The app must be explicitly closed by a 'shutdown' tool.
-        logging.info("Word backend cleaned up (document closed).")
+        
+        logging.info("Word backend cleaned up (document closed, Word application kept running).")
 
     async def start(self):
         """

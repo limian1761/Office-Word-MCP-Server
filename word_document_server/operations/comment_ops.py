@@ -9,11 +9,13 @@ from typing import Any, Dict, List, Optional
 
 import win32com.client
 
-from word_document_server.utils.core_utils import ErrorCode, WordDocumentError
-from word_document_server.com_backend.com_utils import handle_com_error
+from ..com_backend.com_utils import handle_com_error
+from ..utils.core_utils import ErrorCode, WordDocumentError, log_error, log_info
 
+logger = logging.getLogger(__name__)
 
 # === Comment Creation Operations ===
+
 
 @handle_com_error(ErrorCode.COMMENT_ERROR, "add comment")
 def add_comment(
@@ -36,15 +38,16 @@ def add_comment(
     """
     # Add the comment
     comment = document.Comments.Add(com_range_obj, text)
-    
+
     # Set the author if provided
     if author:
         comment.Author = author
-        
+
     return comment
 
 
 # === Comment Retrieval Operations ===
+
 
 @handle_com_error(ErrorCode.COMMENT_ERROR, "get comments")
 def get_comments(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
@@ -74,7 +77,9 @@ def get_comments(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
                 "scope_start": comment.Scope.Start,
                 "scope_end": comment.Scope.End,
                 "scope_text": comment.Scope.Text.strip(),
-                "replies_count": comment.Replies.Count if hasattr(comment, "Replies") else 0,
+                "replies_count": (
+                    comment.Replies.Count if hasattr(comment, "Replies") else 0
+                ),
             }
             comments.append(comment_info)
         except Exception as e:
@@ -85,7 +90,9 @@ def get_comments(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
 
 
 @handle_com_error(ErrorCode.COMMENT_ERROR, "get comment thread")
-def get_comment_thread(document: win32com.client.CDispatch, index: int) -> List[Dict[str, Any]]:
+def get_comment_thread(
+    document: win32com.client.CDispatch, index: int
+) -> List[Dict[str, Any]]:
     """
     Retrieves a comment thread (a comment and its replies) by index.
 
@@ -134,6 +141,7 @@ def get_comment_thread(document: win32com.client.CDispatch, index: int) -> List[
 
 # === Comment Modification Operations ===
 
+
 @handle_com_error(ErrorCode.COMMENT_ERROR, "delete comment")
 def delete_comment(document: win32com.client.CDispatch, index: int) -> bool:
     """
@@ -171,7 +179,9 @@ def delete_all_comments(document: win32com.client.CDispatch) -> Any:
 
 
 @handle_com_error(ErrorCode.COMMENT_ERROR, "edit comment")
-def edit_comment(document: win32com.client.CDispatch, index: int, new_text: str) -> bool:
+def edit_comment(
+    document: win32com.client.CDispatch, index: int, new_text: str
+) -> bool:
     """
     Edits a comment at the specified index.
 
@@ -191,7 +201,12 @@ def edit_comment(document: win32com.client.CDispatch, index: int, new_text: str)
 
 
 @handle_com_error(ErrorCode.COMMENT_ERROR, "reply to comment")
-def reply_to_comment(document: win32com.client.CDispatch, index: int, text: str, author: Optional[str] = None) -> bool:
+def reply_to_comment(
+    document: win32com.client.CDispatch,
+    index: int,
+    text: str,
+    author: Optional[str] = None,
+) -> bool:
     """
     Adds a reply to a comment at the specified index.
 

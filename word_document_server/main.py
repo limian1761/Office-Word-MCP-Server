@@ -4,9 +4,10 @@ Main entry point for the Word Document MCP Server.
 
 import mcp
 
-from word_document_server.mcp_service.core import mcp_server
 # Import tools to ensure they are registered with the MCP server
 import word_document_server.tools
+from word_document_server.mcp_service.core import mcp_server
+
 
 def run_server():
     """

@@ -12,17 +12,18 @@ import win32com.client
 
 from word_document_server.utils.core_utils import ErrorCode, WordDocumentError
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def handle_com_error(error_code: ErrorCode, operation_name: str):
     """
     Decorator to handle common COM operation errors.
-    
+
     Args:
         error_code: The error code to use for WordDocumentError
         operation_name: Name of the operation for error messages
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
@@ -30,35 +31,36 @@ def handle_com_error(error_code: ErrorCode, operation_name: str):
                 return func(*args, **kwargs)
             except Exception as e:
                 raise WordDocumentError(
-                    error_code, 
-                    f"Failed to {operation_name}: {str(e)}"
+                    error_code, f"Failed to {operation_name}: {str(e)}"
                 )
+
         return wrapper
+
     return decorator
 
 
 def safe_com_call(error_code: ErrorCode, operation_name: str):
     """
     Context manager for safe COM calls.
-    
+
     Args:
         error_code: The error code to use for WordDocumentError
         operation_name: Name of the operation for error messages
-    
+
     Usage:
         with safe_com_call(ErrorCode.FORMATTING_ERROR, "set bold formatting"):
             com_range_obj.Bold = 1
     """
+
     class SafeComCall:
         def __enter__(self):
             pass
-            
+
         def __exit__(self, exc_type, exc_val, exc_tb):
             if exc_type is not None:
                 raise WordDocumentError(
-                    error_code,
-                    f"Failed to {operation_name}: {exc_val}"
+                    error_code, f"Failed to {operation_name}: {exc_val}"
                 )
             return False
-    
+
     return SafeComCall()

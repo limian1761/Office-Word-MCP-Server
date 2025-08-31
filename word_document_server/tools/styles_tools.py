@@ -1,0 +1,227 @@
+"""
+Style Integration Tool for Word Document MCP Server.
+
+This module provides a unified MCP tool for style operations.
+"""
+
+import json
+import os
+from typing import Any, Dict, List, Optional
+
+# Standard library imports
+from dotenv import load_dotenv
+# Third-party imports
+from mcp.server.fastmcp import Context
+from mcp.server.session import ServerSession
+from pydantic import Field
+
+# Local imports
+from word_document_server.mcp_service.core import mcp_server
+from word_document_server.operations.styles_ops import apply_formatting
+from word_document_server.selector.selector import SelectorEngine
+from word_document_server.utils.app_context import AppContext
+from word_document_server.utils.core_utils import (
+    ErrorCode, WordDocumentError, format_error_response, get_active_document,
+    handle_tool_errors, log_error, log_info, require_active_document_validation)
+
+
+@mcp_server.tool()
+@handle_tool_errors
+@require_active_document_validation
+def styles_tools(
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
+    operation_type: Optional[str] = Field(
+        default=None,
+        description="Type of style operation: apply_formatting, set_font, set_paragraph_style, set_alignment, set_paragraph_formatting",
+    ),
+    formatting: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Formatting parameters dictionary containing various formatting options",
+    ),
+    font_name: Optional[str] = Field(default=None, description="Font name"),
+    font_size: Optional[float] = Field(default=None, description="Font size"),
+    bold: Optional[bool] = Field(default=None, description="Whether bold"),
+    italic: Optional[bool] = Field(default=None, description="Whether italic"),
+    underline: Optional[str] = Field(
+        default=None,
+        description="Underline type, options: 'none', 'single', 'double', 'dotted', 'dashed', 'wave'",
+    ),
+    color: Optional[str] = Field(default=None, description="Font color"),
+    style_name: Optional[str] = Field(default=None, description="Paragraph style name"),
+    alignment: Optional[str] = Field(
+        default=None,
+        description="Alignment, options: 'left', 'center', 'right', 'justify'",
+    ),
+    line_spacing: Optional[float] = Field(default=None, description="Line spacing"),
+    space_before: Optional[float] = Field(
+        default=None, description="Space before paragraph"
+    ),
+    space_after: Optional[float] = Field(
+        default=None, description="Space after paragraph"
+    ),
+    first_line_indent: Optional[float] = Field(
+        default=None, description="First line indent"
+    ),
+    left_indent: Optional[float] = Field(default=None, description="Left indent"),
+    right_indent: Optional[float] = Field(default=None, description="Right indent"),
+    locator: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Element locator for specifying elements to apply styles to",
+    ),
+) -> str:
+    """
+    Unified style operation tool.
+
+    This tool provides a single interface for all style operations:
+    - apply_formatting: Apply text formatting
+    - set_font: Set text font properties
+    - set_paragraph_style: Set paragraph style
+    - set_alignment: Set paragraph alignment
+
+    Returns:
+        Operation result based on the operation type
+    """
+    try:
+        # 获取活动文档
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        if not active_doc:
+            raise WordDocumentError(
+                ErrorCode.DOCUMENT_ERROR, "No active document found"
+            )
+
+        # 根据操作类型执行相应的操作
+        if operation_type and operation_type.lower() == "apply_formatting":
+            if formatting is None or locator is None:
+                raise ValueError(
+                    "formatting and locator parameters must be provided for apply_formatting operation"
+                )
+
+            log_info("Applying formatting")
+            result = apply_formatting(
+                document=active_doc, formatting=formatting, locator=locator
+            )
+            return str(result)
+
+        elif operation_type and operation_type.lower() == "set_font":
+            if locator is None:
+                raise ValueError(
+                    "locator parameter must be provided for set_font operation"
+                )
+
+            log_info("Setting font")
+            set_font(
+                document=active_doc,
+                font_name=font_name,
+                font_size=font_size,
+                bold=bold,
+                italic=italic,
+                underline=underline,
+                color=color,
+                locator=locator,
+            )
+            return json.dumps(
+                {"success": True, "message": "Font settings applied successfully"},
+                ensure_ascii=False,
+            )
+
+        elif operation_type and operation_type.lower() == "set_paragraph_style":
+            if style_name is None or locator is None:
+                raise ValueError(
+                    "style_name and locator parameters must be provided for set_paragraph_style operation"
+                )
+
+            log_info("Setting paragraph style")
+            result = set_paragraph_style(
+                document=active_doc, style_name=style_name, locator=locator
+            )
+            return str(result)
+
+        elif operation_type and operation_type.lower() == "set_paragraph_formatting":
+            if locator is None:
+                raise ValueError(
+                    "locator parameter must be provided for set_paragraph_formatting operation"
+                )
+
+            log_info("Setting paragraph formatting")
+            # 这里我们只设置对齐方式，因为这是唯一可用的函数
+            result = set_paragraph_alignment(
+                document=active_doc, alignment=alignment, locator=locator
+            )
+            return str(result)
+
+        elif operation_type and operation_type.lower() == "set_alignment":
+            if alignment is None or locator is None:
+                raise ValueError(
+                    "alignment and locator parameters must be provided for set_alignment operation"
+                )
+
+            log_info("Setting paragraph alignment")
+            result = set_paragraph_alignment(
+                document=active_doc, alignment=alignment, locator=locator
+            )
+            return str(result)
+
+        elif operation_type and operation_type.lower() == "get_available_styles":
+            log_info("Getting available styles")
+            result = []
+            try:
+                for style in active_doc.Styles:
+                    result.append(
+                        {
+                            "name": style.NameLocal,
+                            "type": style.Type,
+                            "built_in": style.BuiltIn,
+                        }
+                    )
+            except Exception as e:
+                raise WordDocumentError(
+                    ErrorCode.SERVER_ERROR, f"Failed to get styles: {str(e)}"
+                )
+
+            return json.dumps(result, ensure_ascii=False)
+
+        elif operation_type and operation_type.lower() == "create_style":
+            if style_name is None:
+                raise ValueError(
+                    "style_name parameter must be provided for create_style operation"
+                )
+
+            log_info(f"Creating style: {style_name}")
+            # 直接在文档中创建样式
+            try:
+                # 检查样式是否已存在
+                style_exists = False
+                for style in active_doc.Styles:
+                    if style.NameLocal == style_name:
+                        style_exists = True
+                        break
+
+                if not style_exists:
+                    # 创建新样式
+                    new_style = active_doc.Styles.Add(
+                        Name=style_name, Type=1
+                    )  # 1 = Paragraph style
+                    result = {
+                        "success": True,
+                        "message": f"Style '{style_name}' created successfully",
+                        "style_name": style_name,
+                    }
+                else:
+                    result = {
+                        "success": False,
+                        "message": f"Style '{style_name}' already exists",
+                        "style_name": style_name,
+                    }
+            except Exception as e:
+                raise WordDocumentError(
+                    ErrorCode.SERVER_ERROR, f"Failed to create style: {str(e)}"
+                )
+
+            return json.dumps(result, ensure_ascii=False)
+
+        else:
+            raise ValueError(f"Unsupported operation type: {operation_type}")
+
+    except Exception as e:
+        log_error(f"Error in styles_tools: {e}", exc_info=True)
+        return str(format_error_response(str(e)))

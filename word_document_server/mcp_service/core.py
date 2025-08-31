@@ -11,19 +11,20 @@ from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 
 from word_document_server.selector.selector import SelectorEngine
-from word_document_server.com_backend.word_backend import WordBackend
 from word_document_server.utils.app_context import AppContext
+
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     """Manage application lifecycle with type-safe context."""
-    # Initialize on startup
-    wordBackend = await WordBackend.connect()
+    # Initialize AppContext without a Word application instance
+    # Word application will be started on-demand when needed
+    app_context = AppContext(word_app=None)
     try:
-        yield AppContext(word_app=wordBackend.word_app)
+        yield app_context
     finally:
-        # Cleanup on shutdown
-        await wordBackend.disconnect()
+        # Cleanup on shutdown - close any open document but don't quit Word app
+        app_context.close_document()
 
 
 # --- MCP Server Initialization ---

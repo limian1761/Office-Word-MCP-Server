@@ -264,8 +264,6 @@ For implementation details, see: [WdProtectionType Enumeration](https://learn.mi
 
 ### Quick Tools
 
-- Add headings quickly with `add_heading_quick`
-- Add paragraphs quickly with `add_paragraph_quick`
 - Get document outline with `get_document_outline`
 
 ### Content Creation
