@@ -17,6 +17,7 @@ from pydantic import Field
 # Local imports
 from word_document_server.mcp_service.core import mcp_server
 from word_document_server.operations.table_ops import (create_table,
+                                                       get_cell_text,
                                                        get_table_info,
                                                        insert_column,
                                                        insert_row,
@@ -40,34 +41,34 @@ def table_tools(
     ),
     table_index: Optional[int] = Field(
         default=None,
-        description="Table index (1-based) for operations that require specifying a table",
+        description="Table index (larger than 0) for operations that require specifying a table. Required for: get_cell, set_cell, get_info, insert_row, insert_column",
     ),
     rows: Optional[int] = Field(
-        default=None, description="Number of rows when creating a table"
+        default=None, description="Number of rows when creating a table. Required for: create"
     ),
     cols: Optional[int] = Field(
-        default=None, description="Number of columns when creating a table"
+        default=None, description="Number of columns when creating a table. Required for: create"
     ),
-    row: Optional[int] = Field(default=None, description="Cell row number (1-based)"),
+    row: Optional[int] = Field(default=None, description="Cell row number (1-based). Required for: get_cell, set_cell"),
     col: Optional[int] = Field(
-        default=None, description="Cell column number (1-based)"
+        default=None, description="Cell column number (1-based). Required for: get_cell, set_cell"
     ),
     text: Optional[str] = Field(
-        default=None, description="Text content for setting cell text"
+        default=None, description="Text content for setting cell text. Required for: set_cell"
     ),
     formatting: Optional[Dict[str, Any]] = Field(
-        default=None, description="Optional formatting parameters dictionary"
+        default=None, description="Optional formatting parameters dictionary. Optional for: set_cell"
     ),
     locator: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Element locator for specifying position when creating table",
+        description="Element locator for specifying position when creating table. Optional for: create",
     ),
     position: Optional[str] = Field(
         default=None,
-        description="Insertion position, e.g. 'before', 'after' or row/column insertion position",
+        description="Insertion position, e.g. 'before', 'after' or row/column insertion position. Optional for: create, insert_row, insert_column",
     ),
     count: Optional[int] = Field(
-        default=None, description="Number of rows/columns to insert"
+        default=None, description="Number of rows/columns to insert. Optional for: insert_row, insert_column"
     ),
 ) -> str:
     """
@@ -75,11 +76,21 @@ def table_tools(
 
     This tool provides a single interface for all table operations:
     - create: Create a new table
+      * Required parameters: rows, cols
+      * Optional parameters: locator, position
     - get_cell: Get cell text
+      * Required parameters: table_index, row, col
     - set_cell: Set cell text
+      * Required parameters: table_index, row, col, text
+      * Optional parameters: formatting
     - get_info: Get table information
+      * Required parameters: table_index
     - insert_row: Insert rows
+      * Required parameters: table_index
+      * Optional parameters: position, count
     - insert_column: Insert columns
+      * Required parameters: table_index
+      * Optional parameters: position, count
 
     Returns:
         Operation result based on the operation type
@@ -105,6 +116,7 @@ def table_tools(
                 locator=locator,
                 position=position,
             )
+            log_info("Table created successfully")
             return str(result)
 
         elif operation_type and operation_type.lower() == "get_cell":
@@ -117,6 +129,7 @@ def table_tools(
             result = get_cell_text(
                 document=active_doc, table_index=table_index, row=row, col=col
             )
+            log_info("Cell text retrieved successfully")
             return str(result)
 
         elif operation_type and operation_type.lower() == "set_cell":
@@ -134,6 +147,7 @@ def table_tools(
                 text=text,
                 formatting=formatting,
             )
+            log_info("Cell text set successfully")
             return str(result)
 
         elif operation_type and operation_type.lower() == "get_info":
@@ -144,6 +158,7 @@ def table_tools(
 
             log_info(f"Getting info for table {table_index}")
             result = get_table_info(document=active_doc, table_index=table_index)
+            log_info("Table info retrieved successfully")
             return str(result)
 
         elif operation_type and operation_type.lower() == "insert_row":
@@ -159,6 +174,7 @@ def table_tools(
                 position=position,
                 count=count,
             )
+            log_info("Row inserted successfully")
             return str(result)
 
         elif operation_type and operation_type.lower() == "insert_column":
@@ -174,10 +190,13 @@ def table_tools(
                 position=position,
                 count=count,
             )
+            log_info("Column inserted successfully")
             return str(result)
 
         else:
-            raise ValueError(f"Unsupported operation type: {operation_type}")
+            error_msg = f"Unsupported operation type: {operation_type}"
+            log_error(error_msg)
+            raise ValueError(error_msg)
 
     except Exception as e:
         log_error(f"Table operation failed: {str(e)}", exc_info=True)

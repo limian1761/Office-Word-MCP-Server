@@ -75,7 +75,7 @@ class ElementFinder(FilterHandlers):
         """
         # Handle special anchor types
         if anchor_id == "document_start":
-            return cast(CDispatch, self.document.Range(0, 0))
+            return cast(CDispatch, self.document.Content)
         elif anchor_id == "document_end":
             end_range = self.document.Content
             end_range.Collapse(Direction=1)  # wdCollapseEnd

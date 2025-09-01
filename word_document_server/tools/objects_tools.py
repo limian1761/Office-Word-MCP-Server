@@ -43,9 +43,32 @@ def objects_tools(
         description="MCP context object containing session and application context information"
     ),
     operation_type: str = Field(
-        description="Operation type: bookmark_operations, citation_operations, hyperlink_operations"
+        ..., description="Operation type: bookmark_operations, citation_operations, hyperlink_operations"
     ),
-    **kwargs,
+    bookmark_name: Optional[str] = Field(
+        default=None, description="Name of the bookmark. Required for bookmark_operations"
+    ),
+    citation_text: Optional[str] = Field(
+        default=None, description="Text for the citation. Required for citation_operations"
+    ),
+    url: Optional[str] = Field(
+        default=None, description="URL for the hyperlink. Required for hyperlink_operations"
+    ),
+    locator: Optional[Dict[str, Any]] = Field(
+        default=None, description="Element locator for specifying position. Required for bookmark_operations, citation_operations, hyperlink_operations"
+    ),
+    sub_operation: Optional[str] = Field(
+        default=None, description="Sub-operation type. Required for all operations"
+    ),
+    display_text: Optional[str] = Field(
+        default=None, description="Display text for the hyperlink. Optional for hyperlink_operations"
+    ),
+    citation_name: Optional[str] = Field(
+        default=None, description="Name of the citation. Optional for citation_operations"
+    ),
+    hyperlink_name: Optional[str] = Field(
+        default=None, description="Name of the hyperlink. Optional for hyperlink_operations"
+    ),
 ) -> Dict[str, Any]:
     """
     Document object operation tool
@@ -54,6 +77,18 @@ def objects_tools(
     - bookmark_operations: Bookmark operations (create, get, delete)
     - citation_operations: Citation operations (create)
     - hyperlink_operations: Hyperlink operations (create)
+
+    Args for bookmark_operations:
+        Required parameters: bookmark_name, locator, sub_operation
+        Optional parameters: None
+
+    Args for citation_operations:
+        Required parameters: citation_text, locator, sub_operation
+        Optional parameters: citation_name
+
+    Args for hyperlink_operations:
+        Required parameters: url, locator, sub_operation
+        Optional parameters: display_text, hyperlink_name
 
     Returns:
         Dictionary of operation results
@@ -68,11 +103,11 @@ def objects_tools(
         # 处理不同类型的操作
         result: Dict[str, Any] = {}
         if operation_type == "bookmark_operations":
-            result = handle_bookmark_operations(ctx, document, **kwargs)
+            result = handle_bookmark_operations(ctx, document, sub_operation, bookmark_name=bookmark_name, locator=locator)
         elif operation_type == "citation_operations":
-            result = handle_citation_operations(ctx, document, **kwargs)
+            result = handle_citation_operations(ctx, document, sub_operation, citation_text=citation_text, locator=locator, citation_name=citation_name)
         elif operation_type == "hyperlink_operations":
-            result = handle_hyperlink_operations(ctx, document, **kwargs)
+            result = handle_hyperlink_operations(ctx, document, sub_operation, url=url, locator=locator, display_text=display_text, hyperlink_name=hyperlink_name)
         else:
             raise ValueError(f"不支持的操作类型: {operation_type}")
 
@@ -86,7 +121,14 @@ def objects_tools(
 def handle_objects_operations(
     ctx: Context[ServerSession, AppContext],
     operation_type: str,
-    **kwargs,
+    bookmark_name: Optional[str] = None,
+    citation_text: Optional[str] = None,
+    url: Optional[str] = None,
+    locator: Optional[Dict[str, Any]] = None,
+    sub_operation: Optional[str] = None,
+    display_text: Optional[str] = None,
+    citation_name: Optional[str] = None,
+    hyperlink_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     处理文档对象相关操作的统一入口
@@ -94,7 +136,14 @@ def handle_objects_operations(
     Args:
         ctx: MCP上下文对象
         operation_type: 操作类型
-        **kwargs: 操作参数
+        bookmark_name: 书签名称
+        citation_text: 引用文本
+        url: 超链接URL
+        locator: 元素定位器
+        sub_operation: 子操作类型
+        display_text: 超链接显示文本
+        citation_name: 引用名称
+        hyperlink_name: 超链接名称
 
     Returns:
         操作结果字典
@@ -109,11 +158,11 @@ def handle_objects_operations(
         # 处理不同类型的操作
         result: Dict[str, Any] = {}
         if operation_type == "bookmark_operations":
-            result = handle_bookmark_operations(ctx, document, **kwargs)
+            result = handle_bookmark_operations(ctx, document, sub_operation, bookmark_name=bookmark_name, locator=locator)
         elif operation_type == "citation_operations":
-            result = handle_citation_operations(ctx, document, **kwargs)
+            result = handle_citation_operations(ctx, document, sub_operation, citation_text=citation_text, locator=locator, citation_name=citation_name)
         elif operation_type == "hyperlink_operations":
-            result = handle_hyperlink_operations(ctx, document, **kwargs)
+            result = handle_hyperlink_operations(ctx, document, sub_operation, url=url, locator=locator, display_text=display_text, hyperlink_name=hyperlink_name)
         else:
             raise ValueError(f"不支持的操作类型: {operation_type}")
 

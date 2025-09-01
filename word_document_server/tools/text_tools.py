@@ -49,43 +49,55 @@ def text_tools(
         description="Type of text operation: get_text, insert_text, replace_text, get_char_count, apply_formatting, get_paragraphs, insert_paragraph, get_paragraphs_info, get_all_paragraphs, get_paragraphs_in_range, format_text",
     ),
     locator: Optional[Dict[str, Any]] = Field(
-        default=None, description="Locator object for element selection. Returns all text when empty."
+        default=None, description="Locator object for element selection. Returns all text when empty.\n\n    Required for: insert_text, replace_text, apply_formatting, format_text, insert_paragraph\n"
     ),
     text: Optional[str] = Field(
-        default=None, description="Text content for insert or replace operations"
+        default=None, description="Text content for insert or replace operations\n\n    Required for: insert_text, replace_text, insert_paragraph\n"
     ),
     position: str = Field(
         default="after",
-        description="Position for insert operations: before, after, replace",
+        description="Position for insert operations: before, after, replace\n\n    Used by: insert_text\n",
     ),
-    style: Optional[str] = Field(default=None, description="Paragraph style name"),
+    style: Optional[str] = Field(default=None, description="Paragraph style name\n\n    Optional for: insert_paragraph\n"),
     formatting: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Formatting options: bold, italic, font_size, font_name, font_color, alignment",
+        description="Formatting options: bold, italic, font_size, font_name, font_color, alignment\n\n    Required for: apply_formatting\n",
     ),
     format_type: Optional[str] = Field(
         default=None,
-        description="Text format type: bold, italic, font_size, font_name, font_color, alignment, paragraph_style",
+        description="Text format type: bold, italic, font_size, font_name, font_color, alignment, paragraph_style\n\n    Required for: format_text\n",
     ),
     format_value: Optional[Any] = Field(
-        default=None, description="Value for the text format operation"
+        default=None, description="Value for the text format operation\n\n    Required for: format_text\n"
     ),
 ) -> Any:
-    """
-    Unified text operation tool.
+    """Unified text operation tool.
 
     This tool provides a single interface for all text operations:
     - get_text: Get text from document or specific element
+      * Optional parameters: locator
     - insert_text: Insert text at specific element
+      * Required parameters: text, locator
+      * Optional parameters: position
     - replace_text: Replace text in specific element
+      * Required parameters: text, locator
     - get_char_count: Get character count of document or specific element
+      * Optional parameters: locator
     - apply_formatting: Apply multiple formatting options to an element
+      * Required parameters: formatting, locator
     - format_text: Apply a single formatting option to an element
+      * Required parameters: format_type, format_value, locator
     - get_paragraphs: Get paragraphs in a specific range
+      * No required parameters
     - get_paragraphs_info: Get paragraph statistics
+      * No required parameters
     - get_all_paragraphs: Get all paragraphs in the document
+      * No required parameters
     - insert_paragraph: Insert a new paragraph at specific element
+      * Required parameters: text, locator
+      * Optional parameters: style
     - get_paragraphs_in_range: Get paragraphs within a specific range
+      * No required parameters
 
     Returns:
         Operation result based on the operation type
@@ -157,34 +169,16 @@ def text_tools(
             if hasattr(element, "Range"):
                 range_obj = element.Range
             else:
-                range_obj = active_doc.Range(0, 0)
-
-            
-            # 检查元素是Range对象还是普通元素
-            if hasattr(element, 'Start') and hasattr(element, 'End'):
-                # 这是一个Range对象
-                if position.lower() == "before":
-                    result = insert_text_before_range(
-                        com_range=range_obj, text=text
-                    )
-                else:
-                    result = insert_text_after_range(
-                        com_range=range_obj, text=text
+                range_obj = active_doc.Range(0, 0)                   
+                # 插入文本
+            if position.lower() == "before":
+                result = insert_text_before_range(
+                com_range=range_obj, text=text
                     )
             else:
-                # 这是一个普通元素，检查是否有Range属性
-                if not hasattr(element, 'Range'):
-                    range_obj = document.Range(0, 0)
-                    
-                # 插入文本
-                if position.lower() == "before":
-                    result = insert_text_before_range(
-                        element=element, text=text
-                    )
-                else:
-                    result = insert_text_before_range(
-                        element=element, text=text
-                    )
+                result = insert_text_after_range(
+                    com_range=range_obj, text=text
+                )
 
             # 检查返回结果是否为字符串（JSON格式），如果是则直接返回
             if isinstance(result, str):
@@ -387,8 +381,8 @@ def text_tools(
             element = selection._elements[0]
 
             # 插入段落
-            result = insert_text_after_element(
-                element=element, text=f"\n{text}"
+            result = insert_text_after_range(
+                com_range_obj=element.Range, text=f"\n{text}"
             )
 
             if style:

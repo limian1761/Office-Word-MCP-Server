@@ -39,34 +39,43 @@ except Exception as e:
 
 @mcp_server.tool()
 async def image_tools(
-    ctx: Context,
+    ctx: Context[ServerSession, AppContext],
     operation_type: str = Field(
         ..., description="Type of image operation: get_info, insert, add_caption, resize, set_color_type"),
     image_path: Optional[str] = Field(
-        default=None, description="Path to the image file for insert operation"),
+        default=None, description="Path to the image file for insert operation. Required for: insert"),
     width: Optional[float] = Field(
-        default=None, description="Image width in points for resize operation"),
+        default=None, description="Image width in points for resize operation. Required for: resize (if height not provided)"),
     height: Optional[float] = Field(
-        default=None, description="Image height in points for resize operation"),
+        default=None, description="Image height in points for resize operation. Required for: resize (if width not provided)"),
     color_type: Optional[str] = Field(
-        default=None, description="Image color type for set_color_type operation"),
+        default=None, description="Image color type for set_color_type operation. Required for: set_color_type"),
     caption_text: Optional[str] = Field(
-        default=None, description="Caption text for add_caption operation"),
-    label: Optional[str] = Field(default=None, description="Caption label"),
+        default=None, description="Caption text for add_caption operation. Required for: add_caption"),
+    label: Optional[str] = Field(default=None, description="Caption label. Optional for: add_caption"),
     locator: Optional[Dict[str, Any]] = Field(
-        default=None, description="Element locator for specifying insertion position"),
+        default=None, description="Element locator for specifying insertion position. Optional for: insert, add_caption, resize, set_color_type"),
     position: Optional[str] = Field(
-        default=None, description="Insertion position, options: 'before', 'after'"),
+        default=None, description="Insertion position, options: 'before', 'after'. Optional for: insert"),
 ) -> str:
     """
     Unified image operation tool.
 
     This tool provides a single interface for all image operations:
     - get_info: Get information about all images in the document
+      * No required parameters
     - insert: Insert an image
+      * Required parameters: image_path
+      * Optional parameters: locator, position
     - add_caption: Add a caption to an image
+      * Required parameters: caption_text
+      * Optional parameters: locator, label
     - resize: Resize an image
+      * Required parameters: width or height (at least one)
+      * Optional parameters: locator
     - set_color_type: Set image color type
+      * Required parameters: color_type
+      * Optional parameters: locator
 
     Returns:
         Operation result based on the operation type
@@ -81,7 +90,9 @@ async def image_tools(
 
     try:
         if operation_type == "get_info":
+            log_info("Getting image information")
             result = get_image_info(document)
+            log_info(f"Retrieved information for {len(result) if result else 0} images")
             return json.dumps({
                 "success": True,
                 "images": result,
@@ -99,7 +110,9 @@ async def image_tools(
                     ErrorCode.NOT_FOUND, f"Image file not found: {image_path}"
                 )
             
+            log_info(f"Inserting image from path: {image_path}")
             result = insert_image(document, image_path, locator, position or "after")
+            log_info("Image inserted successfully")
             return json.dumps({
                 "success": True,
                 "result": result,
@@ -112,7 +125,9 @@ async def image_tools(
                     ErrorCode.INVALID_INPUT, "Caption text is required for add_caption operation"
                 )
             
-            result = add_caption(document, caption_text, locator)
+            log_info(f"Adding caption: {caption_text}")
+            result = add_caption(document, caption_text, locator, label)
+            log_info("Caption added successfully")
             return json.dumps({
                 "success": True,
                 "result": result,
@@ -132,8 +147,10 @@ async def image_tools(
                 # 为了简化，我们暂时使用默认值
                 pass
             
+            log_info(f"Resizing image with width: {width}, height: {height}")
             # 调用resize_image函数，注意参数顺序
             result = resize_image(document, image_index, width, height)
+            log_info("Image resized successfully")
             return json.dumps({
                 "success": True,
                 "result": result,
@@ -153,8 +170,10 @@ async def image_tools(
                 # 为了简化，我们暂时使用默认值
                 pass
             
+            log_info(f"Setting image color type to: {color_type}")
             # 调用set_image_color_type函数，注意参数顺序
             result = set_image_color_type(document, image_index, color_type)
+            log_info("Image color type set successfully")
             return json.dumps({
                 "success": True,
                 "result": result,
@@ -162,8 +181,10 @@ async def image_tools(
             }, ensure_ascii=False)
 
         else:
+            error_msg = f"Unknown operation type: {operation_type}"
+            log_error(error_msg)
             raise WordDocumentError(
-                ErrorCode.INVALID_INPUT, f"Unknown operation type: {operation_type}"
+                ErrorCode.INVALID_INPUT, error_msg
             )
 
     except Exception as e:

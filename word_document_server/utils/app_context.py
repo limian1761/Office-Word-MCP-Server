@@ -10,6 +10,7 @@ import pythoncom
 import win32com.client
 from win32com.client.dynamic import CDispatch
 from pythoncom import com_error
+import shutil
 
 from word_document_server.utils.core_utils import WordDocumentError, ErrorCode
 
@@ -65,6 +66,39 @@ class AppContext:
         
         self._initialized = True
 
+    def _clear_com_cache(self):
+        """Clear win32com cache to resolve CLSIDToPackageMap errors"""
+        try:
+            # 获取gen_py目录路径，使用win32com的内置路径
+            import win32com
+            gen_path = os.path.join(win32com.__gen_path__, 'win32com', 'gen_py')
+            logger.info(f"Checking win32com cache at: {gen_path}")
+            
+            # 检查目录是否存在
+            if os.path.exists(gen_path):
+                logger.info(f"Clearing win32com cache at: {gen_path}")
+                # 尝试删除目录
+                shutil.rmtree(gen_path)
+                logger.info("Cleared win32com cache successfully")
+                return True
+            else:
+                logger.warning(f"win32com cache directory not found: {gen_path}")
+                # 尝试查找其他可能的缓存位置
+                temp_gen_path = os.path.join(os.environ.get('TEMP', 'C:\\temp'), 'gen_py')
+                if os.path.exists(temp_gen_path):
+                    logger.info(f"Clearing win32com cache at temp location: {temp_gen_path}")
+                    shutil.rmtree(temp_gen_path)
+                    logger.info("Cleared win32com cache from temp location successfully")
+                    return True
+                return False
+        except PermissionError as e:
+            logger.error(f"Permission denied when clearing win32com cache: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to clear win32com cache: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
+
     def get_word_app(self, create_if_needed: bool = False) -> Optional[CDispatch]:
         """
         Get the Word application instance, optionally creating it if needed.
@@ -85,11 +119,40 @@ class AppContext:
             
         # Don't try to attach to existing instances, always create a new one
         try:
+            logger.info("Attempting to create Word Application instance...")
+            # 确保每次都使用新的win32com.client导入
+            import win32com.client
             self._word_app = win32com.client.Dispatch("Word.Application")
             logger.info("Started a new Word application instance.")
             return self._word_app
+        except AttributeError as e:
+            logger.error(f"COM cache error detected: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
+            # Try to clear COM cache and retry
+            if self._clear_com_cache():
+                try:
+                    logger.info("Retrying Word Application creation after cache clear...")
+                    # 重新导入win32com.client以确保使用清除后的缓存
+                    import importlib
+                    import win32com.client
+                    importlib.reload(win32com.client)
+                    
+                    self._word_app = win32com.client.Dispatch("Word.Application")
+                    logger.info("Successfully created Word application instance after cache clear.")
+                    return self._word_app
+                except Exception as retry_e:
+                    logger.error(f"Failed to start Word Application after cache clear: {retry_e}")
+                    logger.error(f"Retry error type: {type(retry_e).__name__}")
+                    logger.error(f"Retry traceback: {traceback.format_exc()}")
+            else:
+                logger.error("Failed to clear COM cache, cannot retry Word Application creation")
+            return None
         except Exception as e:
             logger.error(f"Failed to start Word Application: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
     def get_active_document(self) -> Optional[CDispatch]:

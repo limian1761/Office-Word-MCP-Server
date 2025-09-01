@@ -6,6 +6,7 @@ This module contains functions for document-level operations.
 
 import os
 import logging
+import traceback
 from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 from win32com.client import CDispatch
 import win32com.client
@@ -39,7 +40,9 @@ def create_document(
     try:
         # Create or use existing Word application instance
         if not word_app:
+            logger.info("Creating new Word application instance for document creation")
             word_app = win32com.client.Dispatch('Word.Application')
+            logger.info("Successfully created Word application instance")
         
         assert word_app is not None
         # Try to set visibility with error handling
@@ -47,14 +50,17 @@ def create_document(
             word_app.Visible = visible
         except AttributeError:
             # Ignore if Visible property cannot be set
+            logger.warning("Could not set Word application visibility")
             pass
 
         # Create the document
         if template_path:
+            logger.info(f"Creating document from template: {template_path}")
             if not os.path.exists(template_path):
                 raise FileNotFoundError(f"Template file not found: {template_path}")
             doc = word_app.Documents.Add(Template=template_path)
         else:
+            logger.info("Creating blank document")
             doc = word_app.Documents.Add()
             
         logger.info("Successfully created new document")
@@ -62,6 +68,8 @@ def create_document(
         
     except Exception as e:
         logger.error(f"Failed to create document: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise WordDocumentError(
             ErrorCode.DOCUMENT_ERROR,
             f"Failed to create document: {str(e)}"
@@ -100,29 +108,15 @@ def open_document(
             
     if not word_app:
         word_app = win32com.client.Dispatch("Word.Application")
-    
-    # Try to set visibility with error handling
-    try:
-        word_app.Visible = visible
-    except AttributeError:
-        # Ignore if Visible property cannot be set
-        pass
+    word_app.Visible = visible
 
     # Open the document
-    try:
-        if password:
-            doc = word_app.Documents.Open(FileName=file_path, PasswordDocument=password)
-        else:
-            doc = word_app.Documents.Open(FileName=file_path)
+    if password:
+        doc = word_app.Documents.Open(file_path, PasswordDocument=password)
+    else:
+        doc = word_app.Documents.Open(file_path)
 
-        logger.info(f"Successfully opened document: {file_path}")
-        return doc
-
-    except Exception as e:
-        logger.error(f"Failed to open document {file_path}: {str(e)}")
-        raise WordDocumentError(
-            ErrorCode.DOCUMENT_ERROR, f"Failed to open document: {str(e)}"
-        )
+    return doc
 
 
 @handle_com_error(ErrorCode.DOCUMENT_ERROR, "close document")

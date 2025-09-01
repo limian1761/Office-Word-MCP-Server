@@ -17,7 +17,12 @@ from pydantic import Field
 
 # Local imports
 from word_document_server.mcp_service.core import mcp_server
-from word_document_server.operations.styles_ops import apply_formatting
+from word_document_server.operations.styles_ops import (
+    apply_formatting,
+    set_font,
+    set_paragraph_style,
+    set_paragraph_alignment
+)
 from word_document_server.selector.selector import SelectorEngine
 from word_document_server.utils.app_context import AppContext
 from word_document_server.utils.core_utils import (
@@ -36,47 +41,63 @@ def styles_tools(
     ),
     formatting: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Formatting parameters dictionary containing various formatting options",
+        description="Formatting parameters dictionary containing various formatting options. Required for: apply_formatting",
     ),
-    font_name: Optional[str] = Field(default=None, description="Font name"),
-    font_size: Optional[float] = Field(default=None, description="Font size"),
-    bold: Optional[bool] = Field(default=None, description="Whether bold"),
-    italic: Optional[bool] = Field(default=None, description="Whether italic"),
+    font_name: Optional[str] = Field(default=None, description="Font name. Optional for: set_font"),
+    font_size: Optional[float] = Field(default=None, description="Font size. Optional for: set_font"),
+    bold: Optional[bool] = Field(default=None, description="Whether bold. Optional for: set_font"),
+    italic: Optional[bool] = Field(default=None, description="Whether italic. Optional for: set_font"),
     underline: Optional[str] = Field(
         default=None,
-        description="Underline type, options: 'none', 'single', 'double', 'dotted', 'dashed', 'wave'",
+        description="Underline type, options: 'none', 'single', 'double', 'dotted', 'dashed', 'wave. Optional for: set_font",
     ),
-    color: Optional[str] = Field(default=None, description="Font color"),
-    style_name: Optional[str] = Field(default=None, description="Paragraph style name"),
+    color: Optional[str] = Field(default=None, description="Font color. Optional for: set_font"),
+    style_name: Optional[str] = Field(default=None, description="Paragraph style name. Required for: set_paragraph_style, create_style"),
     alignment: Optional[str] = Field(
         default=None,
-        description="Alignment, options: 'left', 'center', 'right', 'justify'",
+        description="Alignment, options: 'left', 'center', 'right', 'justify'. Required for: set_alignment. Optional for: set_paragraph_formatting",
     ),
-    line_spacing: Optional[float] = Field(default=None, description="Line spacing"),
+    line_spacing: Optional[float] = Field(default=None, description="Line spacing. Optional for: set_paragraph_formatting"),
     space_before: Optional[float] = Field(
-        default=None, description="Space before paragraph"
+        default=None, description="Space before paragraph. Optional for: set_paragraph_formatting"
     ),
     space_after: Optional[float] = Field(
-        default=None, description="Space after paragraph"
+        default=None, description="Space after paragraph. Optional for: set_paragraph_formatting"
     ),
     first_line_indent: Optional[float] = Field(
-        default=None, description="First line indent"
+        default=None, description="First line indent. Optional for: set_paragraph_formatting"
     ),
-    left_indent: Optional[float] = Field(default=None, description="Left indent"),
-    right_indent: Optional[float] = Field(default=None, description="Right indent"),
+    left_indent: Optional[float] = Field(default=None, description="Left indent. Optional for: set_paragraph_formatting"),
+    right_indent: Optional[float] = Field(default=None, description="Right indent. Optional for: set_paragraph_formatting"),
     locator: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Element locator for specifying elements to apply styles to",
+        description="Element locator for specifying elements to apply styles to. Required for: apply_formatting, set_font, set_paragraph_style, set_alignment, set_paragraph_formatting",
     ),
 ) -> str:
-    """
-    Unified style operation tool.
+    """Unified style operation tool.
 
     This tool provides a single interface for all style operations:
     - apply_formatting: Apply text formatting
+      * Required parameters: formatting, locator
+      * Optional parameters: None
     - set_font: Set text font properties
+      * Required parameters: locator
+      * Optional parameters: font_name, font_size, bold, italic, underline, color
     - set_paragraph_style: Set paragraph style
+      * Required parameters: style_name, locator
+      * Optional parameters: None
     - set_alignment: Set paragraph alignment
+      * Required parameters: alignment, locator
+      * Optional parameters: None
+    - set_paragraph_formatting: Set paragraph formatting
+      * Required parameters: locator
+      * Optional parameters: alignment, line_spacing, space_before, space_after, first_line_indent, left_indent, right_indent
+    - get_available_styles: Get available styles
+      * Required parameters: None
+      * Optional parameters: None
+    - create_style: Create a new style
+      * Required parameters: style_name
+      * Optional parameters: None
 
     Returns:
         Operation result based on the operation type

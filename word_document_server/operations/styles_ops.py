@@ -17,6 +17,75 @@ from . import text_format_ops
 logger = logging.getLogger(__name__)
 
 
+def set_paragraph_alignment(
+    document: win32com.client.CDispatch,
+    alignment: str,
+    locator: Optional[Dict[str, Any]] = None,
+) -> str:
+    """设置段落对齐方式
+
+    Args:
+        document: Word文档COM对象
+        alignment: 对齐方式 (left, center, right, justify)
+        locator: 定位器对象，用于指定要设置对齐方式的元素
+
+    Returns:
+        设置对齐方式成功的消息
+    """
+    if not document:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+
+    selector = SelectorEngine()
+
+    # 获取要设置对齐方式的范围
+    aligned_count = 0
+
+    if locator:
+        # 使用定位器找到要设置对齐方式的元素
+        selection = selector.select(document, locator)
+
+        if (
+            not selection
+            or not hasattr(selection, "_elements")
+            or not selection._elements
+        ):
+            raise WordDocumentError(
+                ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+            )
+
+        # 对每个元素设置对齐方式
+        for element in selection._elements:
+            try:
+                text_format_ops.set_alignment_for_range(document, element.Range, alignment)
+                aligned_count += 1
+            except Exception as e:
+                log_error(f"Failed to apply alignment to element: {str(e)}")
+    else:
+        # 如果没有定位器，使用当前选区
+        try:
+            range_obj = document.Application.Selection.Range
+            text_format_ops.set_alignment_for_range(document, range_obj, alignment)
+            aligned_count = 1
+        except Exception as e:
+            raise WordDocumentError(
+                ErrorCode.FORMATTING_ERROR,
+                f"Failed to apply alignment to selection: {str(e)}",
+            )
+
+    log_info(
+        f"Successfully applied alignment '{alignment}' to {aligned_count} paragraph(s)"
+    )
+    return json.dumps(
+        {
+            "success": True,
+            "message": f"Successfully applied alignment '{alignment}'",
+            "alignment": alignment,
+            "paragraph_count": aligned_count,
+        },
+        ensure_ascii=False,
+    )
+
+
 @handle_com_error(ErrorCode.FORMATTING_ERROR, "apply formatting")
 def apply_formatting(
     document: win32com.client.CDispatch,
@@ -167,6 +236,25 @@ def set_font(
     if not font_name:
         raise ValueError("Font name parameter must be provided")
 
+    # 验证字体是否存在
+    font_exists = False
+    available_fonts = list(document.Application.FontNames)
+    for font in available_fonts:
+        if font == font_name:
+            font_exists = True
+            break
+
+    if not font_exists:
+        # 准备可用字体列表
+        if len(available_fonts) <= 10:
+            fonts_list = ", ".join(available_fonts)
+        else:
+            fonts_list = ", ".join(available_fonts[:10]) + f", and {len(available_fonts)-10} more fonts"
+        raise WordDocumentError(
+            ErrorCode.FORMATTING_ERROR,
+            f"Font '{font_name}' not found. Available fonts: {fonts_list}"
+        )
+
     range_obj = None
     element_count = 0
 
@@ -179,16 +267,27 @@ def set_font(
 
         for element in selection._elements:
             if hasattr(element, "Range"):
-                _apply_font_settings(
-                    document,
-                    element.Range,
-                    font_name,
-                    font_size,
-                    bold,
-                    italic,
-                    underline,
-                    color,
-                )
+                text_format_ops.set_font_name_for_range(element.Range, font_name)
+                if font_size is not None:
+                    text_format_ops.set_font_size_for_range(element.Range, font_size)
+                if bold is not None:
+                    text_format_ops.set_bold_for_range(element.Range, bold)
+                if italic is not None:
+                    text_format_ops.set_italic_for_range(element.Range, italic)
+                if color is not None:
+                    text_format_ops.set_font_color_for_range(document, element.Range, color)
+                # Underline is not yet in text_format_ops, so we handle it here for now.
+                if underline is not None:
+                    font = element.Range.Font
+                    underline_map = {
+                        "none": 0,
+                        "single": 1,
+                        "double": 2,
+                        "dotted": 4,
+                        "dashed": 5,
+                        "wave": 16,
+                    }
+                    font.Underline = underline_map.get(underline, 0)
         element_count = len(selection._elements)
     else:
         try:
@@ -197,9 +296,27 @@ def set_font(
             range_obj = document.Content
             range_obj.Collapse(0)
 
-        _apply_font_settings(
-            document, range_obj, font_name, font_size, bold, italic, underline, color
-        )
+        text_format_ops.set_font_name_for_range(range_obj, font_name)
+        if font_size is not None:
+            text_format_ops.set_font_size_for_range(range_obj, font_size)
+        if bold is not None:
+            text_format_ops.set_bold_for_range(range_obj, bold)
+        if italic is not None:
+            text_format_ops.set_italic_for_range(range_obj, italic)
+        if color is not None:
+            text_format_ops.set_font_color_for_range(document, range_obj, color)
+        # Underline is not yet in text_format_ops, so we handle it here for now.
+        if underline is not None:
+            font = range_obj.Font
+            underline_map = {
+                "none": 0,
+                "single": 1,
+                "double": 2,
+                "dotted": 4,
+                "dashed": 5,
+                "wave": 16,
+            }
+            font.Underline = underline_map.get(underline, 0)
         element_count = 1
 
     log_info(f"Successfully set font properties for {element_count} element(s)")
@@ -209,40 +326,6 @@ def set_font(
         "font_name": font_name,
         "element_count": element_count,
     }
-
-
-def _apply_font_settings(
-    document: win32com.client.CDispatch,
-    range_obj: Any,
-    font_name: str,
-    font_size: Optional[float],
-    bold: Optional[bool],
-    italic: Optional[bool],
-    underline: Optional[str],
-    color: Optional[str],
-):
-    """Helper function to apply font settings to a range."""
-    text_format_ops.set_font_name_for_range(range_obj, font_name)
-    if font_size is not None:
-        text_format_ops.set_font_size_for_range(range_obj, font_size)
-    if bold is not None:
-        text_format_ops.set_bold_for_range(range_obj, bold)
-    if italic is not None:
-        text_format_ops.set_italic_for_range(range_obj, italic)
-    if color is not None:
-        text_format_ops.set_font_color_for_range(document, range_obj, color)
-    # Underline is not yet in text_format_ops, so we handle it here for now.
-    if underline is not None:
-        font = range_obj.Font
-        underline_map = {
-            "none": 0,
-            "single": 1,
-            "double": 2,
-            "dotted": 4,
-            "dashed": 5,
-            "wave": 16,
-        }
-        font.Underline = underline_map.get(underline, 0)
 
 
 @handle_com_error(ErrorCode.SERVER_ERROR, "set paragraph style")
@@ -274,30 +357,27 @@ def set_paragraph_style(
     if not style_name:
         raise ValueError("Style name parameter must be provided")
 
-    # 检查样式是否存在
+    # 检查样式是否存在（使用Name属性而非本地化名称以确保兼容性）
     style_exists = False
+    paragraph_styles = []
     for style in document.Styles:
-        if style.NameLocal == style_name:
-            style_exists = True
-            break
+        if style.Type == 1:  # wdStyleTypeParagraph = 1
+            paragraph_styles.append(style.Name)
+            if style.Name == style_name:
+                style_exists = True
+                break
 
     if not style_exists:
-        # 查找相似的样式名称提供建议
-        similar_styles = []
-        for style in document.Styles:
-            if style_name.lower() in style.NameLocal.lower():
-                similar_styles.append(style.NameLocal)
-
-        if similar_styles:
-            raise WordDocumentError(
-                ErrorCode.SERVER_ERROR,
-                f"Style '{style_name}' not found. Similar styles: {', '.join(similar_styles)}",
-            )
+        # 准备可用段落样式列表
+        if len(paragraph_styles) <= 10:
+            styles_list = ", ".join(paragraph_styles)
         else:
-            raise WordDocumentError(
-                ErrorCode.SERVER_ERROR,
-                f"Style '{style_name}' not found in the document",
-            )
+            styles_list = ", ".join(paragraph_styles[:10]) + f", and {len(paragraph_styles)-10} more styles"
+        
+        raise WordDocumentError(
+            ErrorCode.SERVER_ERROR,
+            f"Style '{style_name}' not found. Available paragraph styles: {styles_list}",
+        )
 
     # 获取要设置样式的范围
     styled_count = 0

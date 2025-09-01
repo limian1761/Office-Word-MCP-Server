@@ -5,13 +5,12 @@ This module provides a unified MCP tool for document operations.
 """
 
 import os
-from typing import Any, Dict, List, Optional
-
 # Standard library imports
 import json
-from dotenv import load_dotenv
+from typing import Any, Dict, List, Optional
 
-# Third-party imports
+import win32com.client
+from dotenv import load_dotenv
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
 from pydantic import Field
@@ -29,6 +28,7 @@ from word_document_server.operations.others_ops import (
     protect_document,
     unprotect_document,
 )
+from word_document_server.utils.app_context import AppContext
 from word_document_server.utils.core_utils import (
     ErrorCode,
     WordDocumentError,
@@ -37,7 +37,6 @@ from word_document_server.utils.core_utils import (
     log_info,
     log_warning,
 )
-from word_document_server.utils.app_context import AppContext
 
 # 加载环境变量
 try:
@@ -50,52 +49,73 @@ except Exception as e:
 def document_tools(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     operation_type: Optional[str] = Field(
-        default=None,
+        default="open",
         description="Type of document operation: create, open, save, save_as, close, get_info, set_property, get_property, print, protect, unprotect",
     ),
     file_path: Optional[str] = Field(
-        default=None, description="File path for document operations"
+        default=None, description="File path for document operations. Required for: open,save_as. Optional for: None.  Optional for: create, "
     ),
     template_path: Optional[str] = Field(
-        default=None, description="Template path for create operation"
+        default=None, description="Template path for create operation. Required for: None. Optional for: create"
     ),
     document_properties: Optional[Dict[str, Any]] = Field(
-        default=None, description="Document properties for set_property operation"
+        default=None, description="Document properties for set_property operation. Required for: set_property. Optional for: None"
     ),
     property_name: Optional[str] = Field(
-        default=None, description="Property name for get/set operations"
+        default=None, description="Property name for get/set operations. Required for: get_property, set_property. Optional for: None"
     ),
     property_value: Optional[Any] = Field(
-        default=None, description="Property value for set operation"
+        default=None, description="Property value for set operation. Required for: set_property. Optional for: None"
     ),
     print_settings: Optional[Dict[str, Any]] = Field(
-        default=None, description="Print settings for print operation"
+        default=None, description="Print settings for print operation. Required for: print. Optional for: None"
     ),
     protection_type: Optional[str] = Field(
-        default=None, description="Protection type for protect operation"
+        default=None, description="Protection type for protect operation. Required for: protect. Optional for: None"
     ),
     protection_password: Optional[str] = Field(
-        default=None, description="Password for protect/unprotect operations"
+        default=None, description="Password for protect/unprotect operations. Required for: protect, unprotect. Optional for: None"
     ),
     password: Optional[str] = Field(
-        default=None, description="Password for opening protected documents"
+        default=None, description="Password for opening protected documents. Required for: open (when document is password protected). Optional for: None"
     ),
 ) -> Any:
-    """
-    Unified document operation tool.
+    """Unified document operation tool.
 
     This tool provides a single interface for all document operations:
     - create: Create a new document
+      * Required parameters: None
+      * Optional parameters: template_path, file_path
     - open: Open an existing document
+      * Required parameters: file_path
+      * Optional parameters: password
     - save: Save the current document
+      * Required parameters: None
+      * Optional parameters: None
     - save_as: Save the current document to a new path
+      * Required parameters: file_path
+      * Optional parameters: None
     - close: Close the current document
+      * Required parameters: None
+      * Optional parameters: None
     - get_info: Get document information
+      * Required parameters: None
+      * Optional parameters: None
     - set_property: Set document property
+      * Required parameters: property_name, property_value
+      * Optional parameters: document_properties
     - get_property: Get document property
+      * Required parameters: property_name
+      * Optional parameters: None
     - print: Print the document
+      * Required parameters: None
+      * Optional parameters: print_settings
     - protect: Protect the document
+      * Required parameters: protection_type
+      * Optional parameters: protection_password
     - unprotect: Unprotect the document
+      * Required parameters: None
+      * Optional parameters: protection_password
 
     Returns:
         Operation result based on the operation type
@@ -110,6 +130,7 @@ def document_tools(
             # 创建新文档的逻辑
             word_app = ctx.request_context.lifespan_context.get_word_app(create_if_needed=True)
             if word_app is None:
+                log_error("Failed to get or create Word application instance")
                 raise RuntimeError("Failed to get or create Word application instance")
             doc = create_document(word_app, visible=True, template_path=template_path)
 
@@ -197,6 +218,10 @@ def document_tools(
                         ctx.request_context.lifespan_context._word_app = word_app  # 更新上下文
                     except Exception as inner_e:
                         log_error(f"Failed to recreate Word application: {str(inner_e)}")
+                except Exception as e:
+                    # 处理其他异常
+                    log_error(f"Error opening document: {str(e)}")
+                    raise RuntimeError(f"Failed to open document: {str(e)}")
 
             # 更新上下文中的活动文档
             ctx.request_context.lifespan_context.set_active_document(doc)
@@ -214,7 +239,7 @@ def document_tools(
                         # 由于文件可能很大，只读取前10000个字符
                         agent_guide_content = f.read(10000)
                         if len(agent_guide_content) == 10000:
-                            agent_guide_content += "\n\n...文档内容过长，已截断..."
+                            agent_guide_content += "\n\n...文档内容过长，已从10000个字符处截断... "
             except Exception as e:
                 log_error(f"Failed to read agent_guide.md: {e}")
                 agent_guide_content = "无法读取agent_guide.md文件"

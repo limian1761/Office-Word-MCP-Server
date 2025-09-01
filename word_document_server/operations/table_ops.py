@@ -429,14 +429,14 @@ def get_table_info(document: win32com.client.CDispatch, table_index: int) -> str
 
 @handle_com_error(ErrorCode.TABLE_ERROR, "insert row")
 def insert_row(
-    document: win32com.client.CDispatch, table_index: int, position: int, count: int = 1
+    document: win32com.client.CDispatch, table_index: int, position: Union[int, str], count: int = 1
 ) -> str:
     """在表格中插入行
 
     Args:
         document: Word文档COM对象
         table_index: 表格索引（从1开始）
-        position: 插入位置（行号，从1开始）
+        position: 插入位置（行号，从1开始）或位置描述符（"after"表示在末尾插入）
         count: 插入的行数
 
     Returns:
@@ -452,8 +452,6 @@ def insert_row(
     # 验证参数
     if table_index <= 0:
         raise ValueError("Table index must be a positive integer")
-    if position <= 0:
-        raise ValueError("Insert position must be a positive integer")
     if count <= 0:
         raise ValueError("Row count must be a positive integer")
 
@@ -467,6 +465,15 @@ def insert_row(
 
     # 获取表格
     table = document.Tables(table_index)
+
+    # 处理字符串类型的position参数
+    if isinstance(position, str):
+        if position.lower() == "after":
+            position = table.Rows.Count + 1
+        else:
+            raise ValueError(f"Invalid position string: {position}. Only 'after' is supported")
+    elif not isinstance(position, int) or position <= 0:
+        raise ValueError("Insert position must be a positive integer or 'after'")
 
     # 检查插入位置
     if position > table.Rows.Count + 1:

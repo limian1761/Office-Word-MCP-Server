@@ -43,42 +43,41 @@ load_dotenv()
 
 @mcp_server.tool()
 async def comment_tools(
-    ctx: Context,
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     operation_type: str = Field(
-        ..., description="Type of comment operation to perform"
+        ..., description="Type of comment operation to perform: add, delete, get_all, reply, get_thread, delete_all, edit"
     ),
     comment_text: Optional[str] = Field(
-        default=None, description="Comment text for add and reply operations"
+        default=None, description="Comment text for add and reply operations\n\n    Required for: add, reply, edit\n    "
     ),
     comment_id: Optional[str] = Field(
-        default=None, description="Comment ID for delete and reply operations"
+        default=None, description="Comment ID for delete and reply operations\n\n    Required for: delete, reply, get_thread, edit\n    "
     ),
     locator: Optional[Dict[str, Any]] = Field(
-        default=None, description="Element locator for add operation"
+        default=None, description="Element locator for add operation\n\n    Required for: add\n    "
     ),
     author: Optional[str] = Field(
-        default=None, description="Comment author for add operation"
+        default=None, description="Comment author for add operation\n\n    Optional for: add\n    "
     ),
 ) -> Any:
-    """
-    Unified comment operation tool.
+    """Unified comment operation tool.
 
     This tool provides a single interface for all comment operations:
     - add: Add a comment to an element
+      * Required parameters: comment_text
+      * Optional parameters: locator, author
     - delete: Delete a comment by ID
+      * Required parameters: comment_id
     - get_all: Get all comments in the document
+      * No required parameters
     - reply: Reply to an existing comment
+      * Required parameters: comment_text, comment_id
     - get_thread: Get a specific comment thread
+      * Required parameters: comment_id
     - delete_all: Delete all comments in the document
+      * No required parameters
     - edit: Edit an existing comment
-
-    Args:
-        ctx: MCP server context
-        operation_type: The type of operation to perform
-        comment_text: Text for the comment (for add and reply operations)
-        comment_id: ID of the comment to operate on (for delete, reply, edit, and get_thread)
-        locator: Element locator for add operation
-        author: Author name for the comment (for add operation)
+      * Required parameters: comment_text, comment_id
 
     Returns:
         Result of the operation
