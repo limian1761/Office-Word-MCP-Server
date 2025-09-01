@@ -35,7 +35,7 @@
 | `close` | 关闭活动文档 | - | - | 文档关闭成功信息 |
 | `shutdown` | 关闭Word应用程序 | - | - | Word应用程序关闭成功信息 |
 | `get_styles` | 获取文档样式 | - | - | 包含样式名称和类型的JSON字符串 |
-| `get_elements` | 获取特定类型元素 | `element_type` | - | 包含元素信息的JSON字符串 |
+| `get_objects` | 获取特定类型元素 | `object_type` | - | 包含元素信息的JSON字符串 |
 
 **使用示例：**
 
@@ -47,7 +47,7 @@ document_operation(operation_type="open", file_path="C:\path\to\document.docx")
 document_operation(operation_type="get_styles")
 
 # 获取文档中的表格
-document_operation(operation_type="get_elements", element_type="tables")
+document_operation(operation_type="get_objects", object_type="tables")
 
 # 关闭文档
 document_operation(operation_type="close")
@@ -221,7 +221,7 @@ comment_operation(operation_type="get_thread",
 大多数操作都需要使用**定位器(Locator)**来指定操作的目标元素。定位器是一个字典对象，格式如下：
 
 ```python
-locator = {"type": "element_type", "value": "element_identifier", "filters": {"filter_name": "filter_value"}}
+locator = {"type": "object_type", "value": "object_identifier", "filters": {"filter_name": "filter_value"}}
 ```
 
 ### 支持的元素类型
@@ -327,7 +327,7 @@ document_operation(operation_type="shutdown")
 |---------|------------|---------|
 | 文档未找到 | File not found: C:\path\to\document.docx | 检查文件路径是否正确 |
 | 没有活动文档 | No active document found | 先使用 `document_operation("open", file_path="...")` 打开文档 |
-| 元素未找到 | No element found matching the locator | 检查定位器参数是否正确，可能文档结构与预期不符 |
+| 元素未找到 | No object found matching the locator | 检查定位器参数是否正确，可能文档结构与预期不符 |
 | 参数无效 | Invalid parameter: text is required | 确保提供了所有必需的参数 |
 | COM错误 | Failed to open document: ... | 检查Word应用程序是否正常运行，可能需要重启Word |
 
@@ -335,7 +335,7 @@ document_operation(operation_type="shutdown")
 
 1. 使用`log_info`和`log_error`函数记录操作过程
 2. 检查`word_doc_server.log`文件获取详细的错误日志
-3. 对于定位问题，可以先使用`document_operation("get_elements")`查看文档结构
+3. 对于定位问题，可以先使用`document_operation("get_objects")`查看文档结构
 4. 确保所有路径使用双反斜杠(`\\`)或正斜杠(`/`)，避免使用单反斜杠
 
 ## 7. 总结

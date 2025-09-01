@@ -54,7 +54,7 @@ async def image_tools(
         default=None, description="Caption text for add_caption operation. Required for: add_caption"),
     label: Optional[str] = Field(default=None, description="Caption label. Optional for: add_caption"),
     locator: Optional[Dict[str, Any]] = Field(
-        default=None, description="Element locator for specifying insertion position. Optional for: insert, add_caption, resize, set_color_type"),
+        default=None, description="Object locator for specifying insertion position. Optional for: insert, add_caption, resize, set_color_type"),
     position: Optional[str] = Field(
         default=None, description="Insertion position, options: 'before', 'after'. Optional for: insert"),
 ) -> str:

@@ -41,7 +41,7 @@ Office Word MCP Server 采用五组件分层架构设计，包括：
 - **table_tools**: 表格操作（创建、插入行/列、设置单元格内容等）
 - **comment_tools**: 注释操作（添加、删除、回复注释等）
 - **styles_tools**: 样式操作（应用格式、设置字体、段落样式等）
-- **element_tools**: 元素操作（选择、删除元素等）
+- **object_tools**: 元素操作（选择、删除元素等）
 - **objects_tools**: 对象操作（创建书签、超链接等）
 
 ### 3. 保存更改
@@ -503,7 +503,7 @@ locator = {
 }
 ```
 
-### element_tools
+### object_tools
 
 元素操作工具，用于选择和管理文档中的元素。
 
@@ -520,7 +520,7 @@ locator = {
 # 选择包含特定文本的所有段落
 {
   "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
-  "tool_name": "element_tools",
+  "tool_name": "object_tools",
   "args": {
     "operation_type": "select",
     "locator": {

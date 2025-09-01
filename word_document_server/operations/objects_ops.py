@@ -30,22 +30,23 @@ def _get_range_from_locator(
     selector = SelectorEngine()
     try:
         selection = selector.select(document, locator)
-        if hasattr(selection, "elements") and selection.elements:
-            return selection.elements[0].Range
+        if hasattr(selection, "_com_ranges") and selection._com_ranges:
+            # Selection._com_ranges中只包含Range对象
+            return selection._com_ranges[0]
         else:
             raise WordDocumentError(
-                ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
             )
     except Exception as e:
         raise WordDocumentError(
-            ErrorCode.ELEMENT_TYPE_ERROR, f"Failed to locate position: {str(e)}"
+            ErrorCode.OBJECT_TYPE_ERROR, f"Failed to locate position: {str(e)}"
         )
 
 
 # === Bookmark Operations ===
 
 
-@handle_com_error(ErrorCode.ELEMENT_TYPE_ERROR, "create bookmark")
+@handle_com_error(ErrorCode.OBJECT_TYPE_ERROR, "create bookmark")
 def create_bookmark(
     document: win32com.client.CDispatch,
     bookmark_name: str,
@@ -96,11 +97,11 @@ def create_bookmark(
             f"Failed to create bookmark '{bookmark_name}': {str(e)}", exc_info=True
         )
         raise WordDocumentError(
-            ErrorCode.ELEMENT_TYPE_ERROR, f"Failed to create bookmark: {str(e)}"
+            ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create bookmark: {str(e)}"
         )
 
 
-@handle_com_error(ErrorCode.ELEMENT_TYPE_ERROR, "get bookmark")
+@handle_com_error(ErrorCode.OBJECT_TYPE_ERROR, "get bookmark")
 def get_bookmark(
     document: win32com.client.CDispatch, bookmark_name: str
 ) -> Dict[str, Any]:
@@ -127,7 +128,7 @@ def get_bookmark(
     try:
         if bookmark_name not in [bm.Name for bm in document.Bookmarks]:
             raise WordDocumentError(
-                ErrorCode.ELEMENT_NOT_FOUND, f"Bookmark '{bookmark_name}' not found"
+                ErrorCode.OBJECT_NOT_FOUND, f"Bookmark '{bookmark_name}' not found"
             )
 
         bookmark = document.Bookmarks(bookmark_name)
@@ -155,11 +156,11 @@ def get_bookmark(
             raise
         log_error(f"Failed to get bookmark '{bookmark_name}': {str(e)}", exc_info=True)
         raise WordDocumentError(
-            ErrorCode.ELEMENT_TYPE_ERROR, f"Failed to get bookmark: {str(e)}"
+            ErrorCode.OBJECT_TYPE_ERROR, f"Failed to get bookmark: {str(e)}"
         )
 
 
-@handle_com_error(ErrorCode.ELEMENT_TYPE_ERROR, "delete bookmark")
+@handle_com_error(ErrorCode.OBJECT_TYPE_ERROR, "delete bookmark")
 def delete_bookmark(document: win32com.client.CDispatch, bookmark_name: str) -> None:
     """删除书签
 
@@ -181,7 +182,7 @@ def delete_bookmark(document: win32com.client.CDispatch, bookmark_name: str) -> 
     try:
         if bookmark_name not in [bm.Name for bm in document.Bookmarks]:
             raise WordDocumentError(
-                ErrorCode.ELEMENT_NOT_FOUND, f"Bookmark '{bookmark_name}' not found"
+                ErrorCode.OBJECT_NOT_FOUND, f"Bookmark '{bookmark_name}' not found"
             )
 
         bookmark = document.Bookmarks(bookmark_name)
@@ -197,14 +198,14 @@ def delete_bookmark(document: win32com.client.CDispatch, bookmark_name: str) -> 
             f"Failed to delete bookmark '{bookmark_name}': {str(e)}", exc_info=True
         )
         raise WordDocumentError(
-            ErrorCode.ELEMENT_TYPE_ERROR, f"Failed to delete bookmark: {str(e)}"
+            ErrorCode.OBJECT_TYPE_ERROR, f"Failed to delete bookmark: {str(e)}"
         )
 
 
 # === Citation Operations ===
 
 
-@handle_com_error(ErrorCode.ELEMENT_TYPE_ERROR, "create citation")
+@handle_com_error(ErrorCode.OBJECT_TYPE_ERROR, "create citation")
 def create_citation(
     document: win32com.client.CDispatch,
     source_data: Dict[str, Any],
@@ -242,14 +243,14 @@ def create_citation(
     except Exception as e:
         log_error(f"Failed to create citation: {str(e)}", exc_info=True)
         raise WordDocumentError(
-            ErrorCode.ELEMENT_TYPE_ERROR, f"Failed to create citation: {str(e)}"
+            ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create citation: {str(e)}"
         )
 
 
 # === Hyperlink Operations ===
 
 
-@handle_com_error(ErrorCode.ELEMENT_TYPE_ERROR, "create hyperlink")
+@handle_com_error(ErrorCode.OBJECT_TYPE_ERROR, "create hyperlink")
 def create_hyperlink(
     document: win32com.client.CDispatch,
     address: str,
@@ -303,5 +304,5 @@ def create_hyperlink(
     except Exception as e:
         log_error(f"Failed to create hyperlink to '{address}': {str(e)}", exc_info=True)
         raise WordDocumentError(
-            ErrorCode.ELEMENT_TYPE_ERROR, f"Failed to create hyperlink: {str(e)}"
+            ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create hyperlink: {str(e)}"
         )

@@ -26,16 +26,16 @@ Objective: You are to continue the development of a Python-based MCP (Model Cont
   *   **Task 1.2: Refined Error Handling**
     *   **Description:** Implement more specific exceptions to give the LLM better feedback on failed operations.
     *   **Implementation:**
-        1.  In `selector.py`, create and raise an `AmbiguousLocatorError` if a locator, which is expected to return a single element, finds multiple.
+        1.  In `selector.py`, create and raise an `AmbiguousLocatorError` if a locator, which is expected to return a single object, finds multiple.
         2.  In `com_backend.py`, wrap key COM calls in `try...except` blocks to catch `pywintypes.com_error` and re-raise them as a more user-friendly `WordDocumentError`, providing context on what failed.
 
-  #### **Priority 2: Expanding Document Element Support**
+  #### **Priority 2: Expanding Document Object Support**
 
   *   **Task 2.1: Implement Header & Footer Support**
     *   **Description:** Allow the selector to target and manipulate headers and footers. This is critical for tasks like adding page numbers or changing document titles.
     *   **Implementation:**
         1.  In `com_backend.py`, add methods like `get_headers()` and `get_footers()`. Note that Word has primary, first-page, and even-page headers/footers per section. The initial implementation can target the primary ones.
-        2.  In `selector.py`, add `"header"` and `"footer"` as supported `element_type` values.
+        2.  In `selector.py`, add `"header"` and `"footer"` as supported `object_type` values.
 
   *   **Task 2.2: Implement Basic List Support**
     *   **Description:** Provide tools to read and create simple bulleted or numbered lists. The COM API for lists is complex, so the initial focus will be on identifying existing list paragraphs and creating new ones.
@@ -70,7 +70,7 @@ Objective: You are to continue the development of a Python-based MCP (Model Cont
     *   **Task 1.3: Implement Core Relations:** The `parent_of` and `immediately_following` relations are implemented.
 
   *   **Priority 2: Expand the Toolset**
-    *   **Task 2.1: Create `replace_text` Tool:** A robust tool for finding an element via a locator and replacing its entire text content.
+    *   **Task 2.1: Create `replace_text` Tool:** A robust tool for finding an object via a locator and replacing its entire text content.
     *   **Task 2.2: Create More Table Tools:** Implemented `set_cell_value` to change the text of a single cell and `create_table` to add a new table at a specified location.
     *   **Task 2.3: Image Manipulation Tools:** Added `insert_inline_picture`, `set_image_size`, and `get_image_info` for image operations.
     *   **Task 2.4: Comment Tools:** Implemented `add_comment`, `get_comments`, and `delete_comment` for comment management.

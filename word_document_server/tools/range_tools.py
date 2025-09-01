@@ -1,7 +1,7 @@
 """
-Element Integration Tool for Word Document MCP Server.
+Object Integration Tool for Word Document MCP Server.
 
-This module provides a unified MCP tool for element operations.
+This module provides a unified MCP tool for object operations.
 """
 
 import json
@@ -27,51 +27,51 @@ from word_document_server.utils.app_context import AppContext
 logger = logging.getLogger(__name__)
 
 # 延迟导入以避免循环导入
-def _import_element_operations():
-    """延迟导入element操作函数以避免循环导入"""
-    from word_document_server.operations.element_selection_ops import (
-        batch_apply_formatting, batch_select_elements, delete_element_by_locator,
-        get_element_by_id, select_elements)
-    return (batch_apply_formatting, batch_select_elements, delete_element_by_locator,
-            get_element_by_id, select_elements)
+def _import_range_operations():
+    """延迟导入range操作函数以避免循环导入"""
+    from word_document_server.operations.range_ops import (
+        batch_apply_formatting, batch_select_objects, delete_object_by_locator,
+        get_object_by_id, select_objects)
+    return (batch_apply_formatting, batch_select_objects, delete_object_by_locator,
+            get_object_by_id, select_objects)
 
 @mcp_server.tool()
-async def element_tools(
+async def range_tools(
     ctx: Context[ServerSession, AppContext],
     operation_type: str = Field(
         ..., 
-        description="Type of element operation: select, get_by_id, batch_select, batch_apply_formatting, delete",
+        description="Type of range operation: select, get_by_id, batch_select, batch_apply_formatting, delete",
     ),
     locator: Optional[Dict[str, Any]] = Field(
-        default=None, description="Element locator for element operations. Required for: select, delete"
+        default=None, description="Range locator for range operations. Required for: select, delete"
     ),
-    element_id: Optional[str] = Field(
-        default=None, description="Element ID for get_by_id operation. Required for: get_by_id"
+    object_id: Optional[str] = Field(
+        default=None, description="Range ID for get_by_id operation. Required for: get_by_id"
     ),
     locators: Optional[List[Dict[str, Any]]] = Field(
-        default=None, description="List of element locators for batch operations. Required for: batch_select"
+        default=None, description="List of range locators for batch operations. Required for: batch_select"
     ),
     operations: Optional[List[Dict[str, Any]]] = Field(
         default=None, description="List of operations for batch formatting. Required for: batch_apply_formatting"
     ),
 ) -> str:
     """
-    Unified element operation tool.
+    Unified object operation tool.
 
-    This tool provides a single interface for all element operations:
-    - select: Select elements based on locator
+    This tool provides a single interface for all object operations:
+    - select: Select objects based on locator
       * Required parameters: locator
       * Optional parameters: None
-    - get_by_id: Get element by ID
-      * Required parameters: element_id
+    - get_by_id: Get object by ID
+      * Required parameters: object_id
       * Optional parameters: None
-    - batch_select: Select multiple elements based on locators
+    - batch_select: Select multiple objects based on locators
       * Required parameters: locators
       * Optional parameters: None
-    - batch_apply_formatting: Apply formatting to multiple elements
+    - batch_apply_formatting: Apply formatting to multiple objects
       * Required parameters: operations
       * Optional parameters: None
-    - delete: Delete element by locator
+    - delete: Delete object by locator
       * Required parameters: locator
       * Optional parameters: None
 
@@ -88,9 +88,9 @@ async def element_tools(
             ErrorCode.NO_ACTIVE_DOCUMENT, "No active document found"
         )
     
-    # 延迟导入element操作函数以避免循环导入
-    (batch_apply_formatting, batch_select_elements, delete_element_by_locator,
-     get_element_by_id, select_elements) = _import_element_operations()
+    # 延迟导入range操作函数以避免循环导入
+    (batch_apply_formatting, batch_select_objects, delete_object_by_locator,
+     get_object_by_id, select_objects) = _import_range_operations()
 
     try:
         if operation_type == "select":
@@ -99,28 +99,28 @@ async def element_tools(
                     ErrorCode.INVALID_INPUT, "Locator is required for select operation"
                 )
             
-            log_info(f"Selecting elements with locator: {locator}")
-            result = select_elements(document, [locator])
-            log_info(f"Successfully selected {len(result) if result else 0} elements")
+            log_info(f"Selecting objects with locator: {locator}")
+            result = select_objects(document, [locator])
+            log_info(f"Successfully selected {len(result) if result else 0} objects")
             return json.dumps({
                 "success": True,
-                "elements": result,
-                "message": "Elements selected successfully"
+                "objects": result,
+                "message": "Objects selected successfully"
             }, ensure_ascii=False)
 
         elif operation_type == "get_by_id":
-            if element_id is None:
+            if object_id is None:
                 raise WordDocumentError(
-                    ErrorCode.INVALID_INPUT, "Element ID is required for get_by_id operation"
+                    ErrorCode.INVALID_INPUT, "Object ID is required for get_by_id operation"
                 )
                 
-            log_info(f"Getting element by ID: {element_id}")
-            result = get_element_by_id(document, element_id)
-            log_info("Element retrieved successfully" if result else "Element not found")
+            log_info(f"Getting object by ID: {object_id}")
+            result = get_object_by_id(document, object_id)
+            log_info("Object retrieved successfully" if result else "Object not found")
             return json.dumps({
                 "success": True,
-                "element": result,
-                "message": "Element retrieved successfully"
+                "object": result,
+                "message": "Object retrieved successfully"
             }, ensure_ascii=False)
 
         elif operation_type == "batch_select":
@@ -129,13 +129,13 @@ async def element_tools(
                     ErrorCode.INVALID_INPUT, "Locators list is required for batch_select operation"
                 )
                 
-            log_info(f"Batch selecting elements with {len(locators) if locators else 0} locators")
-            result = batch_select_elements(document, locators)
-            log_info(f"Successfully selected {len(result) if result else 0} elements in batch")
+            log_info(f"Batch selecting objects with {len(locators) if locators else 0} locators")
+            result = batch_select_objects(document, locators)
+            log_info(f"Successfully selected {len(result) if result else 0} objects in batch")
             return json.dumps({
                 "success": True,
-                "elements": result,
-                "message": "Elements selected successfully"
+                "objects": result,
+                "message": "Objects selected successfully"
             }, ensure_ascii=False)
 
         elif operation_type == "batch_apply_formatting":
@@ -160,12 +160,12 @@ async def element_tools(
                     ErrorCode.INVALID_INPUT, "Locator is required for delete operation"
                 )
                 
-            log_info(f"Deleting element with locator: {locator}")
-            result = delete_element_by_locator(document, locator)
-            log_info("Element deleted successfully" if result else "Failed to delete element")
+            log_info(f"Deleting object with locator: {locator}")
+            result = delete_object_by_locator(document, locator)
+            log_info("Object deleted successfully" if result else "Failed to delete object")
             return json.dumps({
                 "success": result,
-                "message": "Element deleted successfully" if result else "Failed to delete element"
+                "message": "Object deleted successfully" if result else "Failed to delete object"
             }, ensure_ascii=False)
 
         else:
@@ -176,5 +176,5 @@ async def element_tools(
             )
 
     except Exception as e:
-        log_error(f"Error in element_tools: {str(e)}", exc_info=True)
+        log_error(f"Error in object_tools: {str(e)}", exc_info=True)
         raise

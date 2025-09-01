@@ -185,14 +185,14 @@ def save_document(
 # === Document Structure Operations ===
 
 
-def count_elements_by_type(
-    document: CDispatch, element_type: str
+def count_objects_by_type(
+    document: CDispatch, object_type: str
 ) -> int:
     """统计特定类型的元素数量
 
     Args:
         document: Word文档COM对象
-        element_type: 元素类型 ("paragraphs", "tables", "images", etc.)
+        object_type: 元素类型 ("paragraphs", "tables", "images", etc.)
 
     Returns:
         元素数量
@@ -203,31 +203,31 @@ def count_elements_by_type(
 
         count = 0
 
-        if element_type == "paragraphs":
+        if object_type == "paragraphs":
             count = document.Paragraphs.Count
-        elif element_type == "tables":
+        elif object_type == "tables":
             count = document.Tables.Count
-        elif element_type == "images" or element_type == "inline_shapes":
+        elif object_type == "images" or object_type == "inline_shapes":
             count = (
                 document.InlineShapes.Count if hasattr(document, "InlineShapes") else 0
             )
-        elif element_type == "sections":
+        elif object_type == "sections":
             count = document.Sections.Count
-        elif element_type == "pages":
+        elif object_type == "pages":
             # 近似页数计算
             count = document.Range().Information(
                 4
             )  # 4 corresponds to wdNumberOfPagesInDocument
         else:
-            raise ValueError(f"Unsupported element type: {element_type}")
+            raise ValueError(f"Unsupported object type: {object_type}")
 
         return count
 
     except Exception as e:
-        logger.error(f"Error in count_elements_by_type: {e}")
+        logger.error(f"Error in count_objects_by_type: {e}")
         raise WordDocumentError(
-            ErrorCode.ELEMENT_TYPE_ERROR,
-            f"Failed to count elements of type '{element_type}': {str(e)}",
+            ErrorCode.OBJECT_TYPE_ERROR,
+            f"Failed to count objects of type '{object_type}': {str(e)}",
         )
 
 

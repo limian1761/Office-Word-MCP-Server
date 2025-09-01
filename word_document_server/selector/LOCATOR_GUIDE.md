@@ -200,10 +200,10 @@
 
 ```python
 # 1. 先查找元素
-selected_elements = selector_engine.select(document, locator)
+selected_objects = selector_engine.select(document, locator)
 
 # 2. 基于查找的元素执行操作
-for element in selected_elements:
+for object in selected_objects:
     # 执行操作
     pass
 
@@ -216,10 +216,10 @@ for element in selected_elements:
 
 ```python
 # 一次性获取所有需要操作的元素
-elements_to_modify = selector_engine.select(document, locator)
+objects_to_modify = selector_engine.select(document, locator)
 
 # 对所有元素执行操作
-for element in elements_to_modify:
+for object in objects_to_modify:
     # 执行操作
     pass
 ```
@@ -339,7 +339,7 @@ selection = selector_engine.select(document, parsed_locator)
 
 ### 2. 找不到匹配的元素
 
-**问题**：使用定位器时遇到 `ElementNotFoundError` 异常。
+**问题**：使用定位器时遇到 `ObjectNotFoundError` 异常。
 **解决方案**：
 - 检查文档中是否存在符合定位器条件的元素
 - 确认过滤器值是否正确（注意大小写）

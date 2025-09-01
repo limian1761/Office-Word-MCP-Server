@@ -20,7 +20,7 @@ from word_document_server.tools.text_tools import text_tools
 from word_document_server.tools.table_tools import table_tools
 from word_document_server.tools.image_tools import image_tools
 from word_document_server.tools.comment_tools import comment_tools
-from word_document_server.tools.element_tools import element_tools
+from word_document_server.tools.range_tools import range_tools
 from word_document_server.utils.app_context import AppContext
 from mcp.server.fastmcp import Context
 

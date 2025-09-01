@@ -55,8 +55,10 @@ def create_table(
         # 使用定位器获取范围
         try:
             selection = selector.select(document, locator)
-            if hasattr(selection, "_elements") and selection._elements:
-                range_obj = selection._elements[0].Range
+            if hasattr(selection, "_com_ranges") and selection._com_ranges:
+                # 所有传入的对象都是Range对象，可以直接使用
+                range_obj = selection._com_ranges[0]
+                
                 # 根据位置参数调整范围
                 if position == "before":
                     range_obj.Collapse(Direction=1)  # wdCollapseStart
@@ -65,7 +67,7 @@ def create_table(
                 # 如果是"replace"，则不折叠范围，直接替换
             else:
                 raise WordDocumentError(
-                    ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                    ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
                 )
         except Exception as e:
             raise WordDocumentError(
@@ -113,9 +115,9 @@ def create_table(
         )
 
 
-def add_element_caption(
+def add_object_caption(
     document: win32com.client.CDispatch,
-    element: Any,
+    range_obj: Any,
     caption_text: str,
     caption_style: str = "Caption",
     position: str = "below",
@@ -124,7 +126,7 @@ def add_element_caption(
 
     Args:
         document: Word文档COM对象
-        element: 要添加标题的元素
+        object: 要添加标题的元素
         caption_text: 标题文本
         caption_style: 标题样式
         position: 标题位置 ("above" 或 "below")
@@ -133,17 +135,15 @@ def add_element_caption(
         操作是否成功
     """
     try:
-        if not hasattr(element, "Range"):
-            return False
 
         # 确定插入位置
         if position.lower() == "above":
             # 在元素前插入标题
-            caption_range = element.Range.Duplicate
+            caption_range = range_obj.Duplicate
             caption_range.Collapse(1)  # wdCollapseStart
         else:
             # 在元素后插入标题
-            caption_range = element.Range.Duplicate
+            caption_range = range_obj.Duplicate
             caption_range.Collapse(0)  # wdCollapseEnd
 
         # 插入标题文本
@@ -160,7 +160,7 @@ def add_element_caption(
 
         return True
     except Exception as e:
-        log_error(f"Failed to add caption to element: {str(e)}")
+        log_error(f"Failed to add caption to range: {str(e)}")
         return False
 
 
@@ -400,8 +400,8 @@ def get_table_info(document: win32com.client.CDispatch, table_index: int) -> str
             "rows": table.Rows.Count,
             "columns": table.Columns.Count,
             "has_borders": table.Borders.Enable,
-            "cell_count": table.Cell(1, 1).Range.Tables.Count
-            == 0,  # 检查是否有嵌套表格
+   # 检查是否有嵌套表格
+        "has_nested_tables": table.Cell(1, 1).Range.Tables.Count > 0
         }
 
         # 获取表格内容（可选择性地获取，根据需要）

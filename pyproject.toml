@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "office-word-mcp-server"
+name = "directofficeword-mcp"
 version = "1.1.9"
-description = "MCP server for manipulating Microsoft Word documents"
+description = "MCP server for directly manipulating Microsoft Word documents via COM interface with direct Office object access"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-    {name = "GongRzhe", email = "gongrzhe@gmail.com"}
+    {name = "lichao", email = "252429238@qq.com"}
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -23,8 +23,8 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/GongRzhe/Office-Word-MCP-Server.git"
-"Bug Tracker" = "https://github.com/GongRzhe/Office-Word-MCP-Server.git/issues"
+"Homepage" = "https://example.com/directofficeword-mcp"
+"Bug Tracker" = "https://example.com/directofficeword-mcp/issues"
 
 [tool.hatch.build.targets.wheel]
 only-include = [
@@ -36,7 +36,7 @@ sources = ["."]
 allow-direct-references = true
 
 [project.scripts]
-word_mcp_server = "word_document_server.main:run_server"
+directofficeword_mcp = "word_document_server.main:run_server"
 
 [project.optional-dependencies]
 dev = [

@@ -1,7 +1,7 @@
-"""Element finder for the selector engine.
+"""Object finder for the selector engine.
 
 This module contains the functionality for finding and selecting
-elements within a Word document.
+objects within a Word document.
 """
 
 from typing import Any, Dict, List, Optional, Set, TypeVar, Union, cast
@@ -13,14 +13,14 @@ from word_document_server.selector.exceptions import AmbiguousLocatorError
 from word_document_server.selector.filter_handlers import FilterHandlers
 
 # Type variables for better type hinting
-ElementT = TypeVar("ElementT")
+ObjectT = TypeVar("ObjectT")
 
 
-class ElementFinder(FilterHandlers):
-    """Component responsible for finding and selecting elements in a Word document."""
+class ObjectFinder(FilterHandlers):
+    """Component responsible for finding and selecting objects in a Word document."""
 
     def __init__(self, document: CDispatch):
-        """Initialize the ElementFinder with a document reference.
+        """Initialize the ObjectFinder with a document reference.
 
         Args:
             document: The Word document COM object.
@@ -29,49 +29,49 @@ class ElementFinder(FilterHandlers):
 
     def select_core(self, locator: Dict[str, Any]) -> List[CDispatch]:
         """核心选择方法，用于SelectorEngine调用"""
-        element_type = locator.get("type", "paragraph")
+        object_type = locator.get("type", "paragraph")
         value = locator.get("value")
         filters = locator.get("filters", [])
 
         # 根据元素类型选择不同的获取方法
-        if element_type == "paragraph":
-            elements = self.get_all_paragraphs()
-        elif element_type == "table":
-            elements = self.get_all_tables()
-        elif element_type == "comment":
-            elements = self.get_all_comments()
-        elif element_type == "image":
-            elements = self.get_all_images()
+        if object_type == "paragraph":
+            objects = self.get_all_paragraphs()
+        elif object_type == "table":
+            objects = self.get_all_tables()
+        elif object_type == "comment":
+            objects = self.get_all_comments()
+        elif object_type == "image":
+            objects = self.get_all_images()
         else:
             # 默认返回所有段落
-            elements = self.get_all_paragraphs()
+            objects = self.get_all_paragraphs()
 
         # 应用过滤器
         if filters:
-            elements = self.apply_filters(elements, filters)
+            objects = self.apply_filters(objects, filters)
 
         # 如果有值（索引），返回特定元素
         if value:
             try:
                 index = int(value)
-                if 0 < index <= len(elements):
-                    return [elements[index - 1]]
+                if 0 < index <= len(objects):
+                    return [objects[index - 1]]
             except ValueError:
                 pass
 
-        return elements
+        return objects
 
     def find_anchor(self, anchor_id: str) -> Optional[CDispatch]:
-        """Find an anchor element in the document based on its identifier.
+        """Find an anchor object in the document based on its identifier.
 
         Args:
             anchor_id: The identifier of the anchor to find.
 
         Returns:
-            The anchor element if found, None otherwise.
+            The anchor object if found, None otherwise.
 
         Raises:
-            AmbiguousLocatorError: If multiple elements match the anchor identifier.
+            AmbiguousLocatorError: If multiple objects match the anchor identifier.
         """
         # Handle special anchor types
         if anchor_id == "document_start":
@@ -108,11 +108,11 @@ class ElementFinder(FilterHandlers):
         try:
             # Attempt to find by index
             index = int(anchor_id)
-            for element_type in ["Paragraphs", "Tables", "Comments"]:
-                if hasattr(self.document, element_type):
-                    elements = getattr(self.document, element_type)
-                    if 0 <= index < elements.Count:
-                        return cast(CDispatch, elements(index + 1))
+            for object_type in ["Paragraphs", "Tables", "Comments"]:
+                if hasattr(self.document, object_type):
+                    objects = getattr(self.document, object_type)
+                    if 0 <= index < objects.Count:
+                        return cast(CDispatch, objects(index + 1))
             return None
         except ValueError:
             # Not an index, try other methods
@@ -126,14 +126,14 @@ class ElementFinder(FilterHandlers):
         return None
 
     def get_initial_candidates(self, locator_type: str, **kwargs) -> List[Any]:
-        """Get the initial set of candidate elements based on the locator type.
+        """Get the initial set of candidate objects based on the locator type.
 
         Args:
-            locator_type: The type of elements to retrieve.
+            locator_type: The type of objects to retrieve.
             **kwargs: Additional parameters for filtering.
 
         Returns:
-            A list of candidate elements.
+            A list of candidate objects.
         """
         if "within_range" in kwargs:
             return self._get_range_specific_candidates(
@@ -142,14 +142,14 @@ class ElementFinder(FilterHandlers):
         else:
             return self._get_global_candidates(locator_type)
 
-    def _get_global_candidates(self, element_type: str) -> List[Any]:
-        """Retrieve elements of a specific type from the entire document.
+    def _get_global_candidates(self, object_type: str) -> List[Any]:
+        """Retrieve objects of a specific type from the entire document.
 
         Args:
-            element_type: The type of elements to retrieve.
+            object_type: The type of objects to retrieve.
 
         Returns:
-            A list of elements matching the specified type.
+            A list of objects matching the specified type.
         """
         # This function is optimized for Word COM object access patterns.
         # It's more efficient to call the COM object once and then work with the
@@ -160,54 +160,54 @@ class ElementFinder(FilterHandlers):
 
         # Handle document-specific candidates
         if (
-            element_type == "document"
-            or element_type == "document_start"
-            or element_type == "document_end"
+            object_type == "document"
+            or object_type == "document_start"
+            or object_type == "document_end"
         ):
             return [self.document.Content]
 
-        # Handle different element types
-        if element_type == "paragraph":
+        # Handle different object types
+        if object_type == "paragraph":
             candidates = self.get_all_paragraphs()
-        elif element_type == "table":
+        elif object_type == "table":
             candidates = self.get_all_tables()
-        elif element_type == "cell":
+        elif object_type == "cell":
             tables = self.get_all_tables()
             for table in tables:
                 for cell in table.Range.Cells:
                     candidates.append(cell)
-        elif element_type == "inline_shape" or element_type == "image":
+        elif object_type == "inline_shape" or object_type == "image":
             # Get all inline shapes
             shapes = self.document.InlineShapes
             candidates = [shapes(i) for i in range(1, shapes.Count + 1)]
-        elif element_type == "comment":
+        elif object_type == "comment":
             comments = self.document.Comments
             candidates = [comments(i) for i in range(1, comments.Count + 1)]
-        elif element_type == "range":
+        elif object_type == "range":
             # Default to the entire document range
             candidates = [self.document.Content]
-        elif element_type == "selection":
+        elif object_type == "selection":
             # Get the current selection
             candidates = [self.document.Application.Selection]
 
         return candidates
 
     def _get_range_specific_candidates(
-        self, element_type: str, range_obj: CDispatch
+        self, object_type: str, range_obj: CDispatch
     ) -> List[Any]:
-        """Retrieve elements of a specific type within a given range.
+        """Retrieve objects of a specific type within a given range.
 
         Args:
-            element_type: The type of elements to retrieve.
+            object_type: The type of objects to retrieve.
             range_obj: The range within which to search.
 
         Returns:
-            A list of elements matching the specified type within the range.
+            A list of objects matching the specified type within the range.
         """
         candidates = []
 
-        # Handle different element types within the range
-        if element_type == "paragraph":
+        # Handle different object types within the range
+        if object_type == "paragraph":
             # Get all paragraphs in the range
             start_paragraph = self.document.Range(
                 range_obj.Start, range_obj.Start
@@ -226,7 +226,7 @@ class ElementFinder(FilterHandlers):
                     or (para.Range.Start <= start_index and para.Range.End >= end_index)
                 ):
                     candidates.append(para)
-        elif element_type == "table":
+        elif object_type == "table":
             # Check if the range intersects with any tables
             for table in self.document.Tables:
                 table_range = table.Range
@@ -245,7 +245,7 @@ class ElementFinder(FilterHandlers):
                     )
                 ):
                     candidates.append(table)
-        elif element_type == "inline_shape" or element_type == "image":
+        elif object_type == "inline_shape" or object_type == "image":
             # Get inline shapes within the range
             candidates = self._get_inline_shapes_in_range(range_obj)
 
@@ -289,18 +289,18 @@ class ElementFinder(FilterHandlers):
         return shapes_in_range
 
     def apply_filters(
-        self, elements: List[Any], filters: List[Dict[str, Any]]
+        self, objects: List[Any], filters: List[Dict[str, Any]]
     ) -> List[Any]:
-        """Apply a series of filters to a list of elements.
+        """Apply a series of filters to a list of objects.
 
         Args:
-            elements: The list of elements to filter.
+            objects: The list of objects to filter.
             filters: A list of filter definitions.
 
         Returns:
-            A filtered list of elements.
+            A filtered list of objects.
         """
-        filtered_elements = elements.copy()
+        filtered_objects = objects.copy()
 
         for filter_def in filters:
             filter_type = filter_def.get("type", "")
@@ -312,72 +312,72 @@ class ElementFinder(FilterHandlers):
                 continue
 
             filter_method = getattr(self, filter_method_name)
-            filtered_elements = filter_method(filtered_elements, filter_value)
+            filtered_objects = filter_method(filtered_objects, filter_value)
 
-            # If no elements remain after filtering, we can stop early
-            if not filtered_elements:
+            # If no objects remain after filtering, we can stop early
+            if not filtered_objects:
                 break
 
-        return filtered_elements
+        return filtered_objects
 
     def select_relative_to_anchor(
-        self, elements: List[Any], anchor: CDispatch, relation: str
+        self, objects: List[Any], anchor: CDispatch, relation: str
     ) -> List[Any]:
-        """Select elements relative to an anchor element based on the specified relation.
+        """Select objects relative to an anchor object based on the specified relation.
 
         Args:
-            elements: The list of elements to filter.
-            anchor: The anchor element to base the selection on.
+            objects: The list of objects to filter.
+            anchor: The anchor object to base the selection on.
             relation: The type of relation to use (e.g., "first_occurrence_after").
 
         Returns:
-            A list of elements that match the relation to the anchor.
+            A list of objects that match the relation to the anchor.
         """
         # Initialize the result list
-        result_elements = []
+        result_objects = []
 
         # Handle different relation types
         if relation == "all_occurrences_within":
-            # Return all elements that are within the anchor range
-            result_elements = [
+            # Return all objects that are within the anchor range
+            result_objects = [
                 el
-                for el in elements
+                for el in objects
                 if hasattr(el, "Range")
                 and el.Range.Start >= anchor.Start
                 and el.Range.End <= anchor.End
             ]
         elif relation == "first_occurrence_after":
-            # Return the first element that comes after the anchor
+            # Return the first object that comes after the anchor
             after_anchor = [
                 el
-                for el in elements
+                for el in objects
                 if hasattr(el, "Range") and el.Range.Start > anchor.End
             ]
             if after_anchor:
                 # Sort by position and take the first
                 after_anchor.sort(key=lambda x: x.Range.Start)
-                result_elements = [after_anchor[0]]
+                result_objects = [after_anchor[0]]
         elif relation == "parent_of":
-            # Return the parent element of the anchor
+            # Return the parent object of the anchor
             if hasattr(anchor, "Parent"):
-                result_elements = [anchor.Parent]
+                result_objects = [anchor.Parent]
         elif relation == "immediately_following":
-            # Return the element immediately following the anchor
+            # Return the object immediately following the anchor
             # We need to find the smallest start position that is greater than the anchor's end
             min_start = float("inf")
-            closest_element = None
-            for el in elements:
+            closest_object = None
+            for el in objects:
                 if (
                     hasattr(el, "Range")
                     and el.Range.Start > anchor.End
                     and el.Range.Start < min_start
                 ):
                     min_start = el.Range.Start
-                    closest_element = el
-            if closest_element:
-                result_elements = [closest_element]
+                    closest_object = el
+            if closest_object:
+                result_objects = [closest_object]
 
-        return result_elements
+        return result_objects
 
     def get_all_comments(self) -> List[CDispatch]:
         """Retrieve all comments in the document.

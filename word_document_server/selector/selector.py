@@ -1,8 +1,8 @@
 """
 Selector Engine for Word Document MCP Server.
 
-This module provides a powerful and flexible element selection system
-for targeting specific elements in Word documents.
+This module provides a powerful and flexible object selection system
+for targeting specific objects in Word documents.
 """
 
 import logging
@@ -11,24 +11,24 @@ from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional, TypeVar, U
 
 import win32com.client
 
-from word_document_server.selector.element_finder import ElementFinder
+from word_document_server.selector.object_finder import ObjectFinder
 from word_document_server.selector.exceptions import (AmbiguousLocatorError,
                                                       LocatorSyntaxError)
 from word_document_server.selector.filter_handlers import FilterHandlers
 from word_document_server.selector.locator_parser import LocatorParser
 from word_document_server.selector.selection import Selection
-from word_document_server.utils.core_utils import (ElementNotFoundError,
+from word_document_server.utils.core_utils import (ObjectNotFoundError,
                                                    ErrorCode,
                                                    WordDocumentError)
 
 # 定义类型变量
 T = TypeVar("T")  # 通用类型变量
-ElementT = TypeVar("ElementT", bound=win32com.client.CDispatch)  # 元素类型变量
+ObjectT = TypeVar("ObjectT", bound=win32com.client.CDispatch)  # 元素类型变量
 
 
 class SelectorEngine:
     """
-    Engine for selecting document elements based on locator queries.
+    Engine for selecting document objects based on locator queries.
     It parses a locator, finds matching COM objects, and returns them
     wrapped in a Selection object.
     """
@@ -36,7 +36,7 @@ class SelectorEngine:
     def __init__(self):
         """Initializes the selector engine."""
         self._filter_handlers = FilterHandlers()
-        self._element_finder = ElementFinder(self._filter_handlers)
+        self._object_finder = ObjectFinder(self._filter_handlers)
         self._locator_parser = LocatorParser()
         # Simple cache for selections
         self._selection_cache: Dict[str, Selection] = {}
@@ -87,13 +87,13 @@ class SelectorEngine:
             
         # 检查是否包含type字段
         if "type" not in locator:
-            raise LocatorSyntaxError("Locator must specify an element type.")
+            raise LocatorSyntaxError("Locator must specify an object type.")
             
-        element_type = locator["type"]
+        object_type = locator["type"]
 
         # Check for required type field
-        if not element_type:
-            raise LocatorSyntaxError("Locator must specify an element type.")
+        if not object_type:
+            raise LocatorSyntaxError("Locator must specify an object type.")
 
         # Validate relation if anchor is specified
         if locator.get("anchor") is not None:
@@ -118,21 +118,21 @@ class SelectorEngine:
         expect_single: bool = False,
     ) -> Selection:
         """
-        Selects elements in the document based on a locator query.
+        Selects objects in the document based on a locator query.
         This is the main entry point for the selector.
 
         Args:
             document: The Word document COM object.
             locator: The locator dictionary specifying what to select.
-            expect_single: Whether to expect a single element.
+            expect_single: Whether to expect a single object.
 
         Returns:
-            Selection object containing the matched elements.
+            Selection object containing the matched objects.
 
         Raises:
             LocatorSyntaxError: If the locator syntax is invalid.
-            ElementNotFoundError: If no elements match the locator.
-            AmbiguousLocatorError: If multiple elements match but only one was expected.
+            ObjectNotFoundError: If no objects match the locator.
+            AmbiguousLocatorError: If multiple objects match but only one was expected.
 
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
@@ -151,12 +151,12 @@ class SelectorEngine:
         else:
             target_spec = locator["target"]
             
-        elements: List[Any]
+        objects: List[Any]
 
         # Create a copy of target_spec to avoid modifying the original
         modified_target = target_spec.copy()
 
-        # Handle 'text' element type with 'value' property
+        # Handle 'text' object type with 'value' property
         is_text_type = target_spec.get("type") == "text"
         text_value = target_spec.get("value") if is_text_type else None
 
@@ -171,13 +171,13 @@ class SelectorEngine:
             if text_value:
                 modified_target["filters"].append({"contains_text": text_value})
 
-        # Create ElementFinder instance
-        element_finder = ElementFinder(document)
+        # Create ObjectFinder instance
+        object_finder = ObjectFinder(document)
 
         # If no anchor, perform a global search from the start of the document
         if "anchor" not in locator:
-            candidates = element_finder.get_initial_candidates(modified_target["type"])
-            elements = element_finder.apply_filters(candidates, modified_target.get("filters", []))
+            candidates = object_finder.get_initial_candidates(modified_target["type"])
+            objects = object_finder.apply_filters(candidates, modified_target.get("filters", []))
         else:
             # If anchor and relation are present, perform a relational search
             if "relation" not in locator:
@@ -185,41 +185,72 @@ class SelectorEngine:
                     "Locator with 'anchor' must also have a 'relation'."
                 )
 
-            # 1. Find the anchor element(s) first
+            # 1. Find the anchor object(s) first
             anchor_spec = locator["anchor"]
-            anchor_element = element_finder.find_anchor(anchor_spec)
+            anchor_object = object_finder.find_anchor(anchor_spec)
 
-            if not anchor_element:
-                raise ElementNotFoundError(
+            if not anchor_object:
+                raise ObjectNotFoundError(
                     {"anchor": anchor_spec}, 
-                    f"Anchor element not found for: {anchor_spec}"
+                    f"Anchor object not found for: {anchor_spec}"
                 )
 
             # 2. Perform the relational selection
             relation = locator["relation"]
-            candidates = element_finder.get_initial_candidates(modified_target["type"], within_range=anchor_element)
-            elements = element_finder.select_relative_to_anchor(
-                candidates, anchor_element, relation
+            candidates = object_finder.get_initial_candidates(modified_target["type"], within_range=anchor_object)
+            objects = object_finder.select_relative_to_anchor(
+                candidates, anchor_object, relation
             )
-            elements = element_finder.apply_filters(elements, modified_target.get("filters", []))
+            objects = object_finder.apply_filters(objects, modified_target.get("filters", []))
 
-        if not elements:
-            raise ElementNotFoundError(
+        if not objects:
+            raise ObjectNotFoundError(
                 locator, 
-                f"No elements found for locator: {locator}."
+                f"No objects found for locator: {locator}."
             )
 
-        if expect_single and len(elements) > 1:
+        if expect_single and len(objects) > 1:
             raise AmbiguousLocatorError(
-                f"Expected 1 element but found {len(elements)} for locator: {locator}."
+                f"Expected 1 object but found {len(objects)} for locator: {locator}."
             )
 
         # Apply filters if they exist
         if "filters" in locator:
-            elements = self._filter_handlers.apply_filters(elements, locator["filters"])
+            objects = self._filter_handlers.apply_filters(objects, locator["filters"])
+
+        # 转换所有对象为Range对象
+        range_objects = []
+        for obj in objects:
+            # 如果对象已经是Range对象（检查是否有Text属性）
+            if hasattr(obj, 'Text') and hasattr(obj, 'Start') and hasattr(obj, 'End'):
+                range_objects.append(obj)
+            # 否则尝试获取其Range属性
+            elif hasattr(obj, 'Range'):
+                range_objects.append(obj.Range)
+            else:
+                # 如果以上都不适用，创建一个包含该对象的Range
+                # 这是最后的尝试，可能不适用于所有对象类型
+                try:
+                    # 尝试创建一个基于对象位置的Range
+                    start = obj.Start if hasattr(obj, 'Start') else 0
+                    end = obj.End if hasattr(obj, 'End') else 0
+                    if start != 0 or end != 0:
+                        range_obj = document.Range(Start=start, End=end)
+                        range_objects.append(range_obj)
+                    else:
+                        # 如果无法获取位置信息，跳过该对象
+                        logger.warning(f"Unable to convert object of type {type(obj).__name__} to Range")
+                except Exception as e:
+                    logger.warning(f"Failed to convert object to Range: {e}")
+        
+        if not range_objects:
+            raise ObjectNotFoundError(
+                locator, 
+                f"No valid Range objects found for locator: {locator}."
+            )
 
         # Cache the result
-        selection = Selection(elements, document)
+        selection = Selection(range_objects, document)
         self._selection_cache[cache_key] = selection
 
         return selection

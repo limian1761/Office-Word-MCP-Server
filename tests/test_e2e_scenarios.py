@@ -20,7 +20,7 @@ from word_document_server.tools.text_tools import text_tools
 from word_document_server.tools.table_tools import table_tools
 from word_document_server.tools.image_tools import image_tools
 from word_document_server.tools.comment_tools import comment_tools
-from word_document_server.tools.element_tools import element_tools
+from word_document_server.tools.range_tools import range_tools
 from word_document_server.utils.app_context import AppContext
 from mcp.server.fastmcp import Context
 
@@ -256,12 +256,12 @@ class TestE2EScenarios(unittest.TestCase):
         )
         
         # 2. 获取文档元素
-        elements_result = document_operation(
+        objects_result = document_operation(
             self.context,
-            operation_type="get_elements",
-            element_type="paragraphs"
+            operation_type="get_objects",
+            object_type="paragraphs"
         )
-        self.assertIn("Elements retrieved successfully", elements_result)
+        self.assertIn("Objects retrieved successfully", objects_result)
         
         # 3. 查找特定文本
         find_result = text_content_operation(

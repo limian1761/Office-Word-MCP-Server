@@ -1,7 +1,7 @@
 """Locator parser for the selector engine.
 
 This module contains the functionality for parsing and validating
-locator strings used to identify elements in a Word document.
+locator strings used to identify objects in a Word document.
 """
 
 import re
@@ -76,7 +76,7 @@ class LocatorParser:
 
             main_part = main_part.strip()
             if not main_part:
-                raise LocatorSyntaxError("Locator must specify an element type.")
+                raise LocatorSyntaxError("Locator must specify an object type.")
 
             # Parse the main part (type:value)
             main_parts = self._parse_main_locator(main_part)
@@ -177,11 +177,11 @@ class LocatorParser:
         Raises:
             LocatorSyntaxError: If the locator is invalid.
         """
-        element_type = parsed_locator["type"]
+        object_type = parsed_locator["type"]
 
         # Check for required type field
-        if not element_type:
-            raise LocatorSyntaxError("Locator must specify an element type.")
+        if not object_type:
+            raise LocatorSyntaxError("Locator must specify an object type.")
 
         # Validate relation if anchor is specified
         if parsed_locator["anchor"] is not None:
@@ -199,8 +199,8 @@ class LocatorParser:
                     f"Invalid relation '{parsed_locator['relation']}'. Valid relations are: {', '.join(valid_relations)}"
                 )
 
-        # Validate certain element types
-        valid_element_types = [
+        # Validate certain object types
+        valid_object_types = [
             "paragraph",
             "table",
             "cell",
@@ -213,11 +213,11 @@ class LocatorParser:
             "document_start",
             "document_end",
         ]
-        if element_type not in valid_element_types:
+        if object_type not in valid_object_types:
             # For guidance on proper locator syntax, please refer to:
             # word_document_server/selector/LOCATOR_GUIDE.md
             raise LocatorSyntaxError(
-                f"Invalid element type '{element_type}'. Valid types are: {', '.join(valid_element_types)}"
+                f"Invalid object type '{object_type}'. Valid types are: {', '.join(valid_object_types)}"
             )
 
     def get_cache_key(self, locator: str, **kwargs) -> str:

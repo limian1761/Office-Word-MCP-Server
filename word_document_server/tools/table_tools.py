@@ -61,7 +61,7 @@ def table_tools(
     ),
     locator: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Element locator for specifying position when creating table. Optional for: create",
+        description="Object locator for specifying position when creating table. Optional for: create",
     ),
     position: Optional[str] = Field(
         default=None,

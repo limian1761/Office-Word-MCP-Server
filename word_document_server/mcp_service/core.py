@@ -29,8 +29,8 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 # --- MCP Server Initialization ---
 # This is the central server instance that tools will be registered against.
-mcp_server = FastMCP("Office-Word-MCP-Server", lifespan=app_lifespan)
+mcp_server = FastMCP("DirectOfficeWordMCP", lifespan=app_lifespan)
 
 # --- Selector Engine Initialization ---
-# This is the central selector engine instance used by tools to find elements.
+# This is the central selector engine instance used by tools to find objects.
 selector = SelectorEngine()

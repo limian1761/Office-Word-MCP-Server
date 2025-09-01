@@ -39,11 +39,11 @@ class ErrorCode(Enum):
     DOCUMENT_FORMAT_ERROR = (2004, "Invalid document format")
     DOCUMENT_ERROR = (2005, "Document operation error")
 
-    # Element errors
-    ELEMENT_NOT_FOUND = (3001, "Element not found")
-    ELEMENT_LOCKED = (3002, "Element is locked")
-    ELEMENT_TYPE_ERROR = (3003, "Invalid element type")
-    PARAGRAPH_SELECTION_FAILED = (3004, "Failed to select paragraph elements")
+    # Object errors
+    OBJECT_NOT_FOUND = (3001, "Object not found")
+    OBJECT_LOCKED = (3002, "Object is locked")
+    OBJECT_TYPE_ERROR = (3003, "Invalid object type")
+    PARAGRAPH_SELECTION_FAILED = (3004, "Failed to select paragraph objects")
 
     # Style errors
     STYLE_NOT_FOUND = (4001, "Style not found")
@@ -90,12 +90,12 @@ class DocumentNotFoundError(WordDocumentError):
         super().__init__(ErrorCode.DOCUMENT_OPEN_ERROR, message, details)
 
 
-class ElementNotFoundError(WordDocumentError):
-    """Raised when an element is not found"""
+class ObjectNotFoundError(WordDocumentError):
+    """Raised when an object is not found"""
 
     def __init__(self, locator: Dict[str, Any], message: Optional[str] = None):
         details = {"locator": locator}
-        super().__init__(ErrorCode.ELEMENT_NOT_FOUND, message, details)
+        super().__init__(ErrorCode.OBJECT_NOT_FOUND, message, details)
 
 
 class StyleNotFoundError(WordDocumentError):
@@ -270,7 +270,7 @@ def format_error_response(e: Exception) -> str:
     elif error_code == ErrorCode.NO_ACTIVE_DOCUMENT.value[0]:
         response += " Please use 'open_document' first."
 
-    elif error_code == ErrorCode.ELEMENT_NOT_FOUND.value[0] and "locator" in details:
+    elif error_code == ErrorCode.OBJECT_NOT_FOUND.value[0] and "locator" in details:
         response += " Please check your locator parameters."
 
     # Add a generic suggestion for resolving the issue
@@ -378,11 +378,11 @@ def validate_locator(locator: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def validate_element_type(element_type: str) -> Optional[str]:
+def validate_object_type(object_type: str) -> Optional[str]:
     """验证元素类型是否有效."""
     valid_types = {"paragraphs", "tables", "images", "headings", "styles", "comments"}
-    if element_type not in valid_types:
-        return f"Invalid element type: {element_type}. Valid types: {', '.join(valid_types)}"
+    if object_type not in valid_types:
+        return f"Invalid object type: {object_type}. Valid types: {', '.join(valid_types)}"
     return None
 
 
@@ -571,8 +571,8 @@ def standardize_tool_errors(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except ElementNotFoundError as e:
-            return f"No elements found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
+        except ObjectNotFoundError as e:
+            return f"No objects found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
         except ValueError as e:
             return f"Invalid parameter: {e}"
         except Exception as e:

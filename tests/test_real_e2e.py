@@ -19,7 +19,7 @@ from word_document_server.tools.document_tools import document_tools
 from word_document_server.tools.text_tools import text_tools
 from word_document_server.tools.table_tools import table_tools
 from word_document_server.tools.comment_tools import comment_tools
-from word_document_server.tools.element_tools import element_tools
+from word_document_server.tools.range_tools import range_tools
 from word_document_server.utils.app_context import AppContext
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
@@ -124,13 +124,13 @@ class TestRealE2E(unittest.TestCase):
         # 3. 获取文档元素
         result = document_tools(
             ctx=self.context,
-            operation_type="get_elements",
-            element_type="paragraphs"
+            operation_type="get_objects",
+            object_type="paragraphs"
         )
         # 验证返回的是有效的JSON格式元素列表
-        elements = json.loads(result)
-        self.assertIsInstance(elements, list)
-        self.assertGreater(len(elements), 0)
+        objects = json.loads(result)
+        self.assertIsInstance(objects, list)
+        self.assertGreater(len(objects), 0)
         
         # 4. 关闭文档
         result = document_tools(

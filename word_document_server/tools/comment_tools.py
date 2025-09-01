@@ -54,7 +54,7 @@ async def comment_tools(
         default=None, description="Comment ID for delete and reply operations\n\n    Required for: delete, reply, get_thread, edit\n    "
     ),
     locator: Optional[Dict[str, Any]] = Field(
-        default=None, description="Element locator for add operation\n\n    Required for: add\n    "
+        default=None, description="Object locator for add operation\n\n    Required for: add\n    "
     ),
     author: Optional[str] = Field(
         default=None, description="Comment author for add operation\n\n    Optional for: add\n    "
@@ -63,7 +63,7 @@ async def comment_tools(
     """Unified comment operation tool.
 
     This tool provides a single interface for all comment operations:
-    - add: Add a comment to an element
+    - add: Add a comment to an object
       * Required parameters: comment_text
       * Optional parameters: locator, author
     - delete: Delete a comment by ID
@@ -101,12 +101,12 @@ async def comment_tools(
             if locator:
                 selector = SelectorEngine()
                 selection = selector.select(document, locator)
-                if not selection or not selection.elements:
-                    raise WordDocumentError(
-                        ErrorCode.ELEMENT_NOT_FOUND,
-                        "No element found matching the locator",
-                    )
-                range_obj = selection.elements[0].Range
+            if not selection or not selection._com_ranges:
+                raise WordDocumentError(
+                    ErrorCode.OBJECT_NOT_FOUND,
+                    "No object found matching the locator",
+                )
+            # Selection._com_ranges中只包含Range对象
             else:
                 # Use current selection if no locator is provided
                 range_obj = document.Application.Selection.Range

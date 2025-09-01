@@ -18,7 +18,7 @@ from word_document_server.tools.text_tools import text_tools
 from word_document_server.utils.app_context import AppContext
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
-from word_document_server.operations.text_ops import insert_text_after_element
+from word_document_server.operations.text_ops import insert_text_after_object
 
 
 class TestTextToolsInsertText(unittest.TestCase):
@@ -137,16 +137,16 @@ class TestTextToolsInsertText(unittest.TestCase):
         # 验证insert_text被正确调用
         mock_insert_text.assert_called_once()
     
-    def test_insert_text_after_element_function(self):
-        """测试insert_text_after_element函数"""
+    def test_insert_text_after_object_function(self):
+        """测试insert_text_after_object函数"""
         # 准备测试文本和元素
         test_text = "这是插入的测试文本"
         
         # 使用文档的Content作为测试元素
-        element = self.doc.Content
+        object = self.doc.Content
         
-        # 调用insert_text_after_element函数
-        result = insert_text_after_element(element, test_text)
+        # 调用insert_text_after_object函数
+        result = insert_text_after_object(object, test_text)
         
         # 验证结果
         result_data = json.loads(result)

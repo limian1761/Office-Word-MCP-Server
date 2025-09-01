@@ -1,6 +1,6 @@
 """
-Element selection and manipulation operations for Word Document MCP Server.
-This module contains operations for selecting and working with document elements.
+Object selection and manipulation operations for Word Document MCP Server.
+This module contains operations for selecting and working with document objects.
 """
 
 import json
@@ -16,16 +16,16 @@ from .text_format_ops import (set_alignment_for_range, set_bold_for_range,
                               set_font_color_for_range,
                               set_font_name_for_range, set_font_size_for_range,
                               set_italic_for_range, set_paragraph_style)
-from .text_ops import (get_element_text, insert_text_after_range,
+from .text_ops import (get_object_text, insert_text_after_range,
                        insert_text_before_range)
 
 logger = logging.getLogger(__name__)
 
 
-# === Element Selection Operations ===
+# === Object Selection Operations ===
 
 
-def select_elements(
+def select_objects(
     document: win32com.client.CDispatch, locator: Dict[str, Any]
 ) -> str:
     """根据定位器选择文档中的元素
@@ -46,46 +46,48 @@ def select_elements(
         selection = selector.select(document, locator)
 
         # 获取元素信息
-        elements_info = []
-        for i, element in enumerate(selection._elements):
+        objects_info = []
+        for i, range_obj in enumerate(selection._com_ranges):
             try:
                 info = {
                     "index": i,
-                    "type": type(element).__name__,
+                    "type": "Range",
                 }
 
-                # 添加文本内容（如果可用）
-                if hasattr(element, "Range") and hasattr(element.Range, "Text"):
+                # 添加文本内容
+                try:
+                    # 所有对象都是Range对象，可以直接访问Text属性
                     info["text"] = (
-                        element.Range.Text[:100] + "..."
-                        if len(element.Range.Text) > 100
-                        else element.Range.Text
+                        range_obj.Text[:100] + "..."
+                        if len(range_obj.Text) > 100
+                        else range_obj.Text
                     )
+                except Exception as text_e:
+                    logger.warning(f"Failed to get text for object: {text_e}")
 
-                # 添加其他属性（如果可用）
-                if hasattr(element, "Style") and hasattr(element.Style, "NameLocal"):
-                    info["style"] = element.Style.NameLocal
+                # 添加样式属性
+                if hasattr(range_obj, "Style") and hasattr(range_obj.Style, "NameLocal"):
+                    info["style"] = range_obj.Style.NameLocal
 
-                elements_info.append(info)
+                objects_info.append(info)
             except Exception as e:
-                logger.warning(f"Failed to get info for element at index {i}: {e}")
+                logger.warning(f"Failed to get info for object at index {i}: {e}")
                 continue
 
-        return json.dumps(elements_info, ensure_ascii=False, indent=2)
+        return json.dumps(objects_info, ensure_ascii=False, indent=2)
 
     except Exception as e:
-        logger.error(f"Error in select_elements: {e}")
+        logger.error(f"Error in select_objects: {e}")
         raise WordDocumentError(
-            ErrorCode.ELEMENT_NOT_FOUND, f"Failed to select elements: {str(e)}"
-        )
+            ErrorCode.OBJECT_NOT_FOUND, f"Failed to select objects: {str(e)}")
 
 
-def get_element_by_id(document: win32com.client.CDispatch, element_id: str) -> str:
+def get_object_by_id(document: win32com.client.CDispatch, object_id: str) -> str:
     """根据ID获取元素
 
     Args:
         document: Word文档COM对象
-        element_id: 元素ID
+        object_id: 元素ID
 
     Returns:
         包含元素信息的JSON字符串
@@ -96,11 +98,11 @@ def get_element_by_id(document: win32com.client.CDispatch, element_id: str) -> s
 
         # 尝试解析ID为整数索引
         try:
-            index = int(element_id)
+            index = int(object_id)
         except ValueError:
             raise WordDocumentError(
                 ErrorCode.INVALID_INPUT,
-                f"Invalid element ID: {element_id}. Must be an integer.",
+                f"Invalid object ID: {object_id}. Must be an integer.",
             )
 
         # 获取所有段落
@@ -108,44 +110,43 @@ def get_element_by_id(document: win32com.client.CDispatch, element_id: str) -> s
 
         if index < 0 or index >= len(paragraphs):
             raise WordDocumentError(
-                ErrorCode.ELEMENT_NOT_FOUND,
-                f"Element with index {index} not found. Document has {len(paragraphs)} paragraphs.",
-            )
+                    ErrorCode.OBJECT_NOT_FOUND,
+                    f"Object with index {index} not found. Document has {len(paragraphs)} paragraphs.",
+                )
 
-        # 获取指定索引的段落
-        element = paragraphs[index]
+        # 获取指定索引的段落并转换为Range对象
+        range_obj = paragraphs[index].Range
 
         # 构建元素信息
-        element_info = {
+        object_info = {
             "index": index,
-            "type": "Paragraph",
+            "type": "Range",
             "text": (
-                element.Range.Text[:200] + "..."
-                if len(element.Range.Text) > 200
-                else element.Range.Text
+                range_obj.Text[:200] + "..."
+                if len(range_obj.Text) > 200
+                else range_obj.Text
             ),
             "style": (
-                element.Style.NameLocal
-                if hasattr(element.Style, "NameLocal")
+                range_obj.Style.NameLocal
+                if hasattr(range_obj.Style, "NameLocal")
                 else "Unknown"
             ),
         }
 
-        return json.dumps(element_info, ensure_ascii=False, indent=2)
+        return json.dumps(object_info, ensure_ascii=False, indent=2)
 
     except Exception as e:
         if isinstance(e, WordDocumentError):
             raise
-        logger.error(f"Error in get_element_by_id: {e}")
+        logger.error(f"Error in get_object_by_id: {e}")
         raise WordDocumentError(
-            ErrorCode.ELEMENT_NOT_FOUND, f"Failed to get element by ID: {str(e)}"
-        )
+                ErrorCode.OBJECT_NOT_FOUND, f"Failed to get object by ID: {str(e)}")
 
 
-# === Element Manipulation Operations ===
+# === Object Manipulation Operations ===
 
 
-def delete_element_by_locator(
+def delete_object_by_locator(
     document: win32com.client.CDispatch, locator: Dict[str, Any]
 ) -> bool:
     """根据定位器删除元素
@@ -165,25 +166,22 @@ def delete_element_by_locator(
         selector = SelectorEngine()
         selection = selector.select(document, locator, expect_single=True)
 
-        # 删除元素
-        from .text_ops import delete_element
-
-        for element in selection._elements:
-            delete_element(element)
+        # 删除元素 - 所有对象都是Range对象，可以直接调用Delete方法
+        for range_obj in selection._com_ranges:
+            range_obj.Delete()
 
         return True
 
     except Exception as e:
-        logger.error(f"Error in delete_element_by_locator: {e}")
+        logger.error(f"Error in delete_object_by_locator: {e}")
         raise WordDocumentError(
-            ErrorCode.ELEMENT_NOT_FOUND, f"Failed to delete element: {str(e)}"
-        )
+                ErrorCode.OBJECT_NOT_FOUND, f"Failed to delete object: {str(e)}")
 
 
 # === Batch Operations ===
 
 
-def batch_select_elements(
+def batch_select_objects(
     document: win32com.client.CDispatch, locators: List[Dict[str, Any]]
 ) -> str:
     """批量选择多个元素
@@ -199,7 +197,7 @@ def batch_select_elements(
         if not document:
             raise RuntimeError("No document open.")
 
-        all_elements_info = []
+        all_objects_info = []
 
         # 依次处理每个定位器
         for i, locator in enumerate(locators):
@@ -209,48 +207,55 @@ def batch_select_elements(
                 selection = selector.select(document, locator)
 
                 # 获取元素信息
-                elements_info = []
-                for j, element in enumerate(selection._elements):
+                objects_info = []
+                # Selection._com_ranges中只包含Range对象
+                for j, range_obj in enumerate(selection._com_ranges):
                     try:
                         info = {
                             "batch_index": i,
-                            "element_index": j,
-                            "type": type(element).__name__,
+                            "object_index": j,
+                            "type": type(object).__name__,
                         }
 
                         # 添加文本内容（如果可用）
-                        if hasattr(element, "Range") and hasattr(element.Range, "Text"):
-                            info["text"] = (
-                                element.Range.Text[:100] + "..."
-                                if len(element.Range.Text) > 100
-                                else element.Range.Text
-                            )
+                        try:
+                            # 所有对象都是Range对象，可以直接访问Text属性
+                            try:
+                                info["text"] = (
+                                    range_obj.Text[:100] + "..."
+                                    if len(range_obj.Text) > 100
+                                    else range_obj.Text
+                                )
+                            except Exception as text_e:
+                                logger.warning(f"Failed to get text for object: {text_e}")
+                        except Exception as text_e:
+                            logger.warning(f"Failed to get text for object: {text_e}")
 
                         # 添加其他属性（如果可用）
-                        if hasattr(element, "Style") and hasattr(
-                            element.Style, "NameLocal"
+                        if hasattr(range_obj, "Style") and hasattr(
+                            range_obj.Style, "NameLocal"
                         ):
-                            info["style"] = element.Style.NameLocal
+                            info["style"] = range_obj.Style.NameLocal
 
-                        elements_info.append(info)
+                        objects_info.append(info)
                     except Exception as e:
                         logger.warning(
-                            f"Failed to get info for element at batch {i}, index {j}: {e}"
+                            f"Failed to get info for object at batch {i}, index {j}: {e}"
                         )
                         continue
 
-                all_elements_info.extend(elements_info)
+                all_objects_info.extend(objects_info)
 
             except Exception as e:
-                logger.warning(f"Failed to select elements for locator {i}: {e}")
+                logger.warning(f"Failed to select objects for locator {i}: {e}")
                 continue
 
-        return json.dumps(all_elements_info, ensure_ascii=False, indent=2)
+        return json.dumps(all_objects_info, ensure_ascii=False, indent=2)
 
     except Exception as e:
-        logger.error(f"Error in batch_select_elements: {e}")
+        logger.error(f"Error in batch_select_objects: {e}")
         raise WordDocumentError(
-            ErrorCode.ELEMENT_NOT_FOUND, f"Failed to batch select elements: {str(e)}"
+            ErrorCode.OBJECT_NOT_FOUND, f"Failed to batch select objects: {str(e)}"
         )
 
 
@@ -270,7 +275,7 @@ def batch_apply_formatting(
         if not document:
             raise RuntimeError("No document open.")
 
-        from .text_ops import apply_formatting_to_element
+        from .text_ops import apply_formatting_to_object
 
         results = []
 
@@ -288,9 +293,10 @@ def batch_apply_formatting(
                 # 应用格式
                 selector = SelectorEngine()
                 selection = selector.select(document, locator)
-                if selection and hasattr(selection, '_elements') and selection._elements:
-                    element = selection._elements[0]
-                    result = apply_formatting_to_element(element, formatting)
+                if selection and hasattr(selection, '_com_ranges') and selection._com_ranges:
+                    # selection._com_ranges中的所有对象都是Range对象
+                    range_obj = selection._com_ranges[0]
+                    result = apply_formatting_to_object(range_obj, formatting)
                     # 解析结果以检查是否成功
                     import json
                     result_dict = json.loads(result)

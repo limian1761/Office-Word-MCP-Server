@@ -12,7 +12,7 @@ import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
 from ..selector.selector import SelectorEngine
-from ..utils.core_utils import (ElementNotFoundError, ErrorCode,
+from ..utils.core_utils import (ObjectNotFoundError, ErrorCode,
                                 WordDocumentError, log_error, log_info)
 from .text_format_ops import (set_alignment_for_range, set_bold_for_range,
                               set_font_color_for_range,
@@ -48,16 +48,17 @@ def get_character_count(
         # 使用定位器找到要统计字符数的元素
         try:
             selection = selector.select(document, locator)
-            if hasattr(selection, '_elements') and selection._elements:
-                # 获取第一个元素的字符数
-                char_count = selection._elements[0].Range.Characters.Count
+            if hasattr(selection, '_com_ranges') and selection._com_ranges:
+                # 获取第一个元素（现在保证是Range对象）
+                range_obj = selection._com_ranges[0]
+                char_count = range_obj.Characters.Count
             else:
                 raise WordDocumentError(
-                    ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                    ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
                 )
-        except ElementNotFoundError:
+        except ObjectNotFoundError:
             raise WordDocumentError(
-                ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
             )
     else:
         # 如果没有提供定位器，返回整个文档的字符数
@@ -66,28 +67,24 @@ def get_character_count(
     return int(char_count)  # 确保返回整数类型
 
 
-def get_element_text(element: Any) -> str:
+def get_object_text(object: Any) -> str:
     """获取元素的文本内容
 
     Args:
-        element: 元素对象
+        object: Range对象（现在保证是Range对象）
 
     Returns:
         元素的文本内容
     """
     try:
-        if hasattr(element, "Range") and hasattr(element.Range, "Text"):
-            return str(element.Range.Text)
-        elif hasattr(element, "Text"):
-            return str(element.Text)
-        else:
-            return str(element)
+        # 由于我们已经确保object是Range对象，直接访问Text属性
+        return str(object.Text)
     except Exception:
         return ""
 
 
-@handle_com_error(ErrorCode.FORMATTING_ERROR, "get text from element")
-def get_text_from_element(
+@handle_com_error(ErrorCode.FORMATTING_ERROR, "get text from object")
+def get_text_from_object(
     document: win32com.client.CDispatch, locator: Dict[str, Any]
 ) -> str:
     """从指定位置获取文本
@@ -109,21 +106,23 @@ def get_text_from_element(
 
     try:
         selection = selector.select(document, locator)
-        if hasattr(selection, '_elements') and selection._elements:
-            # 获取第一个元素的文本
-            element_text = get_element_text(selection._elements[0])
-            return str(element_text)
+        if hasattr(selection, '_com_ranges') and selection._com_ranges:
+            # 获取第一个Range对象的文本
+            range_obj = selection._com_ranges[0]
+            # 由于Range对象保证有Text属性，直接访问
+            object_text = str(range_obj.Text)
+            return object_text
         else:
             raise WordDocumentError(
-                ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
             )
-    except ElementNotFoundError:
+    except ObjectNotFoundError:
         raise WordDocumentError(
-            ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+            ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
         )
 
 
-@handle_com_error(ErrorCode.ELEMENT_NOT_FOUND, "insert text")
+@handle_com_error(ErrorCode.OBJECT_NOT_FOUND, "insert text")
 def insert_text(
     document: win32com.client.CDispatch,
     locator: Dict[str, Any],
@@ -150,19 +149,20 @@ def insert_text(
     selector = SelectorEngine()
     selection = selector.select(document, locator, expect_single=True)
 
-    element = selection._elements[0]
+    # 获取第一个元素（现在保证是Range对象）
+    range_obj = selection._com_ranges[0]
 
     if position == "replace":
-        element.Range.Text = text
+        range_obj.Text = text
     elif position == "before":
-        element.Range.InsertBefore(text)
+        range_obj.InsertBefore(text)
     else:  # position == "after"
-        element.Range.InsertAfter(text)
+        range_obj.InsertAfter(text)
 
     return True
 
 
-@handle_com_error(ErrorCode.ELEMENT_NOT_FOUND, "replace text")
+@handle_com_error(ErrorCode.OBJECT_NOT_FOUND, "replace text")
 def replace_text(
     document: win32com.client.CDispatch, locator: Dict[str, Any], new_text: str
 ) -> bool:
@@ -185,9 +185,13 @@ def replace_text(
     selector = SelectorEngine()
     selection = selector.select(document, locator, expect_single=True)
 
-    for element in selection._elements:
-        if hasattr(element, "Range"):
-            element.Range.Text = new_text
+    # Selection._com_ranges中只包含Range对象
+    for range_obj in selection._com_ranges:
+        try:
+            # 由于我们已经确保所有对象都是Range对象，直接访问Text属性
+            range_obj.Text = new_text
+        except Exception as e:
+            logger.warning(f"Failed to replace text for object: {e}")
 
     return True
 
@@ -226,22 +230,17 @@ def insert_text_after_range(com_range: Any, text: str) -> str:
         return json.dumps({"success": False, "message": f"Failed to insert text: {str(e)}"})
 
 
-def apply_formatting_to_element(element: Any, formatting: Dict[str, Any]) -> str:
-    """对元素应用格式化
+def apply_formatting_to_object(range_obj: Any, formatting: Dict[str, Any]) -> str:
+    """对Range对象应用格式化
 
     Args:
-        element: 元素对象
+        range_obj: Range对象（现在保证是Range对象）
         formatting: 格式化参数字典
 
     Returns:
         操作结果的JSON字符串
     """
     try:
-        if not hasattr(element, "Range"):
-            return json.dumps({"success": False, "message": "Element has no Range attribute"})
-
-        range_obj = element.Range
-
         # 应用格式化选项
         if "bold" in formatting:
             range_obj.Font.Bold = formatting["bold"]
@@ -270,42 +269,37 @@ def apply_formatting_to_element(element: Any, formatting: Dict[str, Any]) -> str
         return json.dumps({"success": False, "message": f"Failed to apply formatting: {str(e)}"})
 
 
-def replace_element_text(element: Any, new_text: str) -> str:
-    """替换元素的文本内容
+def replace_object_text(range_obj: Any, new_text: str) -> str:
+    """替换Range对象的文本内容
 
     Args:
-        element: 元素对象
+        range_obj: Range对象（现在保证是Range对象）
         new_text: 新的文本内容
 
     Returns:
         操作结果的JSON字符串
     """
     try:
-        if hasattr(element, "Range"):
-            element.Range.Text = new_text
-            return json.dumps({"success": True, "message": "Text replaced successfully"})
-        return json.dumps({"success": False, "message": "Element has no Range attribute"})
+        # 由于我们已经确保所有对象都是Range对象，直接访问Text属性
+        range_obj.Text = new_text
+        return json.dumps({"success": True, "message": "Text replaced successfully"})
     except Exception as e:
         return json.dumps({"success": False, "message": f"Failed to replace text: {str(e)}"})
 
 
-def delete_element(element: Any) -> str:
-    """删除元素
+def delete_object(range_obj: Any) -> str:
+    """删除Range对象
 
     Args:
-        element: 要删除的元素
+        range_obj: Range对象（现在保证是Range对象）
 
     Returns:
         操作结果的JSON字符串
     """
     try:
-        if hasattr(element, "Delete"):
-            element.Delete()
-            return json.dumps({"success": True, "message": "Element deleted successfully"})
-        elif hasattr(element, "Range") and hasattr(element.Range, "Delete"):
-            element.Range.Delete()
-            return json.dumps({"success": True, "message": "Element deleted successfully"})
-        return json.dumps({"success": False, "message": "Element cannot be deleted"})
+        # 由于我们已经确保所有对象都是Range对象，直接调用Delete方法
+        range_obj.Delete()
+        return json.dumps({"success": True, "message": "Object deleted successfully"})
     except Exception as e:
-        return json.dumps({"success": False, "message": f"Failed to delete element: {str(e)}"})
+        return json.dumps({"success": False, "message": f"Failed to delete object: {str(e)}"})
 

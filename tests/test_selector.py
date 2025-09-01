@@ -2,7 +2,7 @@
 Selector tests for Word Document MCP Server.
 
 This module contains tests for the selector engine that is used to locate
-and select elements in Word documents.
+and select objects in Word documents.
 """
 
 import unittest
@@ -112,13 +112,13 @@ class TestSelector(unittest.TestCase):
         
         selection = self.selector.select(self.test_doc, locator)
         self.assertIsNotNone(selection)
-        self.assertEqual(len(selection._elements), 1)
+        self.assertEqual(len(selection._com_ranges), 1)
         
         # 验证选择的位置确实是文档末尾
-        element = selection._elements[0]
-        self.assertEqual(element.Start, element.End)
+        object = selection._com_ranges[0]
+        self.assertEqual(object.Start, object.End)
         # 文档末尾位置可能因为Word的处理方式略有不同，所以我们只验证它是一个有效的正数
-        self.assertGreaterEqual(element.Start, 0)
+        self.assertGreaterEqual(object.Start, 0)
     
     def test_document_start_selector(self):
         """测试document_start选择器"""
@@ -131,12 +131,12 @@ class TestSelector(unittest.TestCase):
         
         selection = self.selector.select(self.test_doc, locator)
         self.assertIsNotNone(selection)
-        self.assertEqual(len(selection._elements), 1)
+        self.assertEqual(len(selection._com_ranges), 1)
         
         # 验证选择的位置确实是文档开头
-        element = selection._elements[0]
-        self.assertEqual(element.Start, 0)
-        self.assertEqual(element.End, 0)
+        object = selection._com_ranges[0]
+        self.assertEqual(object.Start, 0)
+        self.assertEqual(object.End, 0)
     
     def test_paragraph_selection(self):
         """测试段落选择"""
@@ -150,7 +150,7 @@ class TestSelector(unittest.TestCase):
         selection = self.selector.select(self.test_doc, locator)
         self.assertIsNotNone(selection)
         # 应该至少有几段（文档内容段落+表格段落）
-        self.assertGreater(len(selection._elements), 0)
+        self.assertGreater(len(selection._com_ranges), 0)
     
     def test_table_selection(self):
         """测试表格选择"""
@@ -164,7 +164,7 @@ class TestSelector(unittest.TestCase):
         selection = self.selector.select(self.test_doc, locator)
         self.assertIsNotNone(selection)
         # 应该有1个表格
-        self.assertEqual(len(selection._elements), 1)
+        self.assertEqual(len(selection._com_ranges), 1)
     
     def test_text_filter_selection(self):
         """测试带文本过滤器的选择"""
@@ -181,12 +181,12 @@ class TestSelector(unittest.TestCase):
         selection = self.selector.select(self.test_doc, locator)
         self.assertIsNotNone(selection)
         # 应该有1个段落包含"关键词"
-        self.assertEqual(len(selection._elements), 1)
+        self.assertEqual(len(selection._com_ranges), 1)
         
         # 验证选中的段落确实包含关键词
-        # 通过Range属性访问段落文本
-        element_text = selection._elements[0].Range.Text.strip()
-        self.assertIn("关键词", element_text)
+        # 直接访问Range对象的文本
+        object_text = selection._com_ranges[0].Text.strip()
+        self.assertIn("关键词", object_text)
     
     def test_anchored_selection(self):
         """测试锚定选择"""
@@ -220,7 +220,7 @@ class TestSelector(unittest.TestCase):
             selection = self.selector.select(self.test_doc, locator)
             self.assertIsNotNone(selection)
             # 应该能找到紧跟在段落后的表格
-            self.assertEqual(len(selection._elements), 1)
+            self.assertEqual(len(selection._com_ranges), 1)
         except Exception as e:
             # 如果测试失败，输出错误信息以便调试
             print(f"Anchored selection test failed with error: {e}")
@@ -238,7 +238,7 @@ class TestSelector(unittest.TestCase):
         with self.assertRaises((Exception, LocatorSyntaxError)):
             self.selector.select(self.test_doc, invalid_locator)
     
-    def test_element_not_found(self):
+    def test_object_not_found(self):
         """测试找不到元素的情况"""
         # 测试查找不存在的文本
         locator = {

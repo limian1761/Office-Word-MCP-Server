@@ -2,7 +2,7 @@
 Complex document operations tests for Word Document MCP Server.
 
 This module contains tests that verify complex operations on documents
-with various elements like tables, images, comments, and formatted text.
+with various objects like tables, images, comments, and formatted text.
 """
 
 import unittest
@@ -22,7 +22,7 @@ from word_document_server.tools.text_tools import text_tools
 from word_document_server.tools.table_tools import table_tools
 from word_document_server.tools.image_tools import image_tools
 from word_document_server.tools.comment_tools import comment_tools
-from word_document_server.tools.element_tools import element_tools
+from word_document_server.tools.range_tools import range_tools
 from word_document_server.utils.app_context import AppContext
 from word_document_server.utils.core_utils import format_error_response
 from mcp.server.fastmcp import Context
@@ -38,7 +38,7 @@ document_tools = document_tools
 
 
 class TestComplexDocumentOperations(unittest.TestCase):
-    """Tests for complex document operations with precise element manipulation"""
+    """Tests for complex document operations with precise object manipulation"""
     
     @classmethod
     def setUpClass(cls):
@@ -242,7 +242,7 @@ class TestComplexDocumentOperations(unittest.TestCase):
             operation_type="close"
         )
     
-    def test_precise_element_selection(self):
+    def test_precise_object_selection(self):
         """测试精确元素选择"""
         # 1. 打开文档
         document_tools(
@@ -256,9 +256,9 @@ class TestComplexDocumentOperations(unittest.TestCase):
             ctx=self.context,
             operation_type="get_info"
         )
-        elements = json.loads(result)
-        self.assertIsInstance(elements, list)
-        self.assertGreater(len(elements), 0)
+        objects = json.loads(result)
+        self.assertIsInstance(objects, list)
+        self.assertGreater(len(objects), 0)
         
         # 3. 关闭文档
         document_tools(

@@ -1,7 +1,7 @@
 """Filter handlers for the selector engine.
 
 This module contains all the filter implementations that can be applied to
-document elements during selection.
+document objects during selection.
 """
 
 import re
@@ -12,7 +12,7 @@ from word_document_server.utils.core_utils import get_shape_types
 
 
 class FilterHandlers:
-    """Collection of filter methods for document element selection."""
+    """Collection of filter methods for document object selection."""
 
     def __init__(self):
         """Initialize the filter handlers with a map of filter names to functions."""
@@ -32,15 +32,15 @@ class FilterHandlers:
             "range_end": self._filter_by_range_end,
         }
 
-    def apply_filters(self, elements: List[Any], filters: List[Dict[str, Any]]) -> List[Any]:
-        """Applies a series of filters to a list of elements.
+    def apply_filters(self, objects: List[Any], filters: List[Dict[str, Any]]) -> List[Any]:
+        """Applies a series of filters to a list of objects.
         
         Args:
-            elements: List of elements to filter.
+            objects: List of objects to filter.
             filters: List of filter dictionaries.
             
         Returns:
-            Filtered list of elements.
+            Filtered list of objects.
             
         Raises:
             LocatorSyntaxError: If filter format is invalid.
@@ -48,7 +48,7 @@ class FilterHandlers:
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
-        filtered_list = list(elements)
+        filtered_list = list(objects)
         for f in filters:
             if not isinstance(f, dict) or len(f) != 1:
                 raise LocatorSyntaxError(f"Invalid filter format: {f}.")
@@ -63,63 +63,63 @@ class FilterHandlers:
 
         return filtered_list
 
-    def _filter_by_index(self, elements: List[Any], index: int) -> List[Any]:
-        """Filters for a single element at a specific index, supporting negative indices.
+    def _filter_by_index(self, objects: List[Any], index: int) -> List[Any]:
+        """Filters for a single object at a specific index, supporting negative indices.
 
         Args:
-            elements: List of elements to filter.
-            index: Index of the element to select.
+            objects: List of objects to filter.
+            index: Index of the object to select.
 
         Returns:
-            List containing the element at the specified index, or empty list.
+            List containing the object at the specified index, or empty list.
 
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
-        # For elements like images, there is no text, so we cannot filter by "meaningful" text content.
-        # We will just use the raw element list for indexing.
-        if not elements:
+        # For objects like images, there is no text, so we cannot filter by "meaningful" text content.
+        # We will just use the raw object list for indexing.
+        if not objects:
             return []
 
         effective_index = index
         if index < 0:
-            effective_index = len(elements) + index
+            effective_index = len(objects) + index
 
-        if 0 <= effective_index < len(elements):
-            return [elements[effective_index]]
+        if 0 <= effective_index < len(objects):
+            return [objects[effective_index]]
         return []
 
-    def _filter_by_contains_text(self, elements: List[Any], text: str) -> List[Any]:
-        """Filters elements that contain the given text (case-insensitive).
+    def _filter_by_contains_text(self, objects: List[Any], text: str) -> List[Any]:
+        """Filters objects that contain the given text (case-insensitive).
 
         Args:
-            elements: List of elements to filter.
+            objects: List of objects to filter.
             text: Text to search for.
 
         Returns:
-            List of elements containing the specified text.
+            List of objects containing the specified text.
 
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
         return [
             el
-            for el in elements
+            for el in objects
             if hasattr(el, "Range") and text.lower() in el.Range.Text.lower()
         ]
 
     def _filter_by_text_matches_regex(
-        self, elements: List[Any], pattern: str
+        self, objects: List[Any], pattern: str
     ) -> List[Any]:
         """
-        Filters elements whose text matches the given regex pattern.
+        Filters objects whose text matches the given regex pattern.
 
         Args:
-            elements: List of elements to filter.
+            objects: List of objects to filter.
             pattern: Regex pattern to match.
 
         Returns:
-            List of elements matching the regex pattern.
+            List of objects matching the regex pattern.
 
         Raises:
             LocatorSyntaxError: If the regex pattern is invalid.
@@ -133,22 +133,22 @@ class FilterHandlers:
             # so we strip whitespace to make matching more reliable.
             return [
                 el
-                for el in elements
+                for el in objects
                 if hasattr(el, "Range") and re.search(pattern, el.Range.Text.strip())
             ]
         except re.error as e:
             raise LocatorSyntaxError(f"Invalid regex pattern '{pattern}': {e}.")
 
-    def _filter_by_shape_type(self, elements: List[Any], shape_type: str) -> List[Any]:
+    def _filter_by_shape_type(self, objects: List[Any], shape_type: str) -> List[Any]:
         """
-        Filters elements based on their shape type.
+        Filters objects based on their shape type.
 
         Args:
-            elements: List of inline shape elements to filter.
+            objects: List of inline shape objects to filter.
             shape_type: The shape type to filter by (e.g., "Picture", "Chart").
 
         Returns:
-            List of elements matching the specified shape type.
+            List of objects matching the specified shape type.
 
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
@@ -170,36 +170,36 @@ class FilterHandlers:
 
         type_code = type_codes[0]  # Take the first matching type code
 
-        return [el for el in elements if hasattr(el, "Type") and el.Type == type_code]
+        return [el for el in objects if hasattr(el, "Type") and el.Type == type_code]
 
-    def _filter_by_style(self, elements: List[Any], style_name: str) -> List[Any]:
-        """Filters elements that have a specific style.
+    def _filter_by_style(self, objects: List[Any], style_name: str) -> List[Any]:
+        """Filters objects that have a specific style.
 
         Args:
-            elements: List of elements to filter.
+            objects: List of objects to filter.
             style_name: Name of the style to filter by.
 
         Returns:
-            List of elements with the specified style.
+            List of objects with the specified style.
 
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
         return [
             el
-            for el in elements
+            for el in objects
             if hasattr(el, "Style") and el.Style.NameLocal == style_name
         ]
 
-    def _filter_by_is_bold(self, elements: List[Any], is_bold: bool) -> List[Any]:
-        """Filters elements based on whether their font is bold.
+    def _filter_by_is_bold(self, objects: List[Any], is_bold: bool) -> List[Any]:
+        """Filters objects based on whether their font is bold.
 
         Args:
-            elements: List of elements to filter.
-            is_bold: Whether to filter for bold elements.
+            objects: List of objects to filter.
+            is_bold: Whether to filter for bold objects.
 
         Returns:
-            List of elements with the specified bold formatting.
+            List of objects with the specified bold formatting.
 
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
@@ -207,18 +207,18 @@ class FilterHandlers:
         bold_value = -1 if is_bold else 0
         return [
             el
-            for el in elements
+            for el in objects
             if hasattr(el, "Range")
             and el.Range.Font.Bold == bold_value
             and "heading" not in el.Style.NameLocal.lower()
             and "标题" not in el.Style.NameLocal.lower()
         ]
 
-    def _filter_by_row_index(self, elements: List[Any], index: int) -> List[Any]:
+    def _filter_by_row_index(self, objects: List[Any], index: int) -> List[Any]:
         """Filters for cells in a specific row.
 
         Args:
-            elements: List of elements to filter.
+            objects: List of objects to filter.
             index: Row index to filter by.
 
         Returns:
@@ -228,14 +228,14 @@ class FilterHandlers:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
         return [
-            el for el in elements if hasattr(el, "RowIndex") and el.RowIndex == index
+            el for el in objects if hasattr(el, "RowIndex") and el.RowIndex == index
         ]
 
-    def _filter_by_column_index(self, elements: List[Any], index: int) -> List[Any]:
+    def _filter_by_column_index(self, objects: List[Any], index: int) -> List[Any]:
         """Filters for cells in a specific column.
 
         Args:
-            elements: List of elements to filter.
+            objects: List of objects to filter.
             index: Column index to filter by.
 
         Returns:
@@ -246,16 +246,16 @@ class FilterHandlers:
         """
         return [
             el
-            for el in elements
+            for el in objects
             if hasattr(el, "ColumnIndex") and el.ColumnIndex == index
         ]
 
-    def _filter_by_table_index(self, elements: List[Any], index: int) -> List[Any]:
+    def _filter_by_table_index(self, objects: List[Any], index: int) -> List[Any]:
         """
         Filters for cells that belong to a specific table index.
 
         Args:
-            elements: List of elements to filter.
+            objects: List of objects to filter.
             index: Table index to filter by.
 
         Returns:
@@ -264,65 +264,65 @@ class FilterHandlers:
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
-        # This filter assumes elements are cells and checks if their parent table
+        # This filter assumes objects are cells and checks if their parent table
         # is at the specified index in the document's tables collection
         return [
             el
-            for el in elements
+            for el in objects
             if hasattr(el, "Parent")
             and hasattr(el.Parent, "Index")
             and el.Parent.Index == index + 1
         ]
 
-    def _filter_by_is_list_item(self, elements: List[Any], is_list: bool) -> List[Any]:
+    def _filter_by_is_list_item(self, objects: List[Any], is_list: bool) -> List[Any]:
         """
         Filters for paragraphs that are part of a list.
 
         Args:
-            elements: List of elements to filter.
+            objects: List of objects to filter.
             is_list: Whether to filter for list items.
 
         Returns:
-            List of elements that are or are not list items.
+            List of objects that are or are not list items.
 
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
         if not is_list:
-            # Return elements that are NOT list items
+            # Return objects that are NOT list items
             return [
                 el
-                for el in elements
+                for el in objects
                 if hasattr(el, "Range")
                 and hasattr(el.Range, "ListFormat")
                 and el.Range.ListFormat.ListString == ""
             ]
 
-        # Return elements that ARE list items
+        # Return objects that ARE list items
         return [
             el
-            for el in elements
+            for el in objects
             if hasattr(el, "Range")
             and hasattr(el.Range, "ListFormat")
             and el.Range.ListFormat.ListString != ""
         ]
 
-    def _filter_by_range_start(self, elements: List[Any], start_pos: int) -> List[Any]:
-        """Filters range elements by start position.
+    def _filter_by_range_start(self, objects: List[Any], start_pos: int) -> List[Any]:
+        """Filters range objects by start position.
 
         Args:
-            elements: List of elements to filter.
+            objects: List of objects to filter.
             start_pos: Start position to filter by.
 
         Returns:
-            List of range elements starting at or after the specified position.
+            List of range objects starting at or after the specified position.
 
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
-        # For range elements, adjust the start position
+        # For range objects, adjust the start position
         filtered = []
-        for el in elements:
+        for el in objects:
             if hasattr(el, "Start") and hasattr(el, "End"):
                 # Create a new range with adjusted start position
                 try:
@@ -335,22 +335,22 @@ class FilterHandlers:
                         filtered.append(el)
         return filtered
 
-    def _filter_by_range_end(self, elements: List[Any], end_pos: int) -> List[Any]:
-        """Filters range elements by end position.
+    def _filter_by_range_end(self, objects: List[Any], end_pos: int) -> List[Any]:
+        """Filters range objects by end position.
 
         Args:
-            elements: List of elements to filter.
+            objects: List of objects to filter.
             end_pos: End position to filter by.
 
         Returns:
-            List of range elements ending at or before the specified position.
+            List of range objects ending at or before the specified position.
 
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
-        # For range elements, adjust the end position
+        # For range objects, adjust the end position
         filtered = []
-        for el in elements:
+        for el in objects:
             if hasattr(el, "Start") and hasattr(el, "End"):
                 # Create a new range with adjusted end position
                 try:

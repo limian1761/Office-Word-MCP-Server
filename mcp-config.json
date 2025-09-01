@@ -4,7 +4,7 @@
       "command": "uv",
       "args": [
         "run",
-        "C:/Users/lichao/Office-Word-MCP-Server/word_document_server/main.py"
+        "C:/Users/lichao/DirectOfficeWordMCP/word_document_server/main.py"
       ],
       "env": {
         "MCP_TRANSPORT": "stdio"
@@ -39,14 +39,14 @@
     {
       "name": "insert_paragraph",
       "title": "Insert Paragraph",
-      "description": "Inserts a new paragraph with the given text relative to the element found by the locator.",
+      "description": "Inserts a new paragraph with the given text relative to the object found by the locator.",
       "inputSchema": {
         "type": "object",
         "required": ["locator", "text"],
         "properties": {
           "locator": {
             "type": "object",
-            "description": "The Locator object to find the anchor element."
+            "description": "The Locator object to find the anchor object."
           },
           "text": {
             "type": "string",
@@ -54,7 +54,7 @@
           },
           "position": {
             "type": "string",
-            "description": "\"before\" or \"after\" the located element.",
+            "description": "\"before\" or \"after\" the located object.",
             "default": "after"
           }
         }
@@ -63,14 +63,14 @@
     {
       "name": "insert_text",
       "title": "Insert Text",
-      "description": "Inserts text with the given text relative to the element found by the locator.",
+      "description": "Inserts text with the given text relative to the object found by the locator.",
       "inputSchema": {
         "type": "object",
         "required": ["locator", "text"],
         "properties": {
           "locator": {
             "type": "object",
-            "description": "The Locator object to find the anchor element."
+            "description": "The Locator object to find the anchor object."
           },
           "text": {
             "type": "string",
@@ -78,7 +78,7 @@
           },
           "position": {
             "type": "string",
-            "description": "\"before\", \"after\", or \"replace\" the located element.",
+            "description": "\"before\", \"after\", or \"replace\" the located object.",
             "default": "after"
           },
           "style": {
@@ -104,16 +104,16 @@
       }
     },
     {
-      "name": "delete_element",
-      "title": "Delete Element",
-      "description": "Deletes the element(s) found by the locator.",
+      "name": "delete_object",
+      "title": "Delete Object",
+      "description": "Deletes the object(s) found by the locator.",
       "inputSchema": {
         "type": "object",
         "required": ["locator"],
         "properties": {
           "locator": {
             "type": "object",
-            "description": "The Locator object to find the target element(s) to delete."
+            "description": "The Locator object to find the target object(s) to delete."
           }
         }
       }
@@ -121,14 +121,14 @@
     {
       "name": "get_text",
       "title": "Get Text",
-      "description": "Retrieves the text from all elements found by the locator or from a specific range.",
+      "description": "Retrieves the text from all objects found by the locator or from a specific range.",
       "inputSchema": {
         "type": "object",
         "required": [],
         "properties": {
           "locator": {
             "type": "object",
-            "description": "Optional. The Locator object to find the target element(s)."
+            "description": "Optional. The Locator object to find the target object(s)."
           },
           "start_pos": {
             "type": "integer",
@@ -144,14 +144,14 @@
     {
       "name": "replace_text",
       "title": "Replace Text",
-      "description": "Replaces the text content of the element(s) found by the locator with new text.",
+      "description": "Replaces the text content of the object(s) found by the locator with new text.",
       "inputSchema": {
         "type": "object",
         "required": ["locator", "new_text"],
         "properties": {
           "locator": {
             "type": "object",
-            "description": "The Locator object to find the target element(s) to replace."
+            "description": "The Locator object to find the target object(s) to replace."
           },
           "new_text": {
             "type": "string",

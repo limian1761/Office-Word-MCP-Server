@@ -37,14 +37,14 @@ def get_paragraphs_in_range(
     selector = SelectorEngine()
     selection = selector.select(document, locator)
 
-    # Get the range object from the first element in selection
-    if not selection._elements:
+    # Get the range object from the first object in selection
+    if not selection._com_ranges:
         raise WordDocumentError(
-            ErrorCode.ELEMENT_NOT_FOUND, "No elements found for the given locator"
+            ErrorCode.OBJECT_NOT_FOUND, "No objects found for the given locator"
         )
 
-    # Get the range from the selection
-    range_obj = selection._elements[0].Range
+    # Get the range from the selection (直接使用_com_ranges中的Range对象)
+    range_obj = selection._com_ranges[0]
 
     # Get paragraphs in the range
     paragraphs: List[Dict[str, Any]] = []

@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Union
 import win32com.client
 
 from word_document_server.com_backend.com_utils import handle_com_error
-from word_document_server.utils.core_utils import ErrorCode, WordDocumentError, log_error, log_info, ElementNotFoundError
+from word_document_server.utils.core_utils import ErrorCode, WordDocumentError, log_error, log_info, ObjectNotFoundError
 from word_document_server.selector.selector import SelectorEngine
 
 logger = logging.getLogger(__name__)
@@ -168,30 +168,30 @@ def set_alignment_for_range(document: Any, range_obj: Any, alignment: str) -> bo
 
 
 @handle_com_error(ErrorCode.FORMATTING_ERROR, "set paragraph style")
-def set_paragraph_style(element: Any, style_name: str) -> bool:
+def set_paragraph_style(object: Any, style_name: str) -> bool:
     """设置段落样式
 
     Args:
-        element: 段落元素
+        object: 段落元素
         style_name: 样式名称
 
     Returns:
         操作是否成功
     """
     try:
-        if hasattr(element, 'Style'):
+        if hasattr(object, 'Style'):
             # 尝试直接设置样式
             try:
-                element.Style = style_name
+                object.Style = style_name
                 return True
             except Exception:
                 # 如果失败，尝试在文档中查找样式
-                if hasattr(element, 'Document') and hasattr(element.Document, 'Styles'):
-                    styles = element.Document.Styles
+                if hasattr(object, 'Document') and hasattr(object.Document, 'Styles'):
+                    styles = object.Document.Styles
                     for i in range(1, styles.Count + 1):
                         try:
                             if styles(i).NameLocal.lower() == style_name.lower():
-                                element.Style = styles(i)
+                                object.Style = styles(i)
                                 return True
                         except Exception:
                             continue
@@ -301,19 +301,20 @@ def create_bulleted_list(
         selector = SelectorEngine()
         selection = selector.select(document, locator, expect_single=True)
 
-        for element in selection._elements:
+        # Selection._com_ranges中只包含Range对象
+        for object in selection._com_ranges:
             if position == "replace":
                 # 删除元素首先
-                element.Range.Delete()
+                object.Range.Delete()
                 # 使用元素的范围作为插入点
-                insertion_range = element.Range
+                insertion_range = object.Range
             elif position == "before":
                 # 折叠范围到开始
-                insertion_range = element.Range.Duplicate
+                insertion_range = object.Range.Duplicate
                 insertion_range.Collapse(1)  # wdCollapseStart = 1
             else:  # position == "after"
                 # 折叠范围到结束
-                insertion_range = element.Range.Duplicate
+                insertion_range = object.Range.Duplicate
                 insertion_range.Collapse(0)  # wdCollapseEnd = 0
 
             # 在插入点创建项目符号列表

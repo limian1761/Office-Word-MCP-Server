@@ -12,6 +12,7 @@ import win32com.client
 
 from ..utils.core_utils import ErrorCode, WordDocumentError, log_error, log_info
 from ..selector.selector import SelectorEngine
+from ..com_backend.com_utils import handle_com_error
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ def get_image_info(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
     try:
         if not document:
-            raise RuntimeError("No document open.")
+            raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
         image_info_list = []
 
@@ -100,30 +101,30 @@ def get_image_info(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
         )
 
 
-def set_picture_element_color_type(element: Any, color_type: int) -> bool:
+def set_picture_object_color_type(object: Any, color_type: int) -> bool:
     """设置图片元素的颜色类型
 
     Args:
-        element: 图片元素
+        object: 图片元素
         color_type: 颜色类型
 
     Returns:
         操作是否成功
     """
     try:
-        if hasattr(element, "PictureFormat"):
-            element.PictureFormat.ColorType = color_type
+        if hasattr(object, "PictureFormat"):
+            object.PictureFormat.ColorType = color_type
             return True
         return False
     except Exception:
         return False
 
 
-def get_element_image_info(element: Any, index: int = 0) -> Optional[Dict[str, Any]]:
+def get_object_image_info(object: Any, index: int = 0) -> Optional[Dict[str, Any]]:
     """获取元素的图片信息
 
     Args:
-        element: 元素对象
+        object: 元素对象
         index: 元素索引
 
     Returns:
@@ -132,41 +133,42 @@ def get_element_image_info(element: Any, index: int = 0) -> Optional[Dict[str, A
     try:
         # 检查元素是否为图片
         if not (
-            hasattr(element, "PictureFormat")
+            hasattr(object, "PictureFormat")
             or (
-                hasattr(element, "InlineShape")
-                and hasattr(element.InlineShape, "PictureFormat")
+                hasattr(object, "InlineShape")
+                and hasattr(object.InlineShape, "PictureFormat")
             )
         ):
             return None
 
         info = {
             "index": index,
-            "type": type(element).__name__,
+            "type": type(object).__name__,
         }
 
         # 添加尺寸信息
-        if hasattr(element, "Width"):
-            info["width"] = element.Width
-        if hasattr(element, "Height"):
-            info["height"] = element.Height
+        if hasattr(object, "Width"):
+            info["width"] = object.Width
+        if hasattr(object, "Height"):
+            info["height"] = object.Height
 
         # 添加图片格式信息
-        if hasattr(element, "PictureFormat"):
+        if hasattr(object, "PictureFormat"):
             info["picture_format"] = {
-                "color_type": element.PictureFormat.ColorType,
+                "color_type": object.PictureFormat.ColorType,
             }
 
         # 添加范围信息
-        if hasattr(element, "Range"):
-            info["range_start"] = element.Range.Start
-            info["range_end"] = element.Range.End
+        if hasattr(object, "Range"):
+            info["range_start"] = object.Range.Start
+            info["range_end"] = object.Range.End
 
         return info
     except Exception:
         return None
 
 
+@handle_com_error(ErrorCode.IMAGE_ERROR, "insert image")
 def insert_image(
     document: win32com.client.CDispatch,
     image_path: str,
@@ -202,8 +204,9 @@ def insert_image(
         # 使用定位器获取范围
         try:
             selection = selector.select(document, locator)
-            if hasattr(selection, "_elements") and selection._elements:
-                range_obj = selection._elements[0].Range
+            if hasattr(selection, "_com_ranges") and selection._com_ranges:
+                # Selection._com_ranges中只包含Range对象
+                range_obj = selection._com_ranges[0]
                 # 根据位置参数调整范围
                 if position == "before":
                     range_obj.Collapse(Direction=1)  # wdCollapseStart
@@ -212,7 +215,7 @@ def insert_image(
                 # 如果是"replace"，则不折叠范围，直接替换
             else:
                 raise WordDocumentError(
-                    ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                    ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
                 )
         except Exception as e:
             raise WordDocumentError(
@@ -251,6 +254,7 @@ def insert_image(
         )
 
 
+@handle_com_error(ErrorCode.IMAGE_ERROR, "add caption")
 def add_caption(
     document: win32com.client.CDispatch,
     caption_text: str,
@@ -282,12 +286,12 @@ def add_caption(
             # 使用定位器获取范围
             selector = SelectorEngine()
             selection = selector.select(document, locator)
-            if hasattr(selection, "_elements") and selection._elements:
-                range_obj = selection._elements[0].Range
+            if hasattr(selection, "_com_ranges") and selection._com_ranges:
+                range_obj = selection._com_ranges[0]  # _com_ranges 已包含 Range 对象
                 range_obj.Collapse(Direction=0)  # wdCollapseEnd
             else:
                 raise WordDocumentError(
-                    ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                    ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
                 )
         else:
             # 如果没有提供定位器，在文档末尾添加题注
@@ -308,7 +312,7 @@ def add_caption(
             ErrorCode.SERVER_ERROR, f"Failed to add caption: {str(e)}"
         )
 
-    log_info(f"Successfully added caption to element")
+    log_info(f"Successfully added caption to object")
     return json.dumps(
         {
             "success": True,
@@ -319,6 +323,7 @@ def add_caption(
     )
 
 
+@handle_com_error(ErrorCode.IMAGE_ERROR, "resize image")
 def resize_image(
     document: win32com.client.CDispatch,
     image_index: int,
@@ -436,6 +441,7 @@ def resize_image(
     )
 
 
+@handle_com_error(ErrorCode.IMAGE_ERROR, "set image color type")
 def set_image_color_type(
     document: win32com.client.CDispatch, image_index: int, color_type: str
 ) -> str:

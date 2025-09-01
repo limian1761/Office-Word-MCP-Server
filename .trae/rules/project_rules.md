@@ -157,7 +157,7 @@
   - `citations_ops.py`: 处理所有引用相关操作
   - `comment_ops.py`: 处理所有注释相关操作
   - `document_ops.py`: 处理所有文档级操作
-  - `general_element_ops.py`: 处理通用元素选择和操作
+  - `general_object_ops.py`: 处理通用元素选择和操作
   - `hyperlinks_ops.py`: 处理所有超链接相关操作
   - `image_ops.py`: 处理所有图片相关操作
   - `others_ops.py`: 处理其他杂项操作
@@ -363,7 +363,7 @@ mypy word_document_server
 ### 12.1 文件命名规范
 
 1. **描述性命名**：文件名应清楚地描述文件内容和用途
-   - ✅ 正确示例：`general_element_ops.py`、`comment_integration_tool.py`
+   - ✅ 正确示例：`general_object_ops.py`、`comment_integration_tool.py`
    - ❌ 错误示例：`common_ops.py`、`utils.py`
 
 2. **功能导向命名**：文件名应体现其主要功能领域

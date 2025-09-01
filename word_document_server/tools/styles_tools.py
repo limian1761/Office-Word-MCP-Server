@@ -71,7 +71,7 @@ def styles_tools(
     right_indent: Optional[float] = Field(default=None, description="Right indent. Optional for: set_paragraph_formatting"),
     locator: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Element locator for specifying elements to apply styles to. Required for: apply_formatting, set_font, set_paragraph_style, set_alignment, set_paragraph_formatting",
+        description="Object locator for specifying objects to apply styles to. Required for: apply_formatting, set_font, set_paragraph_style, set_alignment, set_paragraph_formatting",
     ),
 ) -> str:
     """Unified style operation tool.

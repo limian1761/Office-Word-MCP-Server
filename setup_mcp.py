@@ -1,4 +1,4 @@
-# Import necessary Python standard libraries
+ Import necessary Python standard libraries
 import os          
 import json        
 import subprocess  
@@ -38,10 +38,10 @@ def check_prerequisites():
         except (subprocess.CalledProcessError, FileNotFoundError):
             uvx_installed = False
     
-    # Check if word-document-server is already installed via pip
+    # Check if directofficeword-mcp is already installed via pip
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "show", "word-document-server"],
+            [sys.executable, "-m", "pip", "show", "directofficeword-mcp"],
             capture_output=True,
             text=True,
             check=False
@@ -195,7 +195,7 @@ def generate_mcp_config_local(python_path, transport_config):
     base_path = os.path.abspath(os.path.dirname(__file__))
     
     # Path to Word Document Server script
-    server_script_path = os.path.join(base_path, 'word_mcp_server.py')
+    server_script_path = os.path.join(base_path, 'directofficeword_mcp.py')
     
     # Build environment variables
     env = {
@@ -238,7 +238,7 @@ def generate_mcp_config_local(python_path, transport_config):
 
 def generate_mcp_config_uvx(transport_config):
     """
-    Generate MCP configuration for PyPI-installed word-document-server using UVX
+    Generate MCP configuration for PyPI-installed directofficeword-mcp using UVX
     
     Parameters:
     - transport_config: Transport configuration dictionary
@@ -273,7 +273,7 @@ def generate_mcp_config_uvx(transport_config):
         "mcpServers": {
             "word-document-server": {
                 "command": sys.executable,
-                "args": ["-m", "uv", "tool", "run", "--from", "word-mcp-server", "word_mcp_server"],
+                "args": ["-m", "uv", "tool", "run", "--from", "directofficeword-mcp", "directofficeword_mcp"],
                 "env": env
             }
         }
@@ -288,7 +288,7 @@ def generate_mcp_config_uvx(transport_config):
 
 def generate_mcp_config_module(transport_config):
     """
-    Generate MCP configuration for PyPI-installed word-document-server using Python module
+    Generate MCP configuration for PyPI-installed directofficeword-mcp using Python module
     
     Parameters:
     - transport_config: Transport configuration dictionary
@@ -316,14 +316,14 @@ def generate_mcp_config_module(transport_config):
             "MCP_PORT": transport_config["port"],
             "MCP_SSE_PATH": transport_config["sse_path"]
         })
-
+    # For stdio transport, no additional environment variables needed
     
     # Create MCP configuration dictionary
     config = {
         "mcpServers": {
-            "word-document-server": {
+            "directofficeword-mcp": {
                 "command": sys.executable,
-                "args": ["-m", "word_document_server"],
+                "args": ["-m", "directofficeword_mcp"],
                 "env": env
             }
         }
@@ -337,18 +337,15 @@ def generate_mcp_config_module(transport_config):
     return config_path
 
 def install_from_pypi():
-    """
-    Install word-document-server from PyPI
+    """Install directofficeword-mcp from PyPI"""
+    print("\nInstalling directofficeword-mcp from PyPI...")
     
-    Returns: True if successful, False otherwise
-    """
-    print("\nInstalling word-document-server from PyPI...")
     try:
-        subprocess.run([sys.executable, "-m", "pip", "install", "word-mcp-server"], check=True)
-        print("word-mcp-server successfully installed from PyPI!")
+        subprocess.run([sys.executable, "-m", "pip", "install", "directofficeword-mcp"], check=True)
+        print("Successfully installed directofficeword-mcp!")
         return True
     except subprocess.CalledProcessError:
-        print("Failed to install word-mcp-server from PyPI.")
+        print("Failed to install directofficeword-mcp from PyPI.")
         return False
 
 def print_config_instructions(config_path, transport_config):
@@ -452,9 +449,9 @@ if __name__ == '__main__':
     # Get transport configuration
     transport_config = get_transport_choice()
     
-    # If word-document-server is already installed, offer config options
+    # If directofficeword-mcp is already installed
     if word_server_installed:
-        print("word-document-server is already installed via pip.")
+        print("directofficeword-mcp is already installed via pip.")
         
         if uvx_installed:
             print("\nOptions:")
@@ -495,9 +492,9 @@ if __name__ == '__main__':
                 print("Invalid choice. Exiting.")
                 sys.exit(1)
     
-    # If word-document-server is not installed, offer installation options
+    # If directofficeword-mcp is not installed, offer installation options
     else:
-        print("word-document-server is not installed.")
+        print("directofficeword-mcp is not installed.")
         
         print("\nOptions:")
         print("1. Install from PyPI (recommended)")

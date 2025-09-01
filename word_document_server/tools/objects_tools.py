@@ -18,7 +18,7 @@ from pydantic import Field
 
 # Local imports
 from word_document_server.mcp_service.core import mcp_server
-from word_document_server.operations.document_objects_ops import (
+from word_document_server.operations.objects_ops import (
     create_bookmark as op_add_bookmark,
     delete_bookmark as op_delete_bookmark,
     get_bookmark as op_get_bookmark,
@@ -55,7 +55,7 @@ def objects_tools(
         default=None, description="URL for the hyperlink. Required for hyperlink_operations"
     ),
     locator: Optional[Dict[str, Any]] = Field(
-        default=None, description="Element locator for specifying position. Required for bookmark_operations, citation_operations, hyperlink_operations"
+        default=None, description="Object locator for specifying position. Required for bookmark_operations, citation_operations, hyperlink_operations"
     ),
     sub_operation: Optional[str] = Field(
         default=None, description="Sub-operation type. Required for all operations"

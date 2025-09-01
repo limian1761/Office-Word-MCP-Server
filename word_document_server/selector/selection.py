@@ -12,7 +12,7 @@ from word_document_server.utils.core_utils import ErrorCode, WordDocumentError
 
 
 class Selection:
-    """Represents a selection of document elements.
+    """Represents a selection of document objects.
 
     For guidance on proper locator syntax, please refer to:
     word_document_server/selector/LOCATOR_GUIDE.md
@@ -20,27 +20,27 @@ class Selection:
 
     def __init__(
         self,
-        raw_com_elements: List[win32com.client.CDispatch],
+        com_ranges: List[win32com.client.CDispatch],
         document: win32com.client.CDispatch,
     ):
-        """Initialize a Selection with COM elements and document reference.
+        """Initialize a Selection with COM objects and document reference.
 
         Args:
-            raw_com_elements: List of raw COM objects representing selected elements.
+            com_ranges: List of COM range objects representing selected objects.
             document: Word document COM object for executing operations.
 
         Raises:
-            ValueError: If raw_com_elements is empty.
+            ValueError: If com_ranges is empty.
 
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
-        if not raw_com_elements:
+        if not com_ranges:
             raise ValueError("Selection cannot be empty.")
-        self._elements = raw_com_elements
+        self._com_ranges = com_ranges
         self._document = document
 
-    def get_element_types(self) -> List[Dict[str, Any]]:
+    def get_object_types(self) -> List[Dict[str, Any]]:
         """
         获取选择集中所有元素的详细类型信息。
 
@@ -50,139 +50,158 @@ class Selection:
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """
-        element_types = []
+        object_types = []
 
-        for i, element in enumerate(self._elements):
-            element_info = {
+        for i, object in enumerate(self._com_ranges):
+            object_info = {
                 "index": i,
-                "com_type": str(type(element)),
-                "element_type": "unknown",
+                "com_type": str(type(object)),
+                "object_type": "unknown",
                 "properties": {},
             }
 
             # 检测元素类型并收集详细属性
             try:
                 # 检查是否为段落
-                if hasattr(element, "Style") and hasattr(element, "Range"):
-                    element_info["element_type"] = "paragraph"
-                    element_info["properties"]["is_paragraph"] = True
+                if hasattr(object, "Style") and (hasattr(object, "Range") or hasattr(object, "Text")):
+                    object_info["object_type"] = "paragraph"
+                    object_info["properties"]["is_paragraph"] = True
                     try:
-                        element_info["properties"][
+                        object_info["properties"][
                             "style_name"
-                        ] = element.Style.NameLocal
+                        ] = object.Style.NameLocal
                     except:
                         pass
                     try:
-                        element_info["properties"]["text_preview"] = element.Range.Text[
-                            :50
-                        ] + ("..." if len(element.Range.Text) > 50 else "")
+                        # 先尝试直接使用object作为Range对象（通过检查Text属性）
+                        if hasattr(object, 'Text'):
+                            text_preview = object.Text[:50] + ("..." if len(object.Text) > 50 else "")
+                        # 否则尝试访问Range属性
+                        elif hasattr(object, 'Range'):
+                            text_preview = object.Range.Text[:50] + ("..." if len(object.Range.Text) > 50 else "")
+                        else:
+                            text_preview = ""
+                        object_info["properties"]["text_preview"] = text_preview
                     except:
                         pass
 
                 # 检查是否为表格
-                elif hasattr(element, "Rows") and hasattr(element, "Columns"):
-                    element_info["element_type"] = "table"
-                    element_info["properties"]["is_table"] = True
+                elif hasattr(object, "Rows") and hasattr(object, "Columns"):
+                    object_info["object_type"] = "table"
+                    object_info["properties"]["is_table"] = True
                     try:
-                        element_info["properties"]["rows_count"] = element.Rows.Count
-                        element_info["properties"][
+                        object_info["properties"]["rows_count"] = object.Rows.Count
+                        object_info["properties"][
                             "columns_count"
-                        ] = element.Columns.Count
+                        ] = object.Columns.Count
                     except:
                         pass
 
                 # 检查是否为图片
-                elif hasattr(element, "Type") and element.Type in (
+                elif hasattr(object, "Type") and object.Type in (
                     1,
                     3,
                 ):  # 1=InlineShape, 3=Shape
-                    element_info["element_type"] = "image"
-                    element_info["properties"]["is_image"] = True
+                    object_info["object_type"] = "image"
+                    object_info["properties"]["is_image"] = True
                     try:
-                        if hasattr(element, "Width") and hasattr(element, "Height"):
-                            element_info["properties"]["width"] = element.Width
-                            element_info["properties"]["height"] = element.Height
+                        if hasattr(object, "Width") and hasattr(object, "Height"):
+                            object_info["properties"]["width"] = object.Width
+                            object_info["properties"]["height"] = object.Height
                     except:
                         pass
                     try:
-                        if hasattr(element, "Name"):
-                            element_info["properties"]["name"] = element.Name
+                        if hasattr(object, "Name"):
+                            object_info["properties"]["name"] = object.Name
                     except:
                         pass
 
                 # 检查是否为文本范围
                 elif (
-                    hasattr(element, "Text")
-                    and hasattr(element, "Start")
-                    and hasattr(element, "End")
+                    hasattr(object, "Text")
+                    and hasattr(object, "Start")
+                    and hasattr(object, "End")
                 ):
-                    element_info["element_type"] = "text_range"
-                    element_info["properties"]["is_range"] = True
+                    object_info["object_type"] = "text_range"
+                    object_info["properties"]["is_range"] = True
                     try:
-                        element_info["properties"]["text_length"] = len(element.Text)
-                        element_info["properties"]["text_preview"] = element.Text[
+                        object_info["properties"]["text_length"] = len(object.Text)
+                        object_info["properties"]["text_preview"] = object.Text[
                             :50
-                        ] + ("..." if len(element.Text) > 50 else "")
+                        ] + ("..." if len(object.Text) > 50 else "")
                     except:
                         pass
 
                 # 检查是否为书签
-                elif hasattr(element, "Name") and hasattr(element, "Range"):
-                    element_info["element_type"] = "bookmark"
+                elif hasattr(object, "Name") and (hasattr(object, "Range") or hasattr(object, "Text")):
+                    object_info["object_type"] = "bookmark"
                     try:
-                        element_info["properties"]["name"] = element.Name
+                        object_info["properties"]["name"] = object.Name
                     except:
                         pass
 
                 # 检查是否为评论
-                elif hasattr(element, "Initial") and hasattr(element, "Range"):
-                    element_info["element_type"] = "comment"
+                elif hasattr(object, "Initial") and (hasattr(object, "Range") or hasattr(object, "Text")):
+                    object_info["object_type"] = "comment"
                     try:
-                        element_info["properties"]["author"] = element.Author
-                        element_info["properties"]["text_preview"] = element.Range.Text[
-                            :50
-                        ] + ("..." if len(element.Range.Text) > 50 else "")
+                        object_info["properties"]["author"] = object.Author
+                        # 先尝试直接使用object作为Range对象（通过检查Text属性）
+                        if hasattr(object, 'Text'):
+                            text_preview = object.Text[:50] + ("..." if len(object.Text) > 50 else "")
+                        # 否则尝试访问Range属性
+                        elif hasattr(object, 'Range'):
+                            text_preview = object.Range.Text[:50] + ("..." if len(object.Range.Text) > 50 else "")
+                        else:
+                            text_preview = ""
+                        object_info["properties"]["text_preview"] = text_preview
                     except:
                         pass
 
                 # 检查是否为超链接
-                elif hasattr(element, "Address") and hasattr(element, "Range"):
-                    element_info["element_type"] = "hyperlink"
+                elif hasattr(object, "Address") and (hasattr(object, "Range") or hasattr(object, "Text")):
+                    object_info["object_type"] = "hyperlink"
                     try:
-                        element_info["properties"]["address"] = element.Address
-                        element_info["properties"]["text_preview"] = element.Range.Text[
-                            :50
-                        ] + ("..." if len(element.Range.Text) > 50 else "")
+                        object_info["properties"]["address"] = object.Address
+                        # 先尝试直接使用object作为Range对象（通过检查Text属性）
+                        if hasattr(object, 'Text'):
+                            text_preview = object.Text[:50] + ("..." if len(object.Text) > 50 else "")
+                        # 否则尝试访问Range属性
+                        elif hasattr(object, 'Range'):
+                            text_preview = object.Range.Text[:50] + ("..." if len(object.Range.Text) > 50 else "")
+                        else:
+                            text_preview = ""
+                        object_info["properties"]["text_preview"] = text_preview
                     except:
                         pass
 
                 else:
                     # 默认类型
-                    element_info["element_type"] = "default"
+                    object_info["object_type"] = "default"
 
                 # 获取元素ID（如果可用）
-                if hasattr(element, "ID"):
+                if hasattr(object, "ID"):
                     try:
-                        element_info["properties"]["id"] = element.ID
+                        object_info["properties"]["id"] = object.ID
                     except:
                         pass
 
                 # 获取元素的起始和结束位置（如果适用）
-                if (
-                    hasattr(element, "Range")
-                    and hasattr(element.Range, "Start")
-                    and hasattr(element.Range, "End")
-                ):
-                    try:
-                        element_info["properties"]["range_start"] = element.Range.Start
-                        element_info["properties"]["range_end"] = element.Range.End
-                    except:
-                        pass
+                try:
+                    # 先尝试直接使用object作为Range对象（通过检查Start和End属性）
+                    if hasattr(object, 'Start') and hasattr(object, 'End'):
+                        object_info["properties"]["range_start"] = object.Start
+                        object_info["properties"]["range_end"] = object.End
+                    # 否则尝试访问Range属性
+                    elif hasattr(object, 'Range') and hasattr(object.Range, 'Start') and hasattr(object.Range, 'End'):
+                        object_info["properties"]["range_start"] = object.Range.Start
+                        object_info["properties"]["range_end"] = object.Range.End
+                except:
+                    pass
 
             except Exception as e:
                 # 忽略获取属性时的错误
-                element_info["properties"]["error"] = str(e)
+                object_info["properties"]["error"] = str(e)
 
-            element_types.append(element_info)
+            object_types.append(object_info)
 
-        return element_types
+        return object_types

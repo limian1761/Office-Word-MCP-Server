@@ -12,10 +12,10 @@ from .document_ops import (
 # 文本操作
 from .text_ops import (
     get_character_count,
-    get_element_text,
+    get_object_text,
     insert_text_before_range,
     insert_text_after_range,
-    replace_element_text,
+    replace_object_text,
 )
 
 # 文本格式操作
@@ -48,12 +48,12 @@ from .comment_ops import (
 )
 
 # 元素选择操作
-from .element_selection_ops import (
-    select_elements,
-    get_element_by_id,
-    batch_select_elements,
+from .object_selection_ops import (
+    select_objects,
+    get_object_by_id,
+    batch_select_objects,
     batch_apply_formatting,
-    delete_element_by_locator,
+    delete_object_by_locator,
 )
 
 # 表格操作
@@ -76,7 +76,7 @@ from .image_ops import (
 )
 
 # 文档对象操作（书签、引用）
-from .document_objects_ops import (
+from .objects_ops import (
     create_bookmark,
     get_bookmark,
     delete_bookmark,
@@ -111,10 +111,10 @@ __all__ = [
     
     # text_ops
     "get_character_count",
-    "get_element_text",
+    "get_object_text",
     "insert_text_before_range",
     "insert_text_after_range",
-    "replace_element_text",
+    "replace_object_text",
     
     # text_format_ops
     "set_bold_for_range",
@@ -139,12 +139,12 @@ __all__ = [
     "edit_comment",
     "reply_to_comment",
     
-    # element_selection_ops
-    "select_elements",
-    "get_element_by_id",
-    "batch_select_elements",
+    # object_selection_ops
+    "select_objects",
+    "get_object_by_id",
+    "batch_select_objects",
     "batch_apply_formatting",
-    "delete_element_by_locator",
+    "delete_object_by_locator",
     
     # table_ops
     "create_table",
@@ -161,7 +161,7 @@ __all__ = [
     "resize_image",
     "set_image_color_type",
     
-    # document_objects_ops
+    # objects_ops
     "create_bookmark",
     "get_bookmark",
     "delete_bookmark",

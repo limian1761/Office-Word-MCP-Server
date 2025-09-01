@@ -1,7 +1,7 @@
 """Exceptions for the selector engine.
 
 This module defines custom exceptions used by the selector engine
-for handling errors during element selection.
+for handling errors during object selection.
 """
 
 
@@ -18,6 +18,6 @@ class LocatorSyntaxError(LocatorError):
 
 
 class AmbiguousLocatorError(LocatorError):
-    """Raised when a locator matches multiple elements when a single element is expected."""
+    """Raised when a locator matches multiple objects when a single object is expected."""
 
     pass

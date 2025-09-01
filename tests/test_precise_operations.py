@@ -2,7 +2,7 @@
 Precise document operations tests for Word Document MCP Server.
 
 This module contains tests that focus on precise operations using locators
-to target specific elements in documents.
+to target specific objects in documents.
 """
 
 import unittest
@@ -19,7 +19,7 @@ from word_document_server.tools.document_tools import document_tools
 from word_document_server.tools.text_tools import text_tools
 from word_document_server.tools.table_tools import table_tools
 from word_document_server.tools.comment_tools import comment_tools
-from word_document_server.tools.element_tools import element_tools
+from word_document_server.tools.range_tools import range_tools
 from word_document_server.utils.app_context import AppContext
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
@@ -269,7 +269,7 @@ class TestPreciseOperations(unittest.TestCase):
         )
         self.assertIn("successfully", result.lower())
     
-    def test_get_document_elements_simple(self):
+    def test_get_document_objects_simple(self):
         """测试获取简单文档元素"""
         # 打开文档
         document_tools(
@@ -281,12 +281,12 @@ class TestPreciseOperations(unittest.TestCase):
         # 获取段落元素
         result = document_tools(
             ctx=self.context,
-            operation_type="get_elements",
-            element_type="paragraphs"
+            operation_type="get_objects",
+            object_type="paragraphs"
         )
-        elements = json.loads(result)
-        self.assertIsInstance(elements, list)
-        self.assertGreater(len(elements), 0)
+        objects = json.loads(result)
+        self.assertIsInstance(objects, list)
+        self.assertGreater(len(objects), 0)
         
         # 关闭文档
         document_tools(
@@ -294,7 +294,7 @@ class TestPreciseOperations(unittest.TestCase):
             operation_type="close"
         )
     
-    def test_get_document_elements_table(self):
+    def test_get_document_objects_table(self):
         """测试获取表格文档元素"""
         # 打开文档
         document_tools(
@@ -306,12 +306,12 @@ class TestPreciseOperations(unittest.TestCase):
         # 获取表格元素
         result = document_tools(
             ctx=self.context,
-            operation_type="get_elements",
-            element_type="tables"
+            operation_type="get_objects",
+            object_type="tables"
         )
-        elements = json.loads(result)
-        self.assertIsInstance(elements, list)
-        self.assertGreater(len(elements), 0)
+        objects = json.loads(result)
+        self.assertIsInstance(objects, list)
+        self.assertGreater(len(objects), 0)
         
         # 关闭文档
         document_tools(

@@ -46,20 +46,21 @@ def set_paragraph_alignment(
 
         if (
             not selection
-            or not hasattr(selection, "_elements")
-            or not selection._elements
+            or not hasattr(selection, "_com_ranges")
+            or not selection._com_ranges
         ):
             raise WordDocumentError(
-                ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
             )
 
         # 对每个元素设置对齐方式
-        for element in selection._elements:
+        # Selection._com_ranges中只包含Range对象
+        for range_obj in selection._com_ranges:
             try:
-                text_format_ops.set_alignment_for_range(document, element.Range, alignment)
+                text_format_ops.set_alignment_for_range(document, range_obj, alignment)
                 aligned_count += 1
             except Exception as e:
-                log_error(f"Failed to apply alignment to element: {str(e)}")
+                log_error(f"Failed to apply alignment to object: {str(e)}")
     else:
         # 如果没有定位器，使用当前选区
         try:
@@ -122,16 +123,17 @@ def apply_formatting(
         # 使用定位器获取范围
         try:
             selection = selector.select(document, locator)
-            if hasattr(selection, "_elements") and selection._elements:
-                range_obj = selection._elements[0].Range
+            if hasattr(selection, "_com_ranges") and selection._com_ranges:
+                # Selection._com_ranges中只包含Range对象
+                range_obj = selection._com_ranges[0]
             else:
                 raise WordDocumentError(
-                    ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                    ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
                 )
         except Exception as e:
             raise WordDocumentError(
                 ErrorCode.FORMATTING_ERROR,
-                f"Failed to locate element for formatting: {str(e)}",
+                f"Failed to locate object for formatting: {str(e)}",
             )
     else:
         # 如果没有提供定位器，格式化整个文档
@@ -256,39 +258,39 @@ def set_font(
         )
 
     range_obj = None
-    element_count = 0
+    object_count = 0
 
     if locator:
         selection = selector.select(document, locator)
-        if not selection._elements:
+        if not selection._com_ranges:
             raise WordDocumentError(
-                ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
             )
 
-        for element in selection._elements:
-            if hasattr(element, "Range"):
-                text_format_ops.set_font_name_for_range(element.Range, font_name)
-                if font_size is not None:
-                    text_format_ops.set_font_size_for_range(element.Range, font_size)
-                if bold is not None:
-                    text_format_ops.set_bold_for_range(element.Range, bold)
-                if italic is not None:
-                    text_format_ops.set_italic_for_range(element.Range, italic)
-                if color is not None:
-                    text_format_ops.set_font_color_for_range(document, element.Range, color)
-                # Underline is not yet in text_format_ops, so we handle it here for now.
-                if underline is not None:
-                    font = element.Range.Font
-                    underline_map = {
-                        "none": 0,
-                        "single": 1,
-                        "double": 2,
-                        "dotted": 4,
-                        "dashed": 5,
-                        "wave": 16,
-                    }
-                    font.Underline = underline_map.get(underline, 0)
-        element_count = len(selection._elements)
+        # Selection._com_ranges中只包含Range对象
+        for range_obj in selection._com_ranges:
+            text_format_ops.set_font_name_for_range(range_obj, font_name)
+            if font_size is not None:
+                text_format_ops.set_font_size_for_range(range_obj, font_size)
+            if bold is not None:
+                text_format_ops.set_bold_for_range(range_obj, bold)
+            if italic is not None:
+                text_format_ops.set_italic_for_range(range_obj, italic)
+            if color is not None:
+                text_format_ops.set_font_color_for_range(document, range_obj, color)
+            # Underline is not yet in text_format_ops, so we handle it here for now.
+            if underline is not None:
+                font = range_obj.Font
+                underline_map = {
+                    "none": 0,
+                    "single": 1,
+                    "double": 2,
+                    "dotted": 4,
+                    "dashed": 5,
+                    "wave": 16,
+                }
+                font.Underline = underline_map.get(underline, 0)
+        object_count = len(selection._com_ranges)
     else:
         try:
             range_obj = document.Application.Selection.Range
@@ -317,14 +319,14 @@ def set_font(
                 "wave": 16,
             }
             font.Underline = underline_map.get(underline, 0)
-        element_count = 1
+        object_count = 1
 
-    log_info(f"Successfully set font properties for {element_count} element(s)")
+    log_info(f"Successfully set font properties for {object_count} object(s)")
     return {
         "success": True,
-        "message": f"Successfully set font properties for {element_count} element(s)",
+        "message": f"Successfully set font properties for {object_count} object(s)",
         "font_name": font_name,
-        "element_count": element_count,
+        "object_count": object_count,
     }
 
 
@@ -388,20 +390,21 @@ def set_paragraph_style(
 
         if (
             not selection
-            or not hasattr(selection, "_elements")
-            or not selection._elements
+            or not hasattr(selection, "_com_ranges")
+            or not selection._com_ranges
         ):
             raise WordDocumentError(
-                ErrorCode.ELEMENT_NOT_FOUND, "No element found matching the locator"
+                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
             )
 
         # 对每个元素设置样式
-        for element in selection._elements:
+        # Selection._com_ranges中只包含Range对象
+        for range_obj in selection._com_ranges:
             try:
-                element.Range.Paragraphs(1).Style = style_name
+                range_obj.Paragraphs(1).Style = style_name
                 styled_count += 1
             except Exception as e:
-                log_error(f"Failed to apply style to element: {str(e)}")
+                log_error(f"Failed to apply style to object: {str(e)}")
     else:
         # 如果没有定位器，使用当前选区
         try:
