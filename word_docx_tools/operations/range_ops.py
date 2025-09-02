@@ -181,7 +181,7 @@ def batch_select_objects(
                         info = {
                             "batch_index": i,
                             "object_index": j,
-                            "type": type(object).__name__,
+                            "type": type(range_obj).__name__,
                         }
 
                         # 添加文本内容（如果可用）

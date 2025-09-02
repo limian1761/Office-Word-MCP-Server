@@ -71,7 +71,7 @@ def get_comments(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
             comment = document.Comments(i)
             comment_info = {
                 "index": i - 1,  # 0-based index
-                "text": comment.Text(),
+                "text": comment.Text,
                 "author": comment.Author,
                 "initials": comment.Initial,
                 "date": str(comment.Date),
@@ -114,7 +114,7 @@ def get_comment_thread(
     thread.append(
         {
             "index": index,
-            "text": comment.Text(),
+            "text": comment.Text,
             "author": comment.Author,
             "initials": comment.Initial,
             "date": str(comment.Date),
@@ -130,7 +130,7 @@ def get_comment_thread(
         thread.append(
             {
                 "index": f"{index}-reply-{i-1}",
-                "text": reply.Text(),
+                "text": reply.Text,
                 "author": reply.Author,
                 "initials": reply.Initial,
                 "date": str(reply.Date),
@@ -174,8 +174,14 @@ def delete_all_comments(document: win32com.client.CDispatch) -> Any:
         The number of comments deleted.
     """
     count = document.Comments.Count
-    # Delete all comments
-    document.Comments.Delete()
+    # Delete all comments by iterating backwards
+    for i in range(count, 0, -1):
+        try:
+            comment = document.Comments(i)
+            comment.Delete()
+        except Exception as e:
+            logger.warning(f"Failed to delete comment at index {i}: {e}")
+            continue
     return count
 
 

@@ -105,20 +105,21 @@ async def comment_tools(
         reply_to_comment,
     ) = _import_comment_operations()
 
+    # 恢复正确的缩进结构
     # Handle add comment operation
     if operation_type == "add":
         if comment_text is None:
             raise WordDocumentError(
                 ErrorCode.INVALID_INPUT, "Comment text is required for add operation"
             )
-
+    
         try:
             # 先尝试使用locator定位
             if locator:
                 try:
                     selector = SelectorEngine()
                     selection = selector.select(document, locator)
-                    if selection and selection._com_ranges:
+                    if selection and hasattr(selection, "_com_ranges") and selection._com_ranges:
                         range_obj = selection._com_ranges[0]  # 使用第一个Range对象
                     else:
                         # 如果locator定位失败，使用文档末尾作为默认位置
@@ -132,7 +133,7 @@ async def comment_tools(
                 # 没有提供locator，使用文档末尾作为默认位置
                 range_obj = document.Content
                 range_obj.Collapse(0)  # 折叠到文档末尾
-
+    
             # 添加评论
             result = add_comment(document, range_obj, comment_text, author)
             
@@ -145,7 +146,7 @@ async def comment_tools(
                 "comment_id": comment_id,
                 "message": "Comment added successfully",
             }
-
+    
         except Exception as e:
             raise WordDocumentError(
                 ErrorCode.SERVER_ERROR, f"Failed to add comment: {str(e)}"
