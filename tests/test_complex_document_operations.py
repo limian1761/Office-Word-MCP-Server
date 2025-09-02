@@ -17,14 +17,14 @@ from win32com.client import CDispatch
 import pythoncom
 from io import StringIO
 
-from word_document_server.tools.document_tools import document_tools
-from word_document_server.tools.text_tools import text_tools
-from word_document_server.tools.table_tools import table_tools
-from word_document_server.tools.image_tools import image_tools
-from word_document_server.tools.comment_tools import comment_tools
-from word_document_server.tools.range_tools import range_tools
-from word_document_server.utils.app_context import AppContext
-from word_document_server.mcp_service.core_utils import format_error_response
+from .tools.document_tools import document_tools
+from .tools.text_tools import text_tools
+from .tools.table_tools import table_tools
+from .tools.image_tools import image_tools
+from .tools.comment_tools import comment_tools
+from .tools.range_tools import range_tools
+from .utils.app_context import AppContext
+from .mcp_service.core_utils import format_error_response
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
 

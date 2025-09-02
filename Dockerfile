@@ -21,7 +21,7 @@ COPY . /app
 RUN pip install --no-cache-dir .
 
 # Default command
-ENTRYPOINT ["directofficeword_mcp"]
+ENTRYPOINT ["word_docx_tools"]
 
 # Stage 2: Windows container image with COM support
 FROM mcr.microsoft.com/windows/servercore:ltsc2022 as windows-base
@@ -53,4 +53,4 @@ COPY . /app
 RUN pip install --no-cache-dir .
 
 # Default command
-ENTRYPOINT ["directofficeword_mcp"]
+ENTRYPOINT ["word_docx_tools"]

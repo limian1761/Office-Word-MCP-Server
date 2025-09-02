@@ -13,8 +13,8 @@ import win32com.client
 import pythoncom
 from unittest.mock import MagicMock, patch
 
-from word_document_server.tools.image_tools import image_tools
-from word_document_server.utils.app_context import AppContext
+from .tools.image_tools import image_tools
+from .utils.app_context import AppContext
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
 
@@ -126,7 +126,7 @@ class TestImageTools(unittest.TestCase):
         self.assertTrue(result_data["success"])
         self.assertEqual(len(result_data["images"]), 0)
     
-    @patch('word_document_server.tools.image_tools.insert_image')
+    @patch('word_docx_tools.tools.image_tools.insert_image')
     async def test_image_tools_insert(self, mock_insert_image):
         """Test insert operation"""
         # 设置mock返回值
@@ -152,7 +152,7 @@ class TestImageTools(unittest.TestCase):
         # 验证insert_image被正确调用
         mock_insert_image.assert_called_once()
     
-    @patch('word_document_server.tools.image_tools.add_caption')
+    @patch('word_docx_tools.tools.image_tools.add_caption')
     async def test_image_tools_add_caption(self, mock_add_caption):
         """Test add_caption operation"""
         # 设置mock返回值
@@ -178,7 +178,7 @@ class TestImageTools(unittest.TestCase):
         # 验证add_caption被正确调用
         mock_add_caption.assert_called_once()
     
-    @patch('word_document_server.tools.image_tools.resize_image')
+    @patch('word_docx_tools.tools.image_tools.resize_image')
     async def test_image_tools_resize(self, mock_resize_image):
         """Test resize operation"""
         # 设置mock返回值
@@ -208,7 +208,7 @@ class TestImageTools(unittest.TestCase):
         # 验证resize_image被正确调用
         mock_resize_image.assert_called_once()
     
-    @patch('word_document_server.tools.image_tools.set_image_color_type')
+    @patch('word_docx_tools.tools.image_tools.set_image_color_type')
     async def test_image_tools_set_color_type(self, mock_set_color_type):
         """Test set_color_type operation"""
         # 设置mock返回值

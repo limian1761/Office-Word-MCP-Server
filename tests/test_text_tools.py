@@ -14,11 +14,11 @@ import pythoncom
 import win32com.client
 from unittest.mock import MagicMock, patch
 
-from word_document_server.tools.text_tools import text_tools
-from word_document_server.utils.app_context import AppContext
+from .tools.text_tools import text_tools
+from .utils.app_context import AppContext
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
-from word_document_server.operations.text_ops import insert_text_after_object
+from .operations.text_ops import insert_text_after_object
 
 
 class TestTextToolsInsertText(unittest.TestCase):
@@ -106,7 +106,7 @@ class TestTextToolsInsertText(unittest.TestCase):
         except:
             pass
     
-    @patch('word_document_server.operations.text_ops.insert_text')
+    @patch('word_docx_tools.operations.text_ops.insert_text')
     def test_insert_text_with_document_start_locator(self, mock_insert_text):
         """测试使用document_start定位器的insert_text操作"""
         # 设置mock返回值

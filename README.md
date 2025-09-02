@@ -1,154 +1,86 @@
-// DirectOfficeWordMCP
+# Word Document MCP Server
 
-A Model Context Protocol (MCP) server for directly manipulating Microsoft Word documents via COM interface with direct Office object access. This server enables AI assistants to work with Word documents through a standardized interface, providing rich document editing capabilities with direct object access.
-
-## Overview
-
-DirectOfficeWordMCP implements the [Model Context Protocol](https://modelcontextprotocol.io/) to expose Word document operations as tools and resources. It serves as a bridge between AI assistants and Microsoft Word documents, allowing for direct document creation, content addition, formatting, and analysis through COM interface with full Office object access.
-
-This version has been significantly restructured and enhanced with:
-
-- Complete COM backend integration for native Word operations with direct Office object access
-- Advanced document selector system for precise element targeting in Office documents
-- Modular architecture separating concerns into core functionality, operations, and tools
-- Support for multiple transport protocols (stdio, HTTP, SSE)
-- Docker containerization support
-- Enhanced error handling and logging
+`word_docx_tools` implements the [Model Context Protocol](https://modelcontextprotocol.io/) to expose Word document operations as tools and resources. It serves as a bridge between AI assistants and Microsoft Word documents, allowing for direct document creation, content addition, formatting, and analysis through COM interface with full Office object access.
 
 ## Features
 
-### Document Operations
-- Create, open, save, and close Word documents
-- Get document information and properties
-- Document protection and encryption
-- Print document support
-
-### Text Operations
-- Insert, replace, and format text
-- Paragraph manipulation
-- Text search and replace
-- Character and paragraph formatting
-
-### Table Operations
-- Create and manipulate tables
-- Cell content and formatting
-- Row and column insertion
-- Table styling and formatting
-
-### Image Operations
-- Insert images with positioning
-- Image resizing and formatting
-- Caption management
-
-### Comment Operations
-- Add, edit, and delete comments
-- Comment threading and replies
-- Author-based filtering
-
-### Style Operations
-- Apply formatting to elements
-- Font and paragraph styling
-- Custom style creation
-
-### Object Operations
-- Bookmark management
-- Hyperlink creation
-- Citation handling
+- Create and manipulate Word documents
+- Text operations (insert, replace, format)
+- Table operations
+- Image operations
+- Comment operations
+- Object operations
+- Style operations
+- Advanced selector engine for targeting document elements
 
 ## Installation
 
 ### Prerequisites
-- Windows operating system (required for COM integration with Word)
-- Python 3.11 or higher
-- Microsoft Word installation
 
-### Installation Options
+- Windows 10/11
+- Microsoft Word (2016 or later)
+- Python 3.11+
 
-#### Option 1: Direct Installation
+### Install from PyPI
+
 ```bash
-# Clone the repository
+pip install word_docx_tools
+```
+
+### Install from Source
+
+```bash
 git clone <repository-url>
-cd Office-Word-MCP-Server
-
-# Install dependencies
-pip install -r requirements.txt
+cd word_docx_tools
+pip install -e .
 ```
-
-#### Option 2: Using uv (Recommended)
-```bash
-# Clone the repository
-git clone https://github.com/GongRzhe/Office-Word-MCP-Server.git
-cd Office-Word-MCP-Server
-
-# Install with uv
-uv pip install -r requirements.txt
-```
-
-#### Option 3: Using the Setup Script
-```bash
-python setup_mcp.py
-```
-
-The setup script will:
-- Check prerequisites
-- Set up a virtual environment
-- Install dependencies
-- Generate MCP configuration
 
 ## Usage
 
-### Running the Server
-
-#### Via Direct Execution
-```bash
-python -m word_document_server.main
-```
-
-#### Via Installed Script
-```bash
-directofficeword_mcp
-```
-
-### Transport Options
-
-The server supports multiple transport protocols:
-
-1. **STDIO** (default): For local AI assistant integration
-2. **HTTP**: For web-based deployments
-3. **SSE** (Server-Sent Events): For compatibility scenarios
-
-Configure the transport method using command-line arguments or environment variables.
-
-## Deployment
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions including Docker deployment, environment configuration, and best practices.
-
-### Docker Deployment
-
-The server can be deployed as a Docker container:
+### Run as MCP Server
 
 ```bash
-# Build the image
-docker build -t office-word-mcp-server .
-
-# Run the container
-docker run -it --rm office-word-mcp-server
+word_docx_tools
 ```
 
-Note: Docker deployment has limitations with COM objects and may require additional configuration for full Word integration.
+### Development Mode
 
+```bash
+cd word_docx_tools
+python -m word_docx_tools.main
+```
+
+Or:
+
+```bash
+python -m word_docx_tools
+```
+
+### HTTP Mode
+
+```bash
+word_docx_tools_http
+```
+
+This starts the server on `http://0.0.0.0:8000`.
+```
+
+Final block for README updates:
+
+c:\Users\lichao\Office-Word-MCP-Server\README.md
+```markdown
+<<<<<<< SEARCH
 ## Development
 
 ### Code Structure
 ```
-word_document_server/
+word-docx-tools/
 ├── com_backend/       # COM integration layer
 ├── mcp_service/       # MCP protocol implementation
 ├── operations/        # Core document operations
 ├── selector/          # Element selection system
 ├── tools/             # MCP tool implementations
 └── utils/             # Utility functions
-```
 
 ### Code Quality Tools
 - [Black](https://github.com/psf/black) for code formatting
@@ -157,9 +89,9 @@ word_document_server/
 
 Run these tools before committing:
 ```bash
-black word_document_server
-isort word_document_server
-mypy word_document_server
+black word-docx-tools
+isort word-docx-tools
+mypy word-docx-tools
 ```
 
 ## Configuration
@@ -172,8 +104,107 @@ Example configuration:
 ```json
 {
   "mcpServers": {
-    "directofficeword-mcp": {
-      "command": "directofficeword_mcp"
+    "word-docx-tools": {
+      "command": "word_docx_tools"
+    }
+  }
+}
+## Docker
+
+### Build
+
+```bash
+docker build -t word_docx_tools .
+```
+
+### Run
+
+```bash
+docker run -it --rm word_docx_tools
+```
+
+## Development
+
+### Code Structure
+
+```
+word_docx_tools/
+├── main.py              # Entry point
+├── mcp_service/         # MCP service integration
+├── selector/            # Document selector engine
+├── operations/          # Low-level document operations
+├── tools/               # MCP tools exposed to clients
+├── com_backend/         # COM interface handling
+└── utils/               # Utility functions
+```
+
+### Code Quality
+
+```bash
+black word_docx_tools
+isort word_docx_tools
+mypy word_docx_tools
+```
+
+### Testing
+
+```bash
+python -m pytest tests/
+```
+
+## Configuration
+
+MCP configuration is defined in `mcp-config.json`:
+
+```json
+{
+    "mcpServers": {
+        "word_docx_tools": {
+            "command": "word_docx_tools",
+            "args": []
+        }
+    }
+}
+
+## Development
+
+### Code Structure
+```
+word-docx-tools/
+├── com_backend/       # COM integration layer
+├── mcp_service/       # MCP protocol implementation
+├── operations/        # Core document operations
+├── selector/          # Element selection system
+├── tools/             # MCP tool implementations
+└── utils/             # Utility functions
+```
+自动化测试 word-docx-tools 所有工具，先创建一个详细测试文档，然后逐一测试工具，包括各个操作类型，每次操作后检查操作是否成功，所有的测试错误信息汇总到一个md文件
+
+
+### Code Quality Tools
+- [Black](https://github.com/psf/black) for code formatting
+- [isort](https://pycqa.github.io/isort/) for import sorting
+- [mypy](http://mypy-lang.org/) for static type checking
+
+Run these tools before committing:
+```bash
+black word-docx-tools
+isort word-docx-tools
+mypy word-docx-tools
+```
+
+## Configuration
+
+MCP server configuration can be specified in your AI assistant's configuration file. For Claude Desktop, this is typically located at:
+
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Example configuration:
+```json
+{
+  "mcpServers": {
+    "word-docx-tools": {
+      "command": "word_docx_tools"
     }
   }
 }
@@ -202,3 +233,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Office-Word-MCP-Server](https://github.com/GongRzhe/Office-Word-MCP-Server.git) as a reference project
 
 ---
+

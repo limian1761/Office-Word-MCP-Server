@@ -37,3 +37,9 @@ TEST_DESCRIPTIONS = {
     'test_complex_document_operations': 'Tests for complex document operations',
     'test_image_tools': 'Tests for image manipulation tools',
 }
+
+# Test document resources
+TEST_DOCUMENTS = {
+    'standard': 'test_docs/valid_test_document_v2.docx',
+    'complex': 'test_docs/additional_test_document.docx'
+}

@@ -17,7 +17,7 @@ cd Office-Word-MCP-Server
 pip install .
 
 # Run the server
-directofficeword_mcp
+word_docx_tools
 ```
 
 ### 2. Docker Deployment
@@ -75,7 +75,7 @@ The server can be configured using environment variables:
 
 Example:
 ```bash
-MCP_TRANSPORT=http HOST=0.0.0.0 PORT=8000 directofficeword_mcp
+MCP_TRANSPORT=http HOST=0.0.0.0 PORT=8000 word_docx_tools
 ```
 
 ### MCP Client Configuration
@@ -86,7 +86,7 @@ Configure your MCP client (e.g., Claude Desktop) to connect to the server:
 {
   "mcpServers": {
     "word-mcp": {
-      "command": "directofficeword_mcp"
+      "command": "word_docx_tools"
     }
   }
 }
@@ -158,7 +158,7 @@ Enable logging for troubleshooting:
 ```bash
 # Enable debug logging
 export LOG_LEVEL=DEBUG
-directofficeword_mcp
+word_docx_tools
 ```
 
 ## Security Considerations

@@ -21,10 +21,10 @@ jobs:
           pip install -r requirements.txt
           pip install black isort mypy pytest
       - name: Check formatting with Black
-        run: black --check word_document_server
+        run: black --check word-docx-tools
       - name: Check import order with isort
-        run: isort --check-only word_document_server
+        run: isort --check-only word-docx-tools
       - name: Static type checking with mypy
-        run: mypy word_document_server
+        run: mypy word-docx-tools
       - name: Run tests with pytest
         run: pytest

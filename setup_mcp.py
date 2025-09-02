@@ -1,12 +1,170 @@
- Import necessary Python standard libraries
-import os          
-import json        
-import subprocess  
-import sys         
-import shutil     
-import platform
+#!/usr/bin/env python3
+"""
+Setup script for Word Document MCP Server.
 
-def check_prerequisites():
+This script provides multiple ways to set up the Word Document MCP Server:
+1. As a standalone executable (using PyInstaller)
+2. As a Python package (using pip)
+3. As an MCP configuration (for use with uvx or direct Python module execution)
+
+It also provides utilities for:
+- Checking if word_docx_tools is already installed
+- Installing word_docx_tools from PyPI
+- Generating MCP configuration files
+- Building standalone executables
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+# Add the parent directory to sys.path to allow imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+def check_word_docx_tools_installed():
+    """Check if word_docx_tools is already installed."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "show", "word_docx_tools"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return "word_docx_tools" in result.stdout.lower()
+    except subprocess.CalledProcessError:
+        return False
+
+def build_executable():
+    """Build a standalone executable using PyInstaller."""
+    print("Building standalone executable...")
+    
+    try:
+        # Check if PyInstaller is installed
+        subprocess.run([sys.executable, "-c", "import PyInstaller"], check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        print("PyInstaller not found. Installing...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
+    
+    # Build the executable
+    pyinstaller_cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--name", "word_docx_tools",
+        "--onefile",
+        "--console",
+        "word_docx_tools.py"
+    ]
+    
+    try:
+        subprocess.run(pyinstaller_cmd, check=True)
+        print("Executable built successfully!")
+        print("Find it in the 'dist' directory.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to build executable: {e}")
+        sys.exit(1)
+
+def generate_mcp_config_pypi_uv():
+    """Generate MCP configuration for PyPI-installed word_docx_tools using UVX."""
+    config = {
+        "mcpServers": {
+            "word_docx_tools": {
+                "command": "uvx",
+                "args": ["--from", "word_docx_tools", "word_docx_tools"]
+            }
+        }
+    }
+    
+    with open("mcp-config-uvx.json", "w") as f:
+        json.dump(config, f, indent=2)
+    
+    print("MCP configuration for UVX saved to mcp-config-uvx.json")
+
+def generate_mcp_config_pypi_python():
+    """Generate MCP configuration for PyPI-installed word_docx_tools using Python module."""
+    config = {
+        "mcpServers": {
+            "word_docx_tools": {
+                "command": sys.executable,
+                "args": ["-m", "word_docx_tools"]
+            }
+        }
+    }
+    
+    with open("mcp-config-python.json", "w") as f:
+        json.dump(config, f, indent=2)
+    
+    print("MCP configuration for Python module saved to mcp-config-python.json")
+
+def generate_mcp_config_local():
+    """Generate MCP configuration for local development."""
+    # Get the absolute path to the main.py file
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    server_script_path = os.path.join(base_path, 'word_docx_tools', 'main.py')
+    
+    config = {
+        "mcpServers": {
+            "word_docx_tools": {
+                "command": sys.executable,
+                "args": [server_script_path]
+            }
+        }
+    }
+    
+    with open("mcp-config-local.json", "w") as f:
+        json.dump(config, f, indent=2)
+    
+    print("MCP configuration for local development saved to mcp-config-local.json")
+
+def install_from_pypi():
+    """Install word_docx_tools from PyPI."""
+    print("\nInstalling word_docx_tools from PyPI...")
+    
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "word_docx_tools"], check=True)
+        print("Successfully installed word_docx_tools!")
+    except subprocess.CalledProcessError as e:
+        print("Failed to install word_docx_tools from PyPI.")
+        print(f"Error: {e}")
+        sys.exit(1)
+
+def main():
+    """Main setup function."""
+    print("Word Document MCP Server Setup")
+    print("=" * 40)
+    
+    # Check if word_docx_tools is already installed
+    if check_word_docx_tools_installed():
+        print("✓ word_docx_tools is already installed")
+        install_choice = input("\nDo you want to reinstall? (y/N): ").lower().strip()
+        if install_choice not in ['y', 'yes']:
+            print("Skipping installation.")
+        else:
+            install_from_pypi()
+    else:
+        install_choice = input("\nDo you want to install word_docx_tools from PyPI? (Y/n): ").lower().strip()
+        if install_choice not in ['n', 'no']:
+            install_from_pypi()
+    
+    # Generate MCP configurations
+    print("\nGenerating MCP configurations...")
+    generate_mcp_config_pypi_uv()
+    generate_mcp_config_pypi_python()
+    generate_mcp_config_local()
+    
+    # Build executable option
+    build_choice = input("\nDo you want to build a standalone executable? (y/N): ").lower().strip()
+    if build_choice in ['y', 'yes']:
+        build_executable()
+    
+    print("\nSetup complete!")
+    print("\nNext steps:")
+    print("1. Use one of the generated mcp-config-*.json files with your MCP client")
+    print("2. Or run the server directly with: word_docx_tools")
+
+if __name__ == "__main__":
+    main()
     """
     Check if necessary prerequisites are installed
     
@@ -38,10 +196,10 @@ def check_prerequisites():
         except (subprocess.CalledProcessError, FileNotFoundError):
             uvx_installed = False
     
-    # Check if directofficeword-mcp is already installed via pip
+    # Check if word-docx-tools is already installed via pip
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "show", "directofficeword-mcp"],
+            [sys.executable, "-m", "pip", "show", "word-docx-tools"],
             capture_output=True,
             text=True,
             check=False
@@ -194,8 +352,8 @@ def generate_mcp_config_local(python_path, transport_config):
     # Get absolute path of the directory containing the current script
     base_path = os.path.abspath(os.path.dirname(__file__))
     
-    # Path to Word Document Server script
-    server_script_path = os.path.join(base_path, 'directofficeword_mcp.py')
+    # Path to Word Document Server module
+    server_script_path = os.path.join(base_path, 'word-docx-tools', 'main.py')
     
     # Build environment variables
     env = {
@@ -221,7 +379,7 @@ def generate_mcp_config_local(python_path, transport_config):
     # Create MCP configuration dictionary
     config = {
         "mcpServers": {
-            "word-document-server": {
+            "word-docx-tools": {
                 "command": python_path,
                 "args": [server_script_path],
                 "env": env
@@ -238,7 +396,7 @@ def generate_mcp_config_local(python_path, transport_config):
 
 def generate_mcp_config_uvx(transport_config):
     """
-    Generate MCP configuration for PyPI-installed directofficeword-mcp using UVX
+    Generate MCP configuration for PyPI-installed word-docx-tools using UVX
     
     Parameters:
     - transport_config: Transport configuration dictionary
@@ -271,9 +429,9 @@ def generate_mcp_config_uvx(transport_config):
     # Create MCP configuration dictionary
     config = {
         "mcpServers": {
-            "word-document-server": {
+            "word-docx-tools": {
                 "command": sys.executable,
-                "args": ["-m", "uv", "tool", "run", "--from", "directofficeword-mcp", "directofficeword_mcp"],
+                "args": ["-m", "uv", "tool", "run", "--from", "word-docx-tools", "word_docx_tools"],
                 "env": env
             }
         }
@@ -288,7 +446,7 @@ def generate_mcp_config_uvx(transport_config):
 
 def generate_mcp_config_module(transport_config):
     """
-    Generate MCP configuration for PyPI-installed directofficeword-mcp using Python module
+    Generate MCP configuration for PyPI-installed word-docx-tools using Python module
     
     Parameters:
     - transport_config: Transport configuration dictionary
@@ -321,9 +479,9 @@ def generate_mcp_config_module(transport_config):
     # Create MCP configuration dictionary
     config = {
         "mcpServers": {
-            "directofficeword-mcp": {
+            "word-docx-tools": {
                 "command": sys.executable,
-                "args": ["-m", "directofficeword_mcp"],
+                "args": ["-m", "word_docx_tools"],
                 "env": env
             }
         }
@@ -337,15 +495,15 @@ def generate_mcp_config_module(transport_config):
     return config_path
 
 def install_from_pypi():
-    """Install directofficeword-mcp from PyPI"""
-    print("\nInstalling directofficeword-mcp from PyPI...")
+    """Install word-docx-tools from PyPI"""
+    print("\nInstalling word-docx-tools from PyPI...")
     
     try:
-        subprocess.run([sys.executable, "-m", "pip", "install", "directofficeword-mcp"], check=True)
-        print("Successfully installed directofficeword-mcp!")
+        subprocess.run([sys.executable, "-m", "pip", "install", "word-docx-tools"], check=True)
+        print("Successfully installed word-docx-tools!")
         return True
     except subprocess.CalledProcessError:
-        print("Failed to install directofficeword-mcp from PyPI.")
+        print("Failed to install word-docx-tools from PyPI.")
         return False
 
 def print_config_instructions(config_path, transport_config):
@@ -449,9 +607,9 @@ if __name__ == '__main__':
     # Get transport configuration
     transport_config = get_transport_choice()
     
-    # If directofficeword-mcp is already installed
+    # If word-docx-tools is already installed
     if word_server_installed:
-        print("directofficeword-mcp is already installed via pip.")
+        print("word-docx-tools is already installed via pip.")
         
         if uvx_installed:
             print("\nOptions:")
@@ -492,9 +650,9 @@ if __name__ == '__main__':
                 print("Invalid choice. Exiting.")
                 sys.exit(1)
     
-    # If directofficeword-mcp is not installed, offer installation options
+    # If word-docx-tools is not installed, offer installation options
     else:
-        print("directofficeword-mcp is not installed.")
+        print("word-docx-tools is not installed.")
         
         print("\nOptions:")
         print("1. Install from PyPI (recommended)")

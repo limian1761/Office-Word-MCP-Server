@@ -74,3 +74,9 @@ When adding new tests:
 ## Continuous Integration
 
 Tests are automatically run as part of the CI pipeline. All tests must pass before changes can be merged.
+
+## Test Document Resources
+
+The `test_docs` directory contains sample Word documents used in testing:
+- `valid_test_document_v2.docx` - Standard test document with various elements
+- `additional_test_document.docx` - Additional test document with complex formatting
