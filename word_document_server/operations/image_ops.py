@@ -10,9 +10,10 @@ from typing import Any, Dict, List, Optional
 
 import win32com.client
 
-from ..utils.core_utils import ErrorCode, WordDocumentError, log_error, log_info
-from ..selector.selector import SelectorEngine
 from ..com_backend.com_utils import handle_com_error
+from ..selector.selector import SelectorEngine
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
+                                log_info)
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,21 @@ def get_image_info(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
     """
     try:
         if not document:
-            raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+            raise WordDocumentError(
+                ErrorCode.DOCUMENT_ERROR, "No active document found"
+            )
+
+        # 检查文档是否包含所需属性
+        if not hasattr(document, 'InlineShapes'):
+             raise WordDocumentError(
+                ErrorCode.DOCUMENT_ERROR,
+                "Document object missing required 'InlineShapes' property"
+            )
+        if not hasattr(document, 'Shapes'):
+            raise WordDocumentError(
+                ErrorCode.DOCUMENT_ERROR,
+                "Document object missing required 'Shapes' property"
+            )
 
         image_info_list = []
 
@@ -168,12 +183,12 @@ def get_object_image_info(object: Any, index: int = 0) -> Optional[Dict[str, Any
         return None
 
 
-@handle_com_error(ErrorCode.IMAGE_ERROR, "insert image")
+@handle_com_error(ErrorCode.IMAGE_NOT_FOUND, "insert image")
 def insert_image(
     document: win32com.client.CDispatch,
     image_path: str,
     locator: Optional[Dict[str, Any]] = None,
-    position: str = "after"
+    position: str = "after",
 ) -> str:
     """在文档中插入图片
 
@@ -223,8 +238,18 @@ def insert_image(
             )
     else:
         # 如果没有提供定位器，在文档末尾插入图片
-        range_obj = document.Range()
-        range_obj.Collapse(Direction=0)  # wdCollapseEnd
+         if not hasattr(document, 'Range'):
+             raise WordDocumentError(
+                 ErrorCode.DOCUMENT_ERROR,
+                 "Document object missing required 'Range' method"
+             )
+         range_obj = document.Range()
+         if not range_obj:
+             raise WordDocumentError(
+                 ErrorCode.OBJECT_TYPE_ERROR,
+                 "Failed to create valid Range object"
+             )
+         range_obj.Collapse(Direction=0)  # wdCollapseEnd
 
     try:
         # 插入图片
@@ -254,11 +279,11 @@ def insert_image(
         )
 
 
-@handle_com_error(ErrorCode.IMAGE_ERROR, "add caption")
+@handle_com_error(ErrorCode.IMAGE_FORMAT_ERROR, "add caption")
 def add_caption(
     document: win32com.client.CDispatch,
     caption_text: str,
-    locator: Optional[Dict[str, Any]] = None
+    locator: Optional[Dict[str, Any]] = None,
 ) -> str:
     """为文档元素添加题注
 
@@ -295,13 +320,29 @@ def add_caption(
                 )
         else:
             # 如果没有提供定位器，在文档末尾添加题注
+            if not hasattr(document, 'Range'):
+                raise WordDocumentError(
+                    ErrorCode.DOCUMENT_ERROR,
+                    "Document object missing required 'Range' method"
+                )
             range_obj = document.Range()
+            if not range_obj:
+                raise WordDocumentError(
+                    ErrorCode.OBJECT_TYPE_ERROR,
+                    "Failed to create valid Range object"
+                )
             range_obj.Collapse(Direction=0)  # wdCollapseEnd
 
         # 添加题注
-        document.Application.ActiveDocument.AttachedTemplate.AutoTextEntries(
-            "Caption Figure"
-        ).Insert(Where=range_obj)
+        try:
+            document.Application.ActiveDocument.AttachedTemplate.AutoTextEntries(
+                "Caption Figure"
+            ).Insert(Where=range_obj)
+        except Exception as e:
+            log_error(f"Failed to insert caption: {str(e)}")
+            raise WordDocumentError(
+                ErrorCode.SERVER_ERROR, f"Failed to add caption: {str(e)}"
+            )
 
         # 设置题注文本
         caption_range = document.Application.Selection.Range
@@ -323,7 +364,7 @@ def add_caption(
     )
 
 
-@handle_com_error(ErrorCode.IMAGE_ERROR, "resize image")
+@handle_com_error(ErrorCode.IMAGE_LOAD_ERROR, "resize image")
 def resize_image(
     document: win32com.client.CDispatch,
     image_index: int,
@@ -441,7 +482,7 @@ def resize_image(
     )
 
 
-@handle_com_error(ErrorCode.IMAGE_ERROR, "set image color type")
+@handle_com_error(ErrorCode.OBJECT_TYPE_ERROR, "set image color type")
 def set_image_color_type(
     document: win32com.client.CDispatch, image_index: int, color_type: str
 ) -> str:
@@ -599,3 +640,88 @@ def _get_shape_image_details(shape: Any) -> Dict[str, Any]:
         log_error(f"Failed to get additional shape details: {str(e)}")
 
     return details
+
+
+@handle_com_error(ErrorCode.IMAGE_FORMAT_ERROR, "add image caption")
+def add_image_caption(
+    document: win32com.client.CDispatch,
+    caption_text: str,
+    locator: Optional[Dict[str, Any]] = None,
+) -> str:
+    """为文档元素添加题注
+
+    Args:
+        document: Word文档COM对象
+        caption_text: 题注文本
+        locator: 定位器对象，用于指定添加题注的位置
+
+    Returns:
+        添加题注成功的消息
+
+    Raises:
+        ValueError: 当参数无效时抛出
+        WordDocumentError: 当添加题注失败时抛出
+    """
+    if not document:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+
+    # 验证参数
+    if not caption_text:
+        raise ValueError("Caption text cannot be empty")
+
+    try:
+        if locator:
+            # 使用定位器获取范围
+            selector = SelectorEngine()
+            selection = selector.select(document, locator)
+            if hasattr(selection, "_com_ranges") and selection._com_ranges:
+                range_obj = selection._com_ranges[0]  # _com_ranges 已包含 Range 对象
+                range_obj.Collapse(Direction=0)  # wdCollapseEnd
+            else:
+                raise WordDocumentError(
+                    ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
+                )
+        else:
+            # 如果没有提供定位器，在文档末尾添加题注
+            if not hasattr(document, 'Range'):
+                raise WordDocumentError(
+                    ErrorCode.DOCUMENT_ERROR,
+                    "Document object missing required 'Range' method"
+                )
+            range_obj = document.Range()
+            if not range_obj:
+                raise WordDocumentError(
+                    ErrorCode.OBJECT_TYPE_ERROR,
+                    "Failed to create valid Range object"
+                )
+            range_obj.Collapse(Direction=0)  # wdCollapseEnd
+
+        # 添加题注
+        try:
+            document.Application.ActiveDocument.AttachedTemplate.AutoTextEntries(
+                "Caption Figure"
+            ).Insert(Where=range_obj)
+        except Exception as e:
+            log_error(f"Failed to insert caption: {str(e)}")
+            raise WordDocumentError(
+                ErrorCode.SERVER_ERROR, f"Failed to add caption: {str(e)}"
+            )
+
+        # 设置题注文本
+        caption_range = document.Application.Selection.Range
+        caption_range.Collapse(0)  # wdCollapseEnd
+        caption_range.Text = f" {caption_text}"
+    except Exception as e:
+        raise WordDocumentError(
+            ErrorCode.SERVER_ERROR, f"Failed to add caption: {str(e)}"
+        )
+
+    log_info(f"Successfully added caption to object")
+    return json.dumps(
+        {
+            "success": True,
+            "message": "Successfully added caption",
+            "caption_text": caption_text,
+        },
+        ensure_ascii=False,
+    )

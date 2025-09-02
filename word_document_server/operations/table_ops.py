@@ -11,7 +11,8 @@ import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
 from ..selector.selector import SelectorEngine
-from ..utils.core_utils import ErrorCode, WordDocumentError, log_error, log_info
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
+                                log_info)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,9 @@ def create_table(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
+    if not hasattr(document, 'Tables') or document.Tables is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support tables")
+
     selector = SelectorEngine()
 
     # 验证行数和列数参数
@@ -58,7 +62,7 @@ def create_table(
             if hasattr(selection, "_com_ranges") and selection._com_ranges:
                 # 所有传入的对象都是Range对象，可以直接使用
                 range_obj = selection._com_ranges[0]
-                
+
                 # 根据位置参数调整范围
                 if position == "before":
                     range_obj.Collapse(Direction=1)  # wdCollapseStart
@@ -84,7 +88,10 @@ def create_table(
 
         # 添加默认样式
         try:
-            table.Style = "Table Grid"
+            if hasattr(document, 'Styles') and document.Styles is not None:
+                table.Style = "Table Grid"
+            else:
+                log_error("Document does not support styles")
         except Exception:
             # 如果默认样式不可用，使用第一个可用的表格样式
             try:
@@ -186,6 +193,9 @@ def get_cell_text(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
+    if not hasattr(document, 'Tables') or document.Tables is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support tables")
+
     # 验证参数
     if table_index <= 0:
         raise ValueError("Table index must be a positive integer")
@@ -263,6 +273,9 @@ def set_cell_text(
     """
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+
+    if not hasattr(document, 'Tables') or document.Tables is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support tables")
 
     # 验证参数
     if table_index <= 0:
@@ -400,8 +413,8 @@ def get_table_info(document: win32com.client.CDispatch, table_index: int) -> str
             "rows": table.Rows.Count,
             "columns": table.Columns.Count,
             "has_borders": table.Borders.Enable,
-   # 检查是否有嵌套表格
-        "has_nested_tables": table.Cell(1, 1).Range.Tables.Count > 0
+            # 检查是否有嵌套表格
+            "has_nested_tables": table.Cell(1, 1).Range.Tables.Count > 0,
         }
 
         # 获取表格内容（可选择性地获取，根据需要）
@@ -429,7 +442,10 @@ def get_table_info(document: win32com.client.CDispatch, table_index: int) -> str
 
 @handle_com_error(ErrorCode.TABLE_ERROR, "insert row")
 def insert_row(
-    document: win32com.client.CDispatch, table_index: int, position: Union[int, str], count: int = 1
+    document: win32com.client.CDispatch,
+    table_index: int,
+    position: Union[int, str],
+    count: int = 1,
 ) -> str:
     """在表格中插入行
 
@@ -471,7 +487,9 @@ def insert_row(
         if position.lower() == "after":
             position = table.Rows.Count + 1
         else:
-            raise ValueError(f"Invalid position string: {position}. Only 'after' is supported")
+            raise ValueError(
+                f"Invalid position string: {position}. Only 'after' is supported"
+            )
     elif not isinstance(position, int) or position <= 0:
         raise ValueError("Insert position must be a positive integer or 'after'")
 

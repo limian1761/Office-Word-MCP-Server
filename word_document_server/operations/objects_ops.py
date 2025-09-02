@@ -4,11 +4,14 @@ This module contains functions for document objects operations including bookmar
 """
 
 import logging
-from typing import Dict, List, Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
 import win32com.client
+
 from ..com_backend.com_utils import handle_com_error, safe_com_call
-from ..utils.core_utils import WordDocumentError, ErrorCode, log_info, log_error
 from ..selector.selector import SelectorEngine
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
+                                log_info)
 
 if TYPE_CHECKING:
     from win32com.client import CDispatch
@@ -18,9 +21,7 @@ else:
 logger = logging.getLogger(__name__)
 
 
-def _get_range_from_locator(
-    document: Any, locator: Optional[Dict[str, Any]]
-) -> Any:
+def _get_range_from_locator(document: Any, locator: Optional[Dict[str, Any]]) -> Any:
     """Helper function to get a Range object from a locator."""
     if not locator:
         range_obj = document.Range()
@@ -67,6 +68,9 @@ def create_bookmark(
     """
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+
+    if not hasattr(document, 'Bookmarks') or document.Bookmarks is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support bookmarks")
 
     if not bookmark_name:
         raise WordDocumentError(
@@ -119,6 +123,9 @@ def get_bookmark(
     """
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+
+    if not hasattr(document, 'Bookmarks') or document.Bookmarks is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support bookmarks")
 
     if not bookmark_name:
         raise WordDocumentError(
@@ -174,6 +181,9 @@ def delete_bookmark(document: win32com.client.CDispatch, bookmark_name: str) -> 
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
+    if not hasattr(document, 'Bookmarks') or document.Bookmarks is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support bookmarks")
+
     if not bookmark_name:
         raise WordDocumentError(
             ErrorCode.INVALID_INPUT, "Bookmark name cannot be empty"
@@ -227,6 +237,9 @@ def create_citation(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
+    if not hasattr(document, 'Bibliography') or document.Bibliography is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support bibliography")
+
     if not source_data:
         raise WordDocumentError(ErrorCode.INVALID_INPUT, "Source data cannot be empty")
 
@@ -277,6 +290,9 @@ def create_hyperlink(
     """
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+
+    if not hasattr(document, 'Hyperlinks') or document.Hyperlinks is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support hyperlinks")
 
     if not address:
         raise WordDocumentError(

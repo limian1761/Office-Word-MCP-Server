@@ -7,24 +7,27 @@ for targeting specific objects in Word documents.
 
 import logging
 import weakref
-from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional, TypeVar, Union
+from typing import (TYPE_CHECKING, Any, Dict, Generic, List, Optional, TypeVar,
+                    Union)
 
 import win32com.client
 
-from word_document_server.selector.object_finder import ObjectFinder
 from word_document_server.selector.exceptions import (AmbiguousLocatorError,
                                                       LocatorSyntaxError)
 from word_document_server.selector.filter_handlers import FilterHandlers
 from word_document_server.selector.locator_parser import LocatorParser
+from word_document_server.selector.object_finder import ObjectFinder
 from word_document_server.selector.selection import Selection
-from word_document_server.utils.core_utils import (ObjectNotFoundError,
-                                                   ErrorCode,
+from word_document_server.mcp_service.core_utils import (ErrorCode,
+                                                   ObjectNotFoundError,
                                                    WordDocumentError)
+
+import logging
+logger = logging.getLogger(__name__)
 
 # 定义类型变量
 T = TypeVar("T")  # 通用类型变量
 ObjectT = TypeVar("ObjectT", bound=win32com.client.CDispatch)  # 元素类型变量
-
 
 class SelectorEngine:
     """
@@ -84,11 +87,11 @@ class SelectorEngine:
         # 检查locator是否为字典类型
         if not isinstance(locator, dict):
             raise LocatorSyntaxError("Locator must be a dictionary.")
-            
+
         # 检查是否包含type字段
         if "type" not in locator:
             raise LocatorSyntaxError("Locator must specify an object type.")
-            
+
         object_type = locator["type"]
 
         # Check for required type field
@@ -150,7 +153,7 @@ class SelectorEngine:
             target_spec = locator
         else:
             target_spec = locator["target"]
-            
+
         objects: List[Any]
 
         # Create a copy of target_spec to avoid modifying the original
@@ -177,7 +180,9 @@ class SelectorEngine:
         # If no anchor, perform a global search from the start of the document
         if "anchor" not in locator:
             candidates = object_finder.get_initial_candidates(modified_target["type"])
-            objects = object_finder.apply_filters(candidates, modified_target.get("filters", []))
+            objects = object_finder.apply_filters(
+                candidates, modified_target.get("filters", [])
+            )
         else:
             # If anchor and relation are present, perform a relational search
             if "relation" not in locator:
@@ -191,22 +196,25 @@ class SelectorEngine:
 
             if not anchor_object:
                 raise ObjectNotFoundError(
-                    {"anchor": anchor_spec}, 
-                    f"Anchor object not found for: {anchor_spec}"
+                    {"anchor": anchor_spec},
+                    f"Anchor object not found for: {anchor_spec}",
                 )
 
             # 2. Perform the relational selection
             relation = locator["relation"]
-            candidates = object_finder.get_initial_candidates(modified_target["type"], within_range=anchor_object)
+            candidates = object_finder.get_initial_candidates(
+                modified_target["type"], within_range=anchor_object
+            )
             objects = object_finder.select_relative_to_anchor(
                 candidates, anchor_object, relation
             )
-            objects = object_finder.apply_filters(objects, modified_target.get("filters", []))
+            objects = object_finder.apply_filters(
+                objects, modified_target.get("filters", [])
+            )
 
         if not objects:
             raise ObjectNotFoundError(
-                locator, 
-                f"No objects found for locator: {locator}."
+                locator, f"No objects found for locator: {locator}."
             )
 
         if expect_single and len(objects) > 1:
@@ -222,31 +230,32 @@ class SelectorEngine:
         range_objects = []
         for obj in objects:
             # 如果对象已经是Range对象（检查是否有Text属性）
-            if hasattr(obj, 'Text') and hasattr(obj, 'Start') and hasattr(obj, 'End'):
+            if hasattr(obj, "Text") and hasattr(obj, "Start") and hasattr(obj, "End"):
                 range_objects.append(obj)
             # 否则尝试获取其Range属性
-            elif hasattr(obj, 'Range'):
+            elif hasattr(obj, "Range"):
                 range_objects.append(obj.Range)
             else:
                 # 如果以上都不适用，创建一个包含该对象的Range
                 # 这是最后的尝试，可能不适用于所有对象类型
                 try:
                     # 尝试创建一个基于对象位置的Range
-                    start = obj.Start if hasattr(obj, 'Start') else 0
-                    end = obj.End if hasattr(obj, 'End') else 0
+                    start = obj.Start if hasattr(obj, "Start") else 0
+                    end = obj.End if hasattr(obj, "End") else 0
                     if start != 0 or end != 0:
                         range_obj = document.Range(Start=start, End=end)
                         range_objects.append(range_obj)
                     else:
                         # 如果无法获取位置信息，跳过该对象
-                        logger.warning(f"Unable to convert object of type {type(obj).__name__} to Range")
+                        logger.warning(
+                            f"Unable to convert object of type {type(obj).__name__} to Range"
+                        )
                 except Exception as e:
                     logger.warning(f"Failed to convert object to Range: {e}")
-        
+
         if not range_objects:
             raise ObjectNotFoundError(
-                locator, 
-                f"No valid Range objects found for locator: {locator}."
+                locator, f"No valid Range objects found for locator: {locator}."
             )
 
         # Cache the result

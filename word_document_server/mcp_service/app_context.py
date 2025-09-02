@@ -4,16 +4,13 @@ AppContext for managing the Word application instance and the active document st
 
 import logging
 import os
-import shutil
 import traceback
 from typing import Optional, cast
-
 import pythoncom
-import win32com.client
 from pythoncom import com_error
 from win32com.client.dynamic import CDispatch
 
-from word_document_server.mcp_service.errors import ErrorCode, WordDocumentError
+from .errors import ErrorCode, WordDocumentError
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -148,9 +145,7 @@ class AppContext:
                     )
                     # 重新导入win32com.client以确保使用清除后的缓存
                     import importlib
-
                     import win32com.client
-
                     importlib.reload(win32com.client)
 
                     self._word_app = win32com.client.Dispatch("Word.Application")

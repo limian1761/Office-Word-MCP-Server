@@ -8,9 +8,12 @@ from typing import Any, Dict, List, Optional, Union
 
 import win32com.client
 
-from word_document_server.com_backend.com_utils import handle_com_error
-from word_document_server.utils.core_utils import ErrorCode, WordDocumentError, log_error, log_info, ObjectNotFoundError
-from word_document_server.selector.selector import SelectorEngine
+from ..com_backend.com_utils import handle_com_error
+from ..selector.selector import SelectorEngine
+from ..mcp_service.core_utils import (ErrorCode,
+                                                          ObjectNotFoundError,
+                                                          WordDocumentError,
+                                                          log_error, log_info)
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +30,7 @@ def set_bold_for_range(range_obj: Any, is_bold: bool) -> bool:
         操作是否成功
     """
     try:
-        if hasattr(range_obj, 'Font'):
+        if hasattr(range_obj, "Font"):
             range_obj.Font.Bold = is_bold
             return True
         return False
@@ -48,7 +51,7 @@ def set_italic_for_range(range_obj: Any, is_italic: bool) -> bool:
         操作是否成功
     """
     try:
-        if hasattr(range_obj, 'Font'):
+        if hasattr(range_obj, "Font"):
             range_obj.Font.Italic = is_italic
             return True
         return False
@@ -69,7 +72,7 @@ def set_font_size_for_range(range_obj: Any, font_size: float) -> bool:
         操作是否成功
     """
     try:
-        if hasattr(range_obj, 'Font'):
+        if hasattr(range_obj, "Font"):
             range_obj.Font.Size = font_size
             return True
         return False
@@ -90,7 +93,7 @@ def set_font_name_for_range(range_obj: Any, font_name: str) -> bool:
         操作是否成功
     """
     try:
-        if hasattr(range_obj, 'Font'):
+        if hasattr(range_obj, "Font"):
             range_obj.Font.Name = font_name
             return True
         return False
@@ -112,7 +115,7 @@ def set_font_color_for_range(document: Any, range_obj: Any, color: str) -> bool:
         操作是否成功
     """
     try:
-        if hasattr(range_obj, 'Font'):
+        if hasattr(range_obj, "Font"):
             # 尝试将颜色字符串转换为RGB值
             # 这里简化处理，实际项目中可能需要更复杂的颜色解析
             if color.lower() == "red":
@@ -144,7 +147,7 @@ def set_alignment_for_range(document: Any, range_obj: Any, alignment: str) -> bo
         操作是否成功
     """
     try:
-        if hasattr(range_obj, 'ParagraphFormat'):
+        if hasattr(range_obj, "ParagraphFormat"):
             # Word的对齐常量
             wdAlignParagraphLeft = 0
             wdAlignParagraphCenter = 1
@@ -179,14 +182,14 @@ def set_paragraph_style(object: Any, style_name: str) -> bool:
         操作是否成功
     """
     try:
-        if hasattr(object, 'Style'):
+        if hasattr(object, "Style"):
             # 尝试直接设置样式
             try:
                 object.Style = style_name
                 return True
             except Exception:
                 # 如果失败，尝试在文档中查找样式
-                if hasattr(object, 'Document') and hasattr(object.Document, 'Styles'):
+                if hasattr(object, "Document") and hasattr(object.Document, "Styles"):
                     styles = object.Document.Styles
                     for i in range(1, styles.Count + 1):
                         try:
@@ -206,7 +209,7 @@ def create_bulleted_list_relative_to(
     document: win32com.client.CDispatch,
     anchor_range: Any,
     items: List[str],
-    position: str = "after"
+    position: str = "after",
 ) -> bool:
     """在指定范围附近创建项目符号列表
 
@@ -245,7 +248,7 @@ def create_bulleted_list_relative_to(
         for i, item in enumerate(items):
             # 插入列表项文本
             insertion_range.InsertAfter(item)
-            
+
             # 如果不是最后一项，添加段落标记
             if i < len(items) - 1:
                 insertion_range.Collapse(0)
@@ -254,19 +257,20 @@ def create_bulleted_list_relative_to(
 
         # 为新插入的文本应用项目符号列表格式
         # 获取刚刚插入的文本范围
-        list_start = insertion_range.Start - sum(len(item) + 2 for item in items)  # 2 for \r
+        list_start = insertion_range.Start - sum(
+            len(item) + 2 for item in items
+        )  # 2 for \r
         list_end = insertion_range.Start
         list_range = document.Range(list_start, list_end)
 
         # 应用项目符号列表
         list_range.ParagraphFormat.Bullet.Enabled = True
-        
+
         return True
     except Exception as e:
         log_error(f"Failed to create bulleted list: {e}")
         raise WordDocumentError(
-            ErrorCode.FORMATTING_ERROR,
-            f"Failed to create bulleted list: {str(e)}"
+            ErrorCode.FORMATTING_ERROR, f"Failed to create bulleted list: {str(e)}"
         )
 
 
@@ -275,7 +279,7 @@ def create_bulleted_list(
     document: win32com.client.CDispatch,
     locator: Dict[str, Any],
     items: List[str],
-    position: str = "after"
+    position: str = "after",
 ) -> bool:
     """在指定元素附近创建项目符号列表
 
@@ -289,7 +293,7 @@ def create_bulleted_list(
         操作是否成功
     """
     from word_document_server.selector.selector import SelectorEngine
-    
+
     try:
         if not document:
             raise RuntimeError("No document open.")
@@ -318,14 +322,11 @@ def create_bulleted_list(
                 insertion_range.Collapse(0)  # wdCollapseEnd = 0
 
             # 在插入点创建项目符号列表
-            create_bulleted_list_relative_to(
-                document, insertion_range, items, "after"
-            )
-        
+            create_bulleted_list_relative_to(document, insertion_range, items, "after")
+
         return True
     except Exception as e:
         log_error(f"Failed to create bulleted list: {e}")
         raise WordDocumentError(
-            ErrorCode.FORMATTING_ERROR,
-            f"Failed to create bulleted list: {str(e)}"
+            ErrorCode.FORMATTING_ERROR, f"Failed to create bulleted list: {str(e)}"
         )

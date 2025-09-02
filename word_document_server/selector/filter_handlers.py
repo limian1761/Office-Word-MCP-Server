@@ -8,7 +8,7 @@ import re
 from typing import Any, Dict, List
 
 from word_document_server.selector.exceptions import LocatorSyntaxError
-from word_document_server.utils.core_utils import get_shape_types
+from word_document_server.mcp_service.core_utils import get_shape_types
 
 
 class FilterHandlers:
@@ -32,19 +32,21 @@ class FilterHandlers:
             "range_end": self._filter_by_range_end,
         }
 
-    def apply_filters(self, objects: List[Any], filters: List[Dict[str, Any]]) -> List[Any]:
+    def apply_filters(
+        self, objects: List[Any], filters: List[Dict[str, Any]]
+    ) -> List[Any]:
         """Applies a series of filters to a list of objects.
-        
+
         Args:
             objects: List of objects to filter.
             filters: List of filter dictionaries.
-            
+
         Returns:
             Filtered list of objects.
-            
+
         Raises:
             LocatorSyntaxError: If filter format is invalid.
-            
+
         For guidance on proper locator syntax, please refer to:
         word_document_server/selector/LOCATOR_GUIDE.md
         """

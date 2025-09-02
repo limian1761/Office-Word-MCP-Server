@@ -10,8 +10,10 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import win32com.client
 
-from word_document_server.com_backend.com_utils import handle_com_error
-from word_document_server.utils.core_utils import ErrorCode, WordDocumentError, log_error, log_info
+from ..com_backend.com_utils import handle_com_error
+from ..mcp_service.core_utils import (ErrorCode,
+                                                   WordDocumentError,
+                                                   log_error, log_info)
 
 if TYPE_CHECKING:
     from win32com.client import CDispatch
@@ -41,10 +43,15 @@ def compare_documents(
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
     if not compared_document_path:
-        raise WordDocumentError(ErrorCode.INVALID_INPUT, "Compared document path cannot be empty")
+        raise WordDocumentError(
+            ErrorCode.INVALID_INPUT, "Compared document path cannot be empty"
+        )
 
     if not os.path.exists(compared_document_path):
-        raise WordDocumentError(ErrorCode.FILE_NOT_FOUND, f"Compared document not found: {compared_document_path}")
+        raise WordDocumentError(
+            ErrorCode.NOT_FOUND,
+            f"Compared document not found: {compared_document_path}",
+        )
 
     # 打开要比较的文档
     word_app = original_document.Application
@@ -65,12 +72,12 @@ def compare_documents(
         CompareComments=True,
         CompareMoves=True,
         RevisedAuthor="MCP Server",
-        IgnoreAllComparisonWarnings=True
+        IgnoreAllComparisonWarnings=True,
     )
 
     # 统计差异
     differences_count = 0
-    if hasattr(comparison_result, 'Revisions'):
+    if hasattr(comparison_result, "Revisions"):
         differences_count = comparison_result.Revisions.Count
 
     # 保存比较结果（如果指定了路径）
@@ -95,15 +102,13 @@ def compare_documents(
     return {
         "differences_count": differences_count,
         "compared_document_name": compared_doc.Name,
-        "saved_path": saved_path
+        "saved_path": saved_path,
     }
 
 
 @handle_com_error(ErrorCode.SERVER_ERROR, "convert document format")
 def convert_document_format(
-    document: win32com.client.CDispatch, 
-    output_path: str, 
-    format_type: str
+    document: win32com.client.CDispatch, output_path: str, format_type: str
 ) -> bool:
     """将文档转换为指定格式
 
@@ -120,32 +125,34 @@ def convert_document_format(
     """
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
-    
+
     if not output_path:
         raise WordDocumentError(ErrorCode.INVALID_INPUT, "Output path cannot be empty")
-    
+
     format_constants = {
         "txt": 0,  # wdFormatText
         "doc": 0,  # wdFormatDocument
         "docx": 12,  # wdFormatXMLDocument
         "rtf": 6,  # wdFormatRTF
         "odt": 23,  # wdFormatOpenDocumentText
-        "pdf": 17  # wdExportFormatPDF
+        "pdf": 17,  # wdExportFormatPDF
     }
-    
+
     if format_type not in format_constants:
-        raise WordDocumentError(ErrorCode.INVALID_INPUT, f"Invalid format type: {format_type}")
-    
+        raise WordDocumentError(
+            ErrorCode.INVALID_INPUT, f"Invalid format type: {format_type}"
+        )
+
+    if not hasattr(document, 'SaveAs2'):
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support SaveAs2 method")
+
     document.SaveAs2(output_path, format_constants[format_type])
     log_info(f"Successfully converted document to {format_type}: {output_path}")
     return True
 
 
 @handle_com_error(ErrorCode.SERVER_ERROR, "export to pdf")
-def export_to_pdf(
-    document: win32com.client.CDispatch, 
-    output_path: str
-) -> bool:
+def export_to_pdf(document: win32com.client.CDispatch, output_path: str) -> bool:
     """将文档导出为PDF
 
     Args:
@@ -160,17 +167,17 @@ def export_to_pdf(
     """
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
-    
+
     if not output_path:
         raise WordDocumentError(ErrorCode.INVALID_INPUT, "Output path cannot be empty")
-    
+
     # 确保输出路径以.pdf结尾
-    if not output_path.lower().endswith('.pdf'):
-        output_path += '.pdf'
-    
+    if not output_path.lower().endswith(".pdf"):
+        output_path += ".pdf"
+
     # 设置导出参数
     export_format = 17  # wdExportFormatPDF
-    
+
     # 导出为PDF
     document.ExportAsFixedFormat(
         OutputFileName=output_path,
@@ -184,9 +191,9 @@ def export_to_pdf(
         CreateBookmarks=1,  # wdExportCreateHeadingBookmarks
         DocStructureTags=True,
         BitmapMissingFonts=True,
-        UseISO19005_1=True
+        UseISO19005_1=True,
     )
-    
+
     log_info(f"Successfully exported document to PDF: {output_path}")
     return True
 
@@ -195,7 +202,7 @@ def export_to_pdf(
 def print_document(
     document: win32com.client.CDispatch,
     printer_name: Optional[str] = None,
-    copies: int = 1
+    copies: int = 1,
 ) -> bool:
     """打印文档
 
@@ -212,13 +219,16 @@ def print_document(
     """
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
-    
-    # 设置打印机名称
+
+    if not hasattr(document, 'Application') or document.Application is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not have an Application instance")
+
+    word_app = document.Application
     if printer_name:
         document.PrintOut(Printer=printer_name)
     else:
         document.PrintOut()
-    
+
     log_info(f"Successfully printed document {copies} times")
     return True
 
@@ -227,7 +237,7 @@ def print_document(
 def protect_document(
     document: win32com.client.CDispatch,
     password: str,
-    protection_type: str = "readonly"
+    protection_type: str = "readonly",
 ) -> bool:
     """保护文档
 
@@ -244,24 +254,24 @@ def protect_document(
     """
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
-    
+
     if protection_type not in ["readonly", "comments", "tracked_changes", "forms"]:
-        raise WordDocumentError(ErrorCode.INVALID_INPUT, f"Invalid protection type: {protection_type}")
-    
+        raise WordDocumentError(
+            ErrorCode.INVALID_INPUT, f"Invalid protection type: {protection_type}"
+        )
+
     protection_constants = {
         "readonly": 1,  # wdAllowOnlyReading
         "comments": 2,  # wdAllowOnlyComments
         "tracked_changes": 3,  # wdAllowOnlyRevisions
-        "forms": 4  # wdAllowOnlyFormFields
+        "forms": 4,  # wdAllowOnlyFormFields
     }
-    
+
     # 保护文档
     document.Protect(
-        Type=protection_constants[protection_type],
-        NoReset=True,
-        Password=password
+        Type=protection_constants[protection_type], NoReset=True, Password=password
     )
-    
+
     log_info(f"Successfully protected document with {protection_type} protection")
     return True
 
@@ -284,13 +294,13 @@ def get_document_statistics(document: win32com.client.CDispatch) -> Dict[str, An
 
     # 获取文档基本统计信息
     stats = {
-        "paragraphs": document.Paragraphs.Count,
-        "tables": document.Tables.Count,
-        "inline_shapes": document.InlineShapes.Count if hasattr(document, "InlineShapes") else 0,
-        "sections": document.Sections.Count,
-        "comments": document.Comments.Count,
-        "words": document.Words.Count,
-        "characters": document.Characters.Count,
+        "paragraphs": document.Paragraphs.Count if hasattr(document, 'Paragraphs') and document.Paragraphs is not None else 0,
+        "tables": document.Tables.Count if hasattr(document, 'Tables') and document.Tables is not None else 0,
+        "inline_shapes": document.InlineShapes.Count if hasattr(document, 'InlineShapes') and document.InlineShapes is not None else 0,
+        "sections": document.Sections.Count if hasattr(document, 'Sections') and document.Sections is not None else 0,
+        "comments": document.Comments.Count if hasattr(document, 'Comments') and document.Comments is not None else 0,
+        "words": document.Words.Count if hasattr(document, 'Words') and document.Words is not None else 0,
+        "characters": document.Characters.Count if hasattr(document, 'Characters') and document.Characters is not None else 0,
         "pages": document.Range().Information(4),  # wdNumberOfPagesInDocument
         "bookmarks": document.Bookmarks.Count if hasattr(document, "Bookmarks") else 0,
     }
@@ -300,7 +310,9 @@ def get_document_statistics(document: win32com.client.CDispatch) -> Dict[str, An
 
 
 @handle_com_error(ErrorCode.SERVER_ERROR, "unprotect document")
-def unprotect_document(document: win32com.client.CDispatch, password: Optional[str] = None) -> bool:
+def unprotect_document(
+    document: win32com.client.CDispatch, password: Optional[str] = None
+) -> bool:
     """解除文档保护
 
     Args:
@@ -315,13 +327,13 @@ def unprotect_document(document: win32com.client.CDispatch, password: Optional[s
     """
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
-    
+
     # 检查文档是否受保护
     # 注意：ProtectionType == -1 表示没有保护，其他值表示有保护
     if document.ProtectionType != -1:  # wdNoProtection
         # 解除保护
         document.Unprotect(Password=password)
-        
+
         log_info("Successfully unprotected document")
         return True
     else:

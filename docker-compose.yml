@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # Local development setup with volume mounting
+  word-mcp-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - MCP_TRANSPORT=http
+      - HOST=0.0.0.0
+      - PORT=8000
+    # Note: COM integration with Word is limited in containers
+    # This is suitable for development and testing only
+
+  # Production-like setup
+  word-mcp-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MCP_TRANSPORT=http
+      - HOST=0.0.0.0
+      - PORT=8000
+    # For production use, consider using host networking
+    # network_mode: "host"
+
+  # Windows container variant (requires Windows host)
+  # Uncomment this section if deploying on Windows with Docker Desktop
+  # word-mcp-windows:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: windows-base
+  #   environment:
+  #     - MCP_TRANSPORT=stdio
+  #   # Windows containers require special configuration for COM objects
+  #   # This is a template - actual deployment may require additional setup
+
+# Volumes for persistent data (if needed)
+volumes:
+  # Example volume for document storage
+  # documents:
+  #   driver: local

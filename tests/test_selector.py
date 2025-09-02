@@ -15,8 +15,7 @@ from pathlib import Path
 
 from word_document_server.selector.selector import SelectorEngine
 from word_document_server.selector.exceptions import LocatorSyntaxError, AmbiguousLocatorError
-from word_document_server.utils.core_utils import WordDocumentError
-
+from word_document_server.mcp_service.core_utils import WordDocumentError
 
 class TestSelector(unittest.TestCase):
     """Tests for selector functionality"""

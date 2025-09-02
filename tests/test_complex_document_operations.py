@@ -24,7 +24,7 @@ from word_document_server.tools.image_tools import image_tools
 from word_document_server.tools.comment_tools import comment_tools
 from word_document_server.tools.range_tools import range_tools
 from word_document_server.utils.app_context import AppContext
-from word_document_server.utils.core_utils import format_error_response
+from word_document_server.mcp_service.core_utils import format_error_response
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
 

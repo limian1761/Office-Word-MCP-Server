@@ -4,9 +4,9 @@ Document Integration Tool for Word Document MCP Server.
 This module provides a unified MCP tool for document operations.
 """
 
-import os
 # Standard library imports
 import json
+import os
 from typing import Any, Dict, List, Optional
 
 import win32com.client
@@ -18,25 +18,16 @@ from pydantic import Field
 # Local imports
 from word_document_server.mcp_service.core import mcp_server
 from word_document_server.operations.document_ops import (
-    close_document,
-    create_document,
-    get_document_structure,
-    open_document,
-    save_document,
-)
-from word_document_server.operations.others_ops import (
-    protect_document,
-    unprotect_document,
-)
+    close_document, create_document, get_document_structure, open_document,
+    save_document)
+from word_document_server.operations.others_ops import (protect_document,
+                                                        unprotect_document)
 from word_document_server.utils.app_context import AppContext
-from word_document_server.utils.core_utils import (
-    ErrorCode,
-    WordDocumentError,
-    format_error_response,
-    log_error,
-    log_info,
-    log_warning,
-)
+from word_document_server.mcp_service.core_utils import (ErrorCode,
+                                                   WordDocumentError,
+                                                   format_error_response,
+                                                   log_error, log_info,
+                                                   log_warning)
 
 # 加载环境变量
 try:
@@ -53,31 +44,40 @@ def document_tools(
         description="Type of document operation: create, open, save, save_as, close, get_info, set_property, get_property, print, protect, unprotect",
     ),
     file_path: Optional[str] = Field(
-        default=None, description="File path for document operations. Required for: open,save_as. Optional for: None.  Optional for: create, "
+        default=None,
+        description="File path for document operations. Required for: open,save_as. Optional for: None.  Optional for: create, ",
     ),
     template_path: Optional[str] = Field(
-        default=None, description="Template path for create operation. Required for: None. Optional for: create"
+        default=None,
+        description="Template path for create operation. Required for: None. Optional for: create",
     ),
     document_properties: Optional[Dict[str, Any]] = Field(
-        default=None, description="Document properties for set_property operation. Required for: set_property. Optional for: None"
+        default=None,
+        description="Document properties for set_property operation. Required for: set_property. Optional for: None",
     ),
     property_name: Optional[str] = Field(
-        default=None, description="Property name for get/set operations. Required for: get_property, set_property. Optional for: None"
+        default=None,
+        description="Property name for get/set operations. Required for: get_property, set_property. Optional for: None",
     ),
     property_value: Optional[Any] = Field(
-        default=None, description="Property value for set operation. Required for: set_property. Optional for: None"
+        default=None,
+        description="Property value for set operation. Required for: set_property. Optional for: None",
     ),
     print_settings: Optional[Dict[str, Any]] = Field(
-        default=None, description="Print settings for print operation. Required for: print. Optional for: None"
+        default=None,
+        description="Print settings for print operation. Required for: print. Optional for: None",
     ),
     protection_type: Optional[str] = Field(
-        default=None, description="Protection type for protect operation. Required for: protect. Optional for: None"
+        default=None,
+        description="Protection type for protect operation. Required for: protect. Optional for: None",
     ),
     protection_password: Optional[str] = Field(
-        default=None, description="Password for protect/unprotect operations. Required for: protect, unprotect. Optional for: None"
+        default=None,
+        description="Password for protect/unprotect operations. Required for: protect, unprotect. Optional for: None",
     ),
     password: Optional[str] = Field(
-        default=None, description="Password for opening protected documents. Required for: open (when document is password protected). Optional for: None"
+        default=None,
+        description="Password for opening protected documents. Required for: open (when document is password protected). Optional for: None",
     ),
 ) -> Any:
     """Unified document operation tool.
@@ -128,7 +128,9 @@ def document_tools(
         if operation_type and operation_type.lower() == "create":
             log_info("Creating new document")
             # 创建新文档的逻辑
-            word_app = ctx.request_context.lifespan_context.get_word_app(create_if_needed=True)
+            word_app = ctx.request_context.lifespan_context.get_word_app(
+                create_if_needed=True
+            )
             if word_app is None:
                 log_error("Failed to get or create Word application instance")
                 raise RuntimeError("Failed to get or create Word application instance")
@@ -144,11 +146,11 @@ def document_tools(
                     {
                         "success": False,
                         "message": f"文件已存在: {file_path}",
-                        "error_code": "FILE_ALREADY_EXISTS"
+                        "error_code": "FILE_ALREADY_EXISTS",
                     },
                     ensure_ascii=False,
                 )
-            
+
             # 保存新文档
             save_document(doc, file_path)
 
@@ -186,38 +188,52 @@ def document_tools(
 
             log_info(f"Opening document: {file_path}")
             # 获取Word应用实例
-            word_app = ctx.request_context.lifespan_context.get_word_app(create_if_needed=True)
+            word_app = ctx.request_context.lifespan_context.get_word_app(
+                create_if_needed=True
+            )
             if word_app is None:
                 raise RuntimeError("Failed to get or create Word application instance")
-            
+
             # 尝试打开文档，添加错误处理
             max_retries = 3
             retry_count = 0
             doc = None
-            
+
             while retry_count < max_retries and doc is None:
                 try:
                     # 尝试使用word_app.Documents.Open打开文档
                     if password:
-                        doc = word_app.Documents.Open(FileName=file_path, PasswordDocument=password)
+                        doc = word_app.Documents.Open(
+                            FileName=file_path, PasswordDocument=password
+                        )
                     else:
                         doc = word_app.Documents.Open(FileName=file_path)
                 except AttributeError as e:
                     retry_count += 1
                     if retry_count >= max_retries:
-                        log_error(f"Failed to open document after {max_retries} retries: {str(e)}")
-                        raise RuntimeError(f"Failed to access Word Documents collection: {str(e)}")
-                    
+                        log_error(
+                            f"Failed to open document after {max_retries} retries: {str(e)}"
+                        )
+                        raise RuntimeError(
+                            f"Failed to access Word Documents collection: {str(e)}"
+                        )
+
                     # 尝试重新创建Word应用实例
-                    log_warning(f"Retrying document opening (attempt {retry_count}/{max_retries}) after AttributeError")
+                    log_warning(
+                        f"Retrying document opening (attempt {retry_count}/{max_retries}) after AttributeError"
+                    )
                     try:
                         # 释放当前实例并创建新实例
                         if word_app is not None:
                             word_app.Quit()
                         word_app = win32com.client.Dispatch("Word.Application")
-                        ctx.request_context.lifespan_context._word_app = word_app  # 更新上下文
+                        ctx.request_context.lifespan_context._word_app = (
+                            word_app  # 更新上下文
+                        )
                     except Exception as inner_e:
-                        log_error(f"Failed to recreate Word application: {str(inner_e)}")
+                        log_error(
+                            f"Failed to recreate Word application: {str(inner_e)}"
+                        )
                 except Exception as e:
                     # 处理其他异常
                     log_error(f"Error opening document: {str(e)}")
@@ -239,7 +255,9 @@ def document_tools(
                         # 由于文件可能很大，只读取前10000个字符
                         agent_guide_content = f.read(10000)
                         if len(agent_guide_content) == 10000:
-                            agent_guide_content += "\n\n...文档内容过长，已从10000个字符处截断... "
+                            agent_guide_content += (
+                                "\n\n...文档内容过长，已从10000个字符处截断... "
+                            )
             except Exception as e:
                 log_error(f"Failed to read agent_guide.md: {e}")
                 agent_guide_content = "无法读取agent_guide.md文件"
@@ -334,13 +352,13 @@ def document_tools(
                 raise WordDocumentError(
                     ErrorCode.DOCUMENT_ERROR, "No active document found"
                 )
-            
+
             if protection_type is None:
                 raise WordDocumentError(
                     ErrorCode.INVALID_INPUT,
-                    "Protection type is required for 'protect' operation"
+                    "Protection type is required for 'protect' operation",
                 )
-                
+
             # Map protection types to match Word's constants
             protection_type_map = {
                 "readonly": "readonly",
@@ -348,22 +366,20 @@ def document_tools(
                 "comments": "comments",
                 "tracked_changes": "tracked_changes",
                 "tracking": "tracked_changes",
-                "forms": "forms"
+                "forms": "forms",
             }
-            
+
             mapped_protection_type = protection_type_map.get(protection_type.lower())
             if mapped_protection_type is None:
                 raise WordDocumentError(
                     ErrorCode.INVALID_INPUT,
-                    f"Invalid protection type: {protection_type}. Valid types are: readonly, comments, tracked_changes, forms"
+                    f"Invalid protection type: {protection_type}. Valid types are: readonly, comments, tracked_changes, forms",
                 )
-            
+
             result = protect_document(
-                active_doc, 
-                protection_password or "", 
-                mapped_protection_type
+                active_doc, protection_password or "", mapped_protection_type
             )
-            
+
             return json.dumps(
                 {"success": True, "message": "Document protected successfully"},
                 ensure_ascii=False,
@@ -374,9 +390,9 @@ def document_tools(
                 raise WordDocumentError(
                     ErrorCode.DOCUMENT_ERROR, "No active document found"
                 )
-                
+
             result = unprotect_document(active_doc, protection_password or "")
-            
+
             return json.dumps(
                 {"success": True, "message": "Document unprotected successfully"},
                 ensure_ascii=False,

@@ -10,7 +10,8 @@ from typing import Any, Dict, List, Optional
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
-from ..utils.core_utils import ErrorCode, WordDocumentError, log_error, log_info
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
+                                       log_info)
 
 logger = logging.getLogger(__name__)
 

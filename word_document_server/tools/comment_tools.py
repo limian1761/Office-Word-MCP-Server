@@ -12,29 +12,33 @@ from dotenv import load_dotenv
 # Third-party imports
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
-
 from pydantic import Field
 
 # Local imports
 from word_document_server.mcp_service.core import mcp_server
 from word_document_server.selector.selector import SelectorEngine
 from word_document_server.utils.app_context import AppContext
-from word_document_server.utils.core_utils import (ErrorCode,
+from word_document_server.mcp_service.core_utils import (ErrorCode,
                                                    WordDocumentError,
                                                    get_active_document)
+
 
 # 在函数内部导入以避免循环导入
 def _import_comment_operations():
     """延迟导入comment操作函数以避免循环导入"""
-    from word_document_server.operations.comment_ops import (add_comment,
-                                                             delete_all_comments,
-                                                             delete_comment,
-                                                             edit_comment,
-                                                             get_comment_thread,
-                                                             get_comments,
-                                                             reply_to_comment)
-    return (add_comment, delete_all_comments, delete_comment, edit_comment, 
-            get_comment_thread, get_comments, reply_to_comment)
+    from word_document_server.operations.comment_ops import (
+        add_comment, delete_all_comments, delete_comment, edit_comment,
+        get_comment_thread, get_comments, reply_to_comment)
+
+    return (
+        add_comment,
+        delete_all_comments,
+        delete_comment,
+        edit_comment,
+        get_comment_thread,
+        get_comments,
+        reply_to_comment,
+    )
 
 
 # Load environment variables from .env file
@@ -45,19 +49,24 @@ load_dotenv()
 async def comment_tools(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     operation_type: str = Field(
-        ..., description="Type of comment operation to perform: add, delete, get_all, reply, get_thread, delete_all, edit"
+        ...,
+        description="Type of comment operation to perform: add, delete, get_all, reply, get_thread, delete_all, edit",
     ),
     comment_text: Optional[str] = Field(
-        default=None, description="Comment text for add and reply operations\n\n    Required for: add, reply, edit\n    "
+        default=None,
+        description="Comment text for add and reply operations\n\n    Required for: add, reply, edit\n    ",
     ),
     comment_id: Optional[str] = Field(
-        default=None, description="Comment ID for delete and reply operations\n\n    Required for: delete, reply, get_thread, edit\n    "
+        default=None,
+        description="Comment ID for delete and reply operations\n\n    Required for: delete, reply, get_thread, edit\n    ",
     ),
     locator: Optional[Dict[str, Any]] = Field(
-        default=None, description="Object locator for add operation\n\n    Required for: add\n    "
+        default=None,
+        description="Object locator for add operation\n\n    Required for: add\n    ",
     ),
     author: Optional[str] = Field(
-        default=None, description="Comment author for add operation\n\n    Optional for: add\n    "
+        default=None,
+        description="Comment author for add operation\n\n    Optional for: add\n    ",
     ),
 ) -> Any:
     """Unified comment operation tool.
@@ -83,12 +92,18 @@ async def comment_tools(
         Result of the operation
     """
     # Get the active Word document
-    app_context = AppContext.get_instance()
-    document = app_context.get_active_document()
+    document = ctx.request_context.lifespan_context.get_active_document()
 
     # 延迟导入comment操作函数以避免循环导入
-    (add_comment, delete_all_comments, delete_comment, edit_comment, 
-     get_comment_thread, get_comments, reply_to_comment) = _import_comment_operations()
+    (
+        add_comment,
+        delete_all_comments,
+        delete_comment,
+        edit_comment,
+        get_comment_thread,
+        get_comments,
+        reply_to_comment,
+    ) = _import_comment_operations()
 
     # Handle add comment operation
     if operation_type == "add":
@@ -109,7 +124,18 @@ async def comment_tools(
             # Selection._com_ranges中只包含Range对象
             else:
                 # Use current selection if no locator is provided
-                range_obj = document.Application.Selection.Range
+                if not document or not hasattr(document, 'Application'):
+                    raise WordDocumentError(
+                        ErrorCode.NO_ACTIVE_DOCUMENT,
+                        "No active document or application instance"
+                    )
+                try:
+                    range_obj = document.Application.Selection.Range
+                except AttributeError as e:
+                    raise WordDocumentError(
+                        ErrorCode.SERVER_ERROR,
+                        f"Failed to get selection range: {str(e)}"
+                    )
 
             result = add_comment(document, range_obj, comment_text, author)
             return {

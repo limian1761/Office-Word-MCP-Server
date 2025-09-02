@@ -60,11 +60,13 @@ class WordBackend:
                 logging.warning(f"关闭文档时出错: {e}")
             finally:
                 self.document = None
-        
+
         # 不再退出Word应用，让应用保持运行状态
         self.word_app = None
-        
-        logging.info("Word backend cleaned up (document closed, Word application kept running).")
+
+        logging.info(
+            "Word backend cleaned up (document closed, Word application kept running)."
+        )
 
     async def start(self):
         """

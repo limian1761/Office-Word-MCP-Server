@@ -12,7 +12,7 @@ import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
 from ..selector.selector import SelectorEngine
-from ..utils.core_utils import (ObjectNotFoundError, ErrorCode,
+from ..mcp_service.core_utils import (ErrorCode, ObjectNotFoundError,
                                 WordDocumentError, log_error, log_info)
 from .text_format_ops import (set_alignment_for_range, set_bold_for_range,
                               set_font_color_for_range,
@@ -24,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 @handle_com_error(ErrorCode.SERVER_ERROR, "get character count")
 def get_character_count(
-    document: win32com.client.CDispatch,
-    locator: Optional[Dict[str, Any]] = None
+    document: win32com.client.CDispatch, locator: Optional[Dict[str, Any]] = None
 ) -> int:
     """获取文档或指定元素的字符数
 
@@ -48,7 +47,7 @@ def get_character_count(
         # 使用定位器找到要统计字符数的元素
         try:
             selection = selector.select(document, locator)
-            if hasattr(selection, '_com_ranges') and selection._com_ranges:
+            if hasattr(selection, "_com_ranges") and selection._com_ranges:
                 # 获取第一个元素（现在保证是Range对象）
                 range_obj = selection._com_ranges[0]
                 char_count = range_obj.Characters.Count
@@ -106,7 +105,7 @@ def get_text_from_object(
 
     try:
         selection = selector.select(document, locator)
-        if hasattr(selection, '_com_ranges') and selection._com_ranges:
+        if hasattr(selection, "_com_ranges") and selection._com_ranges:
             # 获取第一个Range对象的文本
             range_obj = selection._com_ranges[0]
             # 由于Range对象保证有Text属性，直接访问
@@ -210,7 +209,9 @@ def insert_text_before_range(com_range: Any, text: str) -> str:
         com_range.InsertBefore(text)
         return json.dumps({"success": True, "message": "Text inserted successfully"})
     except Exception as e:
-        return json.dumps({"success": False, "message": f"Failed to insert text: {str(e)}"})
+        return json.dumps(
+            {"success": False, "message": f"Failed to insert text: {str(e)}"}
+        )
 
 
 def insert_text_after_range(com_range: Any, text: str) -> str:
@@ -227,7 +228,9 @@ def insert_text_after_range(com_range: Any, text: str) -> str:
         com_range.InsertAfter(text)
         return json.dumps({"success": True, "message": "Text inserted successfully"})
     except Exception as e:
-        return json.dumps({"success": False, "message": f"Failed to insert text: {str(e)}"})
+        return json.dumps(
+            {"success": False, "message": f"Failed to insert text: {str(e)}"}
+        )
 
 
 def apply_formatting_to_object(range_obj: Any, formatting: Dict[str, Any]) -> str:
@@ -256,17 +259,24 @@ def apply_formatting_to_object(range_obj: Any, formatting: Dict[str, Any]) -> st
 
         if "font_color" in formatting:
             # font_color 应该是一个RGB值的元组 (R, G, B)
-            if isinstance(formatting["font_color"], (list, tuple)) and len(formatting["font_color"]) == 3:
+            if (
+                isinstance(formatting["font_color"], (list, tuple))
+                and len(formatting["font_color"]) == 3
+            ):
                 range_obj.Font.Color = (
-                    formatting["font_color"][0] +
-                    (formatting["font_color"][1] << 8) +
-                    (formatting["font_color"][2] << 16)
+                    formatting["font_color"][0]
+                    + (formatting["font_color"][1] << 8)
+                    + (formatting["font_color"][2] << 16)
                 )
 
-        return json.dumps({"success": True, "message": "Formatting applied successfully"})
+        return json.dumps(
+            {"success": True, "message": "Formatting applied successfully"}
+        )
 
     except Exception as e:
-        return json.dumps({"success": False, "message": f"Failed to apply formatting: {str(e)}"})
+        return json.dumps(
+            {"success": False, "message": f"Failed to apply formatting: {str(e)}"}
+        )
 
 
 def replace_object_text(range_obj: Any, new_text: str) -> str:
@@ -284,7 +294,9 @@ def replace_object_text(range_obj: Any, new_text: str) -> str:
         range_obj.Text = new_text
         return json.dumps({"success": True, "message": "Text replaced successfully"})
     except Exception as e:
-        return json.dumps({"success": False, "message": f"Failed to replace text: {str(e)}"})
+        return json.dumps(
+            {"success": False, "message": f"Failed to replace text: {str(e)}"}
+        )
 
 
 def delete_object(range_obj: Any) -> str:
@@ -301,5 +313,6 @@ def delete_object(range_obj: Any) -> str:
         range_obj.Delete()
         return json.dumps({"success": True, "message": "Object deleted successfully"})
     except Exception as e:
-        return json.dumps({"success": False, "message": f"Failed to delete object: {str(e)}"})
-
+        return json.dumps(
+            {"success": False, "message": f"Failed to delete object: {str(e)}"}
+        )

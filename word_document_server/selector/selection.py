@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import win32com.client
 
-from word_document_server.utils.core_utils import ErrorCode, WordDocumentError
+from word_document_server.mcp_service.core_utils import ErrorCode, WordDocumentError
 
 
 class Selection:
@@ -53,32 +53,31 @@ class Selection:
         object_types = []
 
         for i, object in enumerate(self._com_ranges):
-            object_info = {
-                "index": i,
-                "com_type": str(type(object)),
-                "object_type": "unknown",
-                "properties": {},
-            }
+            object_info: dict[str, Any] = {"type": "unknown", "properties": {}}
 
             # 检测元素类型并收集详细属性
             try:
                 # 检查是否为段落
-                if hasattr(object, "Style") and (hasattr(object, "Range") or hasattr(object, "Text")):
+                if hasattr(object, "Style") and (
+                    hasattr(object, "Range") or hasattr(object, "Text")
+                ):
                     object_info["object_type"] = "paragraph"
                     object_info["properties"]["is_paragraph"] = True
                     try:
-                        object_info["properties"][
-                            "style_name"
-                        ] = object.Style.NameLocal
+                        object_info["properties"]["style_name"] = object.Style.NameLocal
                     except:
                         pass
                     try:
                         # 先尝试直接使用object作为Range对象（通过检查Text属性）
-                        if hasattr(object, 'Text'):
-                            text_preview = object.Text[:50] + ("..." if len(object.Text) > 50 else "")
+                        if hasattr(object, "Text"):
+                            text_preview = object.Text[:50] + (
+                                "..." if len(object.Text) > 50 else ""
+                            )
                         # 否则尝试访问Range属性
-                        elif hasattr(object, 'Range'):
-                            text_preview = object.Range.Text[:50] + ("..." if len(object.Range.Text) > 50 else "")
+                        elif hasattr(object, "Range"):
+                            text_preview = object.Range.Text[:50] + (
+                                "..." if len(object.Range.Text) > 50 else ""
+                            )
                         else:
                             text_preview = ""
                         object_info["properties"]["text_preview"] = text_preview
@@ -126,14 +125,16 @@ class Selection:
                     object_info["properties"]["is_range"] = True
                     try:
                         object_info["properties"]["text_length"] = len(object.Text)
-                        object_info["properties"]["text_preview"] = object.Text[
-                            :50
-                        ] + ("..." if len(object.Text) > 50 else "")
+                        object_info["properties"]["text_preview"] = object.Text[:50] + (
+                            "..." if len(object.Text) > 50 else ""
+                        )
                     except:
                         pass
 
                 # 检查是否为书签
-                elif hasattr(object, "Name") and (hasattr(object, "Range") or hasattr(object, "Text")):
+                elif hasattr(object, "Name") and (
+                    hasattr(object, "Range") or hasattr(object, "Text")
+                ):
                     object_info["object_type"] = "bookmark"
                     try:
                         object_info["properties"]["name"] = object.Name
@@ -141,16 +142,22 @@ class Selection:
                         pass
 
                 # 检查是否为评论
-                elif hasattr(object, "Initial") and (hasattr(object, "Range") or hasattr(object, "Text")):
+                elif hasattr(object, "Initial") and (
+                    hasattr(object, "Range") or hasattr(object, "Text")
+                ):
                     object_info["object_type"] = "comment"
                     try:
                         object_info["properties"]["author"] = object.Author
                         # 先尝试直接使用object作为Range对象（通过检查Text属性）
-                        if hasattr(object, 'Text'):
-                            text_preview = object.Text[:50] + ("..." if len(object.Text) > 50 else "")
+                        if hasattr(object, "Text"):
+                            text_preview = object.Text[:50] + (
+                                "..." if len(object.Text) > 50 else ""
+                            )
                         # 否则尝试访问Range属性
-                        elif hasattr(object, 'Range'):
-                            text_preview = object.Range.Text[:50] + ("..." if len(object.Range.Text) > 50 else "")
+                        elif hasattr(object, "Range"):
+                            text_preview = object.Range.Text[:50] + (
+                                "..." if len(object.Range.Text) > 50 else ""
+                            )
                         else:
                             text_preview = ""
                         object_info["properties"]["text_preview"] = text_preview
@@ -158,16 +165,22 @@ class Selection:
                         pass
 
                 # 检查是否为超链接
-                elif hasattr(object, "Address") and (hasattr(object, "Range") or hasattr(object, "Text")):
+                elif hasattr(object, "Address") and (
+                    hasattr(object, "Range") or hasattr(object, "Text")
+                ):
                     object_info["object_type"] = "hyperlink"
                     try:
                         object_info["properties"]["address"] = object.Address
                         # 先尝试直接使用object作为Range对象（通过检查Text属性）
-                        if hasattr(object, 'Text'):
-                            text_preview = object.Text[:50] + ("..." if len(object.Text) > 50 else "")
+                        if hasattr(object, "Text"):
+                            text_preview = object.Text[:50] + (
+                                "..." if len(object.Text) > 50 else ""
+                            )
                         # 否则尝试访问Range属性
-                        elif hasattr(object, 'Range'):
-                            text_preview = object.Range.Text[:50] + ("..." if len(object.Range.Text) > 50 else "")
+                        elif hasattr(object, "Range"):
+                            text_preview = object.Range.Text[:50] + (
+                                "..." if len(object.Range.Text) > 50 else ""
+                            )
                         else:
                             text_preview = ""
                         object_info["properties"]["text_preview"] = text_preview
@@ -188,13 +201,19 @@ class Selection:
                 # 获取元素的起始和结束位置（如果适用）
                 try:
                     # 先尝试直接使用object作为Range对象（通过检查Start和End属性）
-                    if hasattr(object, 'Start') and hasattr(object, 'End'):
-                        object_info["properties"]["range_start"] = object.Start
-                        object_info["properties"]["range_end"] = object.End
+                    if hasattr(object, "Start") and hasattr(object, "End"):
+                        properties = object_info["properties"]
+                        properties["range_start"] = object.Start
+                        properties["range_end"] = object.End
                     # 否则尝试访问Range属性
-                    elif hasattr(object, 'Range') and hasattr(object.Range, 'Start') and hasattr(object.Range, 'End'):
-                        object_info["properties"]["range_start"] = object.Range.Start
-                        object_info["properties"]["range_end"] = object.Range.End
+                    elif (
+                        hasattr(object, "Range")
+                        and hasattr(object.Range, "Start")
+                        and hasattr(object.Range, "End")
+                    ):
+                        properties = object_info["properties"]
+                        properties["range_start"] = object.Range.Start
+                        properties["range_end"] = object.Range.End
                 except:
                     pass
 

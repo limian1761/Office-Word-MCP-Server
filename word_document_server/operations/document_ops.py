@@ -4,15 +4,16 @@ Document operations for Word Document MCP Server.
 This module contains functions for document-level operations.
 """
 
-import os
 import logging
+import os
 import traceback
-from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
-from win32com.client import CDispatch
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+
 import win32com.client
+from win32com.client import CDispatch
 
 from ..com_backend.com_utils import handle_com_error, safe_com_call
-from ..utils.core_utils import ErrorCode, WordDocumentError
+from ..mcp_service.core_utils import ErrorCode, WordDocumentError
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 def create_document(
     word_app: Optional[CDispatch] = None,
     visible: bool = True,
-    template_path: Optional[str] = None
+    template_path: Optional[str] = None,
 ) -> CDispatch:
     """
     Creates a new Word document.
@@ -41,10 +42,14 @@ def create_document(
         # Create or use existing Word application instance
         if not word_app:
             logger.info("Creating new Word application instance for document creation")
-            word_app = win32com.client.Dispatch('Word.Application')
+            word_app = win32com.client.Dispatch("Word.Application")
             logger.info("Successfully created Word application instance")
-        
-        assert word_app is not None
+
+        if not word_app:
+            raise WordDocumentError(
+                ErrorCode.SERVER_ERROR,
+                "Failed to create or access Word application instance"
+            )
         # Try to set visibility with error handling
         try:
             word_app.Visible = visible
@@ -62,17 +67,16 @@ def create_document(
         else:
             logger.info("Creating blank document")
             doc = word_app.Documents.Add()
-            
+
         logger.info("Successfully created new document")
         return doc
-        
+
     except Exception as e:
         logger.error(f"Failed to create document: {str(e)}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise WordDocumentError(
-            ErrorCode.DOCUMENT_ERROR,
-            f"Failed to create document: {str(e)}"
+            ErrorCode.DOCUMENT_ERROR, f"Failed to create document: {str(e)}"
         )
 
 
@@ -98,6 +102,11 @@ def open_document(
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Document file not found: {file_path}")
 
+    if document and not hasattr(document, 'Application'):
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR,
+            "Invalid document object: missing Application attribute"
+        )
     # Try to get Word application from existing document, otherwise create new instance
     word_app = None
     if document:
@@ -105,7 +114,7 @@ def open_document(
             word_app = document.Application
         except Exception:
             pass
-            
+
     if not word_app:
         word_app = win32com.client.Dispatch("Word.Application")
     word_app.Visible = visible
@@ -120,9 +129,7 @@ def open_document(
 
 
 @handle_com_error(ErrorCode.DOCUMENT_ERROR, "close document")
-def close_document(
-    document: CDispatch, save_changes: bool = True
-) -> bool:
+def close_document(document: CDispatch, save_changes: bool = True) -> bool:
     """
     Closes a Word document.
 
@@ -149,9 +156,7 @@ def close_document(
 
 
 @handle_com_error(ErrorCode.DOCUMENT_ERROR, "save document")
-def save_document(
-    document: CDispatch, file_path: Optional[str] = None
-) -> str:
+def save_document(document: CDispatch, file_path: Optional[str] = None) -> str:
     """
     Saves a Word document.
 
@@ -172,6 +177,11 @@ def save_document(
         else:
             document.Save()
             file_path = document.FullName
+            if file_path is None:
+                raise WordDocumentError(
+                    ErrorCode.SERVER_ERROR,
+                    "Could not determine file path after saving"
+                )
             logger.info(f"Document saved to: {file_path}")
 
         return file_path
@@ -185,9 +195,7 @@ def save_document(
 # === Document Structure Operations ===
 
 
-def count_objects_by_type(
-    document: CDispatch, object_type: str
-) -> int:
+def count_objects_by_type(document: CDispatch, object_type: str) -> int:
     """统计特定类型的元素数量
 
     Args:

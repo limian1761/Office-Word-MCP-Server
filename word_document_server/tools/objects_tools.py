@@ -8,27 +8,31 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
+import win32com.client
 # Standard library imports
 from dotenv import load_dotenv
 # Third-party imports
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
-import win32com.client
 from pydantic import Field
 
 # Local imports
 from word_document_server.mcp_service.core import mcp_server
-from word_document_server.operations.objects_ops import (
-    create_bookmark as op_add_bookmark,
-    delete_bookmark as op_delete_bookmark,
-    get_bookmark as op_get_bookmark,
-    create_citation as op_add_citation,
+from word_document_server.operations.objects_ops import \
+    create_bookmark as op_add_bookmark
+from word_document_server.operations.objects_ops import \
+    create_citation as op_add_citation
+from word_document_server.operations.objects_ops import \
     create_hyperlink as op_add_hyperlink
-)
+from word_document_server.operations.objects_ops import \
+    delete_bookmark as op_delete_bookmark
+from word_document_server.operations.objects_ops import \
+    get_bookmark as op_get_bookmark
 from word_document_server.utils.app_context import AppContext
-from word_document_server.utils.core_utils import (
+from word_document_server.mcp_service.core_utils import (
     ErrorCode, WordDocumentError, format_error_response, get_active_document,
-    handle_tool_errors, log_error, log_info, require_active_document_validation)
+    handle_tool_errors, log_error, log_info,
+    require_active_document_validation)
 
 # 加载环境变量
 try:
@@ -43,31 +47,39 @@ def objects_tools(
         description="MCP context object containing session and application context information"
     ),
     operation_type: str = Field(
-        ..., description="Operation type: bookmark_operations, citation_operations, hyperlink_operations"
+        ...,
+        description="Operation type: bookmark_operations, citation_operations, hyperlink_operations",
     ),
     bookmark_name: Optional[str] = Field(
-        default=None, description="Name of the bookmark. Required for bookmark_operations"
+        default=None,
+        description="Name of the bookmark. Required for bookmark_operations",
     ),
     citation_text: Optional[str] = Field(
-        default=None, description="Text for the citation. Required for citation_operations"
+        default=None,
+        description="Text for the citation. Required for citation_operations",
     ),
     url: Optional[str] = Field(
-        default=None, description="URL for the hyperlink. Required for hyperlink_operations"
+        default=None,
+        description="URL for the hyperlink. Required for hyperlink_operations",
     ),
     locator: Optional[Dict[str, Any]] = Field(
-        default=None, description="Object locator for specifying position. Required for bookmark_operations, citation_operations, hyperlink_operations"
+        default=None,
+        description="Object locator for specifying position. Required for bookmark_operations, citation_operations, hyperlink_operations",
     ),
     sub_operation: Optional[str] = Field(
         default=None, description="Sub-operation type. Required for all operations"
     ),
     display_text: Optional[str] = Field(
-        default=None, description="Display text for the hyperlink. Optional for hyperlink_operations"
+        default=None,
+        description="Display text for the hyperlink. Optional for hyperlink_operations",
     ),
     citation_name: Optional[str] = Field(
-        default=None, description="Name of the citation. Optional for citation_operations"
+        default=None,
+        description="Name of the citation. Optional for citation_operations",
     ),
     hyperlink_name: Optional[str] = Field(
-        default=None, description="Name of the hyperlink. Optional for hyperlink_operations"
+        default=None,
+        description="Name of the hyperlink. Optional for hyperlink_operations",
     ),
 ) -> Dict[str, Any]:
     """
@@ -103,11 +115,32 @@ def objects_tools(
         # 处理不同类型的操作
         result: Dict[str, Any] = {}
         if operation_type == "bookmark_operations":
-            result = handle_bookmark_operations(ctx, document, sub_operation, bookmark_name=bookmark_name, locator=locator)
+            result = handle_bookmark_operations(
+                ctx,
+                document,
+                sub_operation,
+                bookmark_name=bookmark_name,
+                locator=locator,
+            )
         elif operation_type == "citation_operations":
-            result = handle_citation_operations(ctx, document, sub_operation, citation_text=citation_text, locator=locator, citation_name=citation_name)
+            result = handle_citation_operations(
+                ctx,
+                document,
+                sub_operation,
+                citation_text=citation_text,
+                locator=locator,
+                citation_name=citation_name,
+            )
         elif operation_type == "hyperlink_operations":
-            result = handle_hyperlink_operations(ctx, document, sub_operation, url=url, locator=locator, display_text=display_text, hyperlink_name=hyperlink_name)
+            result = handle_hyperlink_operations(
+                ctx,
+                document,
+                sub_operation,
+                url=url,
+                locator=locator,
+                display_text=display_text,
+                hyperlink_name=hyperlink_name,
+            )
         else:
             raise ValueError(f"不支持的操作类型: {operation_type}")
 
@@ -149,20 +182,37 @@ def handle_objects_operations(
         操作结果字典
     """
     try:
-        # 验证是否有活动文档
-        require_active_document_validation(ctx)
-
-        # 获取活动文档
-        document = get_active_document(ctx)
+        document = ctx.request_context.lifespan_context.get_active_document()
 
         # 处理不同类型的操作
         result: Dict[str, Any] = {}
         if operation_type == "bookmark_operations":
-            result = handle_bookmark_operations(ctx, document, sub_operation, bookmark_name=bookmark_name, locator=locator)
+            result = handle_bookmark_operations(
+                ctx,
+                document,
+                sub_operation,
+                bookmark_name=bookmark_name,
+                locator=locator,
+            )
         elif operation_type == "citation_operations":
-            result = handle_citation_operations(ctx, document, sub_operation, citation_text=citation_text, locator=locator, citation_name=citation_name)
+            result = handle_citation_operations(
+                ctx,
+                document,
+                sub_operation,
+                citation_text=citation_text,
+                locator=locator,
+                citation_name=citation_name,
+            )
         elif operation_type == "hyperlink_operations":
-            result = handle_hyperlink_operations(ctx, document, sub_operation, url=url, locator=locator, display_text=display_text, hyperlink_name=hyperlink_name)
+            result = handle_hyperlink_operations(
+                ctx,
+                document,
+                sub_operation,
+                url=url,
+                locator=locator,
+                display_text=display_text,
+                hyperlink_name=hyperlink_name,
+            )
         else:
             raise ValueError(f"不支持的操作类型: {operation_type}")
 
@@ -255,8 +305,7 @@ def handle_citation_operations(
         if citation_name:
             # 由于没有提供get_citation函数，这里暂时抛出异常
             raise WordDocumentError(
-                ErrorCode.SERVER_ERROR, 
-                "Get citation operation is not implemented"
+                ErrorCode.SERVER_ERROR, "Get citation operation is not implemented"
             )
         else:
             raise ValueError("citation_name is required for get operation")
@@ -266,8 +315,7 @@ def handle_citation_operations(
         if citation_name:
             # 由于没有提供delete_citation函数，这里暂时抛出异常
             raise WordDocumentError(
-                ErrorCode.SERVER_ERROR, 
-                "Delete citation operation is not implemented"
+                ErrorCode.SERVER_ERROR, "Delete citation operation is not implemented"
             )
         else:
             raise ValueError("citation_name is required for delete operation")
@@ -313,8 +361,7 @@ def handle_hyperlink_operations(
         if hyperlink_name:
             # 由于没有提供get_hyperlink函数，这里暂时抛出异常
             raise WordDocumentError(
-                ErrorCode.SERVER_ERROR, 
-                "Get hyperlink operation is not implemented"
+                ErrorCode.SERVER_ERROR, "Get hyperlink operation is not implemented"
             )
         else:
             raise ValueError("hyperlink_name is required for get operation")
@@ -324,8 +371,7 @@ def handle_hyperlink_operations(
         if hyperlink_name:
             # 由于没有提供delete_hyperlink函数，这里暂时抛出异常
             raise WordDocumentError(
-                ErrorCode.SERVER_ERROR, 
-                "Delete hyperlink operation is not implemented"
+                ErrorCode.SERVER_ERROR, "Delete hyperlink operation is not implemented"
             )
         else:
             raise ValueError("hyperlink_name is required for delete operation")

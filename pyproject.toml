@@ -73,3 +73,16 @@ dependencies = [
     "isort>=5.0",
     "mypy>=1.0",
 ]
+
+# Deployment scripts
+[tool.hatch.envs.deploy]
+dependencies = [
+    "docker>=6.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+# Development and deployment scripts
+directofficeword_mcp = "word_document_server.main:run_server"
+directofficeword_mcp_dev = "word_document_server.main:run_server"
+directofficeword_mcp_http = "word_document_server.main:run_server --transport http --host 0.0.0.0 --port 8000"

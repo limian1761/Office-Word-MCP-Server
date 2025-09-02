@@ -11,7 +11,8 @@ import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
 from ..selector.selector import SelectorEngine
-from ..utils.core_utils import ErrorCode, WordDocumentError, log_error, log_info
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
+                                log_info)
 from . import text_format_ops
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,10 @@ def set_paragraph_alignment(
     """
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+
+    # Check if document has Application property
+    if not hasattr(document, 'Application') or document.Application is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document Application object not available")
 
     selector = SelectorEngine()
 
@@ -251,10 +256,13 @@ def set_font(
         if len(available_fonts) <= 10:
             fonts_list = ", ".join(available_fonts)
         else:
-            fonts_list = ", ".join(available_fonts[:10]) + f", and {len(available_fonts)-10} more fonts"
+            fonts_list = (
+                ", ".join(available_fonts[:10])
+                + f", and {len(available_fonts)-10} more fonts"
+            )
         raise WordDocumentError(
             ErrorCode.FORMATTING_ERROR,
-            f"Font '{font_name}' not found. Available fonts: {fonts_list}"
+            f"Font '{font_name}' not found. Available fonts: {fonts_list}",
         )
 
     range_obj = None
@@ -280,6 +288,10 @@ def set_font(
                 text_format_ops.set_font_color_for_range(document, range_obj, color)
             # Underline is not yet in text_format_ops, so we handle it here for now.
             if underline is not None:
+                # Check if range_obj has Font property
+                if not hasattr(range_obj, 'Font'):
+                    log_error("Range object does not have Font property")
+                    continue
                 font = range_obj.Font
                 underline_map = {
                     "none": 0,
@@ -353,6 +365,10 @@ def set_paragraph_style(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
+    # Check if document has Styles property
+    if not hasattr(document, 'Styles') or document.Styles is None:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document Styles collection not available")
+
     selector = SelectorEngine()
 
     # 验证样式名称参数
@@ -374,8 +390,11 @@ def set_paragraph_style(
         if len(paragraph_styles) <= 10:
             styles_list = ", ".join(paragraph_styles)
         else:
-            styles_list = ", ".join(paragraph_styles[:10]) + f", and {len(paragraph_styles)-10} more styles"
-        
+            styles_list = (
+                ", ".join(paragraph_styles[:10])
+                + f", and {len(paragraph_styles)-10} more styles"
+            )
+
         raise WordDocumentError(
             ErrorCode.SERVER_ERROR,
             f"Style '{style_name}' not found. Available paragraph styles: {styles_list}",

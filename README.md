@@ -119,6 +119,10 @@ The server supports multiple transport protocols:
 
 Configure the transport method using command-line arguments or environment variables.
 
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions including Docker deployment, environment configuration, and best practices.
+
 ### Docker Deployment
 
 The server can be deployed as a Docker container:
@@ -198,5 +202,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Office-Word-MCP-Server](https://github.com/GongRzhe/Office-Word-MCP-Server.git) as a reference project
 
 ---
-
-_Note: This server interacts with document files on your system. Always verify that requested operations are appropriate before confirming them in Claude for Desktop or other MCP clients._

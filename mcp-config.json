@@ -1,11 +1,7 @@
 {
   "mcpServers": {
     "word-docx-tools": {
-      "command": "uv",
-      "args": [
-        "run",
-        "C:/Users/lichao/DirectOfficeWordMCP/word_document_server/main.py"
-      ],
+      "command": "directofficeword_mcp",
       "env": {
         "MCP_TRANSPORT": "stdio"
       }

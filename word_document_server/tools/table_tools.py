@@ -25,9 +25,16 @@ from word_document_server.operations.table_ops import (create_table,
 from word_document_server.selector.selector import SelectorEngine
 # 工具模块
 from word_document_server.utils.app_context import AppContext
-from word_document_server.utils.core_utils import (
-    ErrorCode, WordDocumentError, format_error_response, get_active_document,
-    handle_tool_errors, log_error, log_info, require_active_document_validation)
+from word_document_server.mcp_service.core_utils import (
+    ErrorCode,
+    WordDocumentError,
+    format_error_response,
+    get_active_document,
+    handle_tool_errors,
+    log_error,
+    log_info,
+    require_active_document_validation,
+)
 
 
 @mcp_server.tool()
@@ -44,20 +51,28 @@ def table_tools(
         description="Table index (larger than 0) for operations that require specifying a table. Required for: get_cell, set_cell, get_info, insert_row, insert_column",
     ),
     rows: Optional[int] = Field(
-        default=None, description="Number of rows when creating a table. Required for: create"
+        default=None,
+        description="Number of rows when creating a table. Required for: create",
     ),
     cols: Optional[int] = Field(
-        default=None, description="Number of columns when creating a table. Required for: create"
+        default=None,
+        description="Number of columns when creating a table. Required for: create",
     ),
-    row: Optional[int] = Field(default=None, description="Cell row number (1-based). Required for: get_cell, set_cell"),
+    row: Optional[int] = Field(
+        default=None,
+        description="Cell row number (1-based). Required for: get_cell, set_cell",
+    ),
     col: Optional[int] = Field(
-        default=None, description="Cell column number (1-based). Required for: get_cell, set_cell"
+        default=None,
+        description="Cell column number (1-based). Required for: get_cell, set_cell",
     ),
     text: Optional[str] = Field(
-        default=None, description="Text content for setting cell text. Required for: set_cell"
+        default=None,
+        description="Text content for setting cell text. Required for: set_cell",
     ),
     formatting: Optional[Dict[str, Any]] = Field(
-        default=None, description="Optional formatting parameters dictionary. Optional for: set_cell"
+        default=None,
+        description="Optional formatting parameters dictionary. Optional for: set_cell",
     ),
     locator: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -68,7 +83,8 @@ def table_tools(
         description="Insertion position, e.g. 'before', 'after' or row/column insertion position. Optional for: create, insert_row, insert_column",
     ),
     count: Optional[int] = Field(
-        default=None, description="Number of rows/columns to insert. Optional for: insert_row, insert_column"
+        default=None,
+        description="Number of rows/columns to insert. Optional for: insert_row, insert_column",
     ),
 ) -> str:
     """
@@ -97,9 +113,7 @@ def table_tools(
     """
     try:
         # 获取活动文档
-        lifespan_context = getattr(ctx.request_context, "lifespan_context", None)
-        active_doc = lifespan_context.get_active_document()
-
+        active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # 根据操作类型执行相应的操作
         if operation_type and operation_type.lower() == "create":

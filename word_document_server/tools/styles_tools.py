@@ -18,16 +18,13 @@ from pydantic import Field
 # Local imports
 from word_document_server.mcp_service.core import mcp_server
 from word_document_server.operations.styles_ops import (
-    apply_formatting,
-    set_font,
-    set_paragraph_style,
-    set_paragraph_alignment
-)
+    apply_formatting, set_font, set_paragraph_alignment, set_paragraph_style)
 from word_document_server.selector.selector import SelectorEngine
 from word_document_server.utils.app_context import AppContext
-from word_document_server.utils.core_utils import (
+from word_document_server.mcp_service.core_utils import (
     ErrorCode, WordDocumentError, format_error_response, get_active_document,
-    handle_tool_errors, log_error, log_info, require_active_document_validation)
+    handle_tool_errors, log_error, log_info,
+    require_active_document_validation)
 
 
 @mcp_server.tool()
@@ -43,32 +40,54 @@ def styles_tools(
         default=None,
         description="Formatting parameters dictionary containing various formatting options. Required for: apply_formatting",
     ),
-    font_name: Optional[str] = Field(default=None, description="Font name. Optional for: set_font"),
-    font_size: Optional[float] = Field(default=None, description="Font size. Optional for: set_font"),
-    bold: Optional[bool] = Field(default=None, description="Whether bold. Optional for: set_font"),
-    italic: Optional[bool] = Field(default=None, description="Whether italic. Optional for: set_font"),
+    font_name: Optional[str] = Field(
+        default=None, description="Font name. Optional for: set_font"
+    ),
+    font_size: Optional[float] = Field(
+        default=None, description="Font size. Optional for: set_font"
+    ),
+    bold: Optional[bool] = Field(
+        default=None, description="Whether bold. Optional for: set_font"
+    ),
+    italic: Optional[bool] = Field(
+        default=None, description="Whether italic. Optional for: set_font"
+    ),
     underline: Optional[str] = Field(
         default=None,
         description="Underline type, options: 'none', 'single', 'double', 'dotted', 'dashed', 'wave. Optional for: set_font",
     ),
-    color: Optional[str] = Field(default=None, description="Font color. Optional for: set_font"),
-    style_name: Optional[str] = Field(default=None, description="Paragraph style name. Required for: set_paragraph_style, create_style"),
+    color: Optional[str] = Field(
+        default=None, description="Font color. Optional for: set_font"
+    ),
+    style_name: Optional[str] = Field(
+        default=None,
+        description="Paragraph style name. Required for: set_paragraph_style, create_style",
+    ),
     alignment: Optional[str] = Field(
         default=None,
         description="Alignment, options: 'left', 'center', 'right', 'justify'. Required for: set_alignment. Optional for: set_paragraph_formatting",
     ),
-    line_spacing: Optional[float] = Field(default=None, description="Line spacing. Optional for: set_paragraph_formatting"),
+    line_spacing: Optional[float] = Field(
+        default=None, description="Line spacing. Optional for: set_paragraph_formatting"
+    ),
     space_before: Optional[float] = Field(
-        default=None, description="Space before paragraph. Optional for: set_paragraph_formatting"
+        default=None,
+        description="Space before paragraph. Optional for: set_paragraph_formatting",
     ),
     space_after: Optional[float] = Field(
-        default=None, description="Space after paragraph. Optional for: set_paragraph_formatting"
+        default=None,
+        description="Space after paragraph. Optional for: set_paragraph_formatting",
     ),
     first_line_indent: Optional[float] = Field(
-        default=None, description="First line indent. Optional for: set_paragraph_formatting"
+        default=None,
+        description="First line indent. Optional for: set_paragraph_formatting",
     ),
-    left_indent: Optional[float] = Field(default=None, description="Left indent. Optional for: set_paragraph_formatting"),
-    right_indent: Optional[float] = Field(default=None, description="Right indent. Optional for: set_paragraph_formatting"),
+    left_indent: Optional[float] = Field(
+        default=None, description="Left indent. Optional for: set_paragraph_formatting"
+    ),
+    right_indent: Optional[float] = Field(
+        default=None, description="Right indent. Optional for: set_paragraph_formatting"
+    ),
     locator: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Object locator for specifying objects to apply styles to. Required for: apply_formatting, set_font, set_paragraph_style, set_alignment, set_paragraph_formatting",
@@ -152,10 +171,28 @@ def styles_tools(
                 )
 
             log_info("Setting paragraph style")
-            result = set_paragraph_style(
-                document=active_doc, style_name=style_name, locator=locator
-            )
-            return str(result)
+            try:
+                result = set_paragraph_style(
+                    document=active_doc, style_name=style_name, locator=locator
+                )
+                return str(result)
+            except WordDocumentError as e:
+                if e.error_code == ErrorCode.STYLE_NOT_FOUND:
+                    # 获取所有可用样式
+                    available_styles = []
+                    for style in active_doc.Styles:
+                        try:
+                            if style.InUse:
+                                available_styles.append(style.Name)
+                        except Exception as ex:
+                            log_error(f"Failed to get style name: {ex}")
+                    return json.dumps({
+                        "success": False,
+                        "error_code": e.error_code,
+                        "error_message": str(e),
+                        "available_styles": available_styles
+                    }, ensure_ascii=False)
+                raise
 
         elif operation_type and operation_type.lower() == "set_paragraph_formatting":
             if locator is None:
@@ -165,6 +202,8 @@ def styles_tools(
 
             log_info("Setting paragraph formatting")
             # 这里我们只设置对齐方式，因为这是唯一可用的函数
+            if alignment is None:
+                raise ValueError("alignment parameter must be provided for set_paragraph_formatting operation")
             result = set_paragraph_alignment(
                 document=active_doc, alignment=alignment, locator=locator
             )
@@ -245,4 +284,4 @@ def styles_tools(
 
     except Exception as e:
         log_error(f"Error in styles_tools: {e}", exc_info=True)
-        return str(format_error_response(str(e)))
+        return str(format_error_response(e))

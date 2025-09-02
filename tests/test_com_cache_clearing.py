@@ -17,7 +17,7 @@ import pythoncom
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from word_document_server.utils.app_context import AppContext
-from word_document_server.utils.core_utils import WordDocumentError
+from word_document_server.mcp_service.core_utils import WordDocumentError
 
 
 class TestComCacheClearing(unittest.TestCase):
