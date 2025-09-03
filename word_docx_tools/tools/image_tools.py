@@ -169,14 +169,30 @@ async def image_tools(
                 range_obj.Collapse(0)  # 折叠到结束位置
             
             # 插入图片
-            shape = document.Shapes.AddPicture(
-                FileName=image_path,
-                LinkToFile=False,
-                SaveWithDocument=True,
-                Range=range_obj
-            )
+            try:
+                # 先尝试使用带Range参数的方法
+                picture = document.InlineShapes.AddPicture(
+                    FileName=image_path,
+                    LinkToFile=False,
+                    SaveWithDocument=True,
+                    Range=range_obj
+                )
+            except Exception as first_exception:
+                # 备用方法：先选择Range，然后插入图片
+                try:
+                    range_obj.Select()
+                    picture = document.InlineShapes.AddPicture(
+                        FileName=image_path,
+                        LinkToFile=False,
+                        SaveWithDocument=True
+                    )
+                except Exception as second_exception:
+                    log_error(f"Failed to insert image {image_path}: {str(second_exception)}")
+                    raise WordDocumentError(
+                        ErrorCode.SERVER_ERROR, f"Failed to insert image: {str(second_exception)}"
+                    )
             
-            result = {"success": True, "shape_id": shape.ID if hasattr(shape, 'ID') else 0}
+            result = {"success": True, "shape_id": picture.Index if hasattr(picture, 'Index') else 0}
             
             log_info("Image inserted successfully")
             return json.dumps(

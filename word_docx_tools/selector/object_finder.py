@@ -75,10 +75,12 @@ class ObjectFinder(FilterHandlers):
         """
         # Handle special anchor types
         if anchor_id == "document_start":
+            start_range = self.document.Content
+            start_range.Collapse(True)  # wdCollapseStart
             return cast(CDispatch, self.document.Content)
         elif anchor_id == "document_end":
             end_range = self.document.Content
-            end_range.Collapse(Direction=1)  # wdCollapseEnd
+            end_range.Collapse()  # wdCollapseEnd
             return cast(CDispatch, end_range)
         elif anchor_id == "current_selection":
             return cast(CDispatch, self.document.Application.Selection)
@@ -164,12 +166,12 @@ class ObjectFinder(FilterHandlers):
         elif object_type == "document_start":
             # Return the start of the document
             start_range = self.document.Content
-            start_range.Collapse(Direction=0)  # wdCollapseStart
+            start_range.Collapse(True)  # wdCollapseStart
             return [start_range]
         elif object_type == "document_end":
             # Return the end of the document
             end_range = self.document.Content
-            end_range.Collapse(Direction=1)  # wdCollapseEnd
+            end_range.Collapse()  # wdCollapseEnd (0 is correct value)
             return [end_range]
 
         # Handle different object types
