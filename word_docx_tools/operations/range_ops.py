@@ -266,13 +266,22 @@ def batch_apply_formatting(
                     and hasattr(selection, "_com_ranges")
                     and selection._com_ranges
                 ):
-                    # selection._com_ranges中的所有对象都是Range对象
-                    range_obj = selection._com_ranges[0]
-                    result = apply_formatting_to_object(range_obj, formatting)
-                    # 解析结果以检查是否成功
-                    result_dict = json.loads(result)
-                    if not result_dict.get("success", False):
-                        raise Exception(result_dict.get("message", "Formatting failed"))
+                    # 遍历所有Range对象并应用格式
+                    all_success = True
+                    for range_obj in selection._com_ranges:
+                        try:
+                            result = apply_formatting_to_object(range_obj, formatting)
+                            # 解析结果以检查是否成功
+                            result_dict = json.loads(result)
+                            if not result_dict.get("success", False):
+                                all_success = False
+                                logger.warning(f"Formatting failed for range object: {result_dict.get('message', 'Unknown error')}")
+                        except Exception as inner_e:
+                            all_success = False
+                            logger.warning(f"Error applying formatting to range object: {inner_e}")
+                    
+                    if not all_success:
+                        raise Exception("Some formatting operations failed")
 
                 results.append({"operation_index": i, "status": "success"})
 

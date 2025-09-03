@@ -14,7 +14,6 @@ from .range_tools import range_tools
 from .styles_tools import styles_tools
 from .table_tools import table_tools
 from .text_tools import text_tools
-from .watch_and_execute import watch_and_execute
 __all__ = [
     "comment_tools",
     "document_tools",
@@ -23,6 +22,5 @@ __all__ = [
     "range_tools",
     "styles_tools",
     "table_tools",
-    "text_tools",
-    "watch_and_execute"
+    "text_tools"
 ]

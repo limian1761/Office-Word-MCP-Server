@@ -246,11 +246,45 @@ def handle_bookmark_operations(
     if sub_operation == "create":
         bookmark_name = kwargs.get("bookmark_name")
         locator = kwargs.get("locator")
-        if bookmark_name:
-            # 修复书签创建问题，确保Range对象正确传递
-            result = create_bookmark(document, bookmark_name, locator)
+        if bookmark_name and locator:
+            try:
+                # 改进书签创建，正确处理Range对象
+                # 确保书签名称不包含非法字符
+                clean_bookmark_name = bookmark_name
+                for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|']:
+                    clean_bookmark_name = clean_bookmark_name.replace(char, '_')
+                
+                engine = SelectorEngine()
+                selection = engine.select(document, locator)
+                if not selection:
+                    raise WordDocumentError(ErrorCode.SELECTOR_ERROR, "Failed to locate position for bookmark")
+                
+                # 正确处理selection对象
+                if hasattr(selection, "_com_ranges") and selection._com_ranges:
+                    ranges = selection._com_ranges
+                else:
+                    # 如果是段落对象，使用其Range
+                    try:
+                        ranges = [selection.Range]
+                    except AttributeError:
+                        # 如果没有Range属性，尝试直接使用selection
+                        ranges = [selection]
+                
+                # 创建书签
+                range_obj = ranges[0]
+                # 如果Range为空，可以插入一个空字符作为书签位置
+                if range_obj.Start == range_obj.End:
+                    range_obj.InsertAfter(" ")
+                    range_obj.Collapse(1)  # 折叠到开始位置
+                
+                bookmark = document.Bookmarks.Add(Name=clean_bookmark_name, Range=range_obj)
+                result = {"success": True, "bookmark_name": bookmark.Name}
+            except Exception as e:
+                log_error(f"Failed to create bookmark: {str(e)}")
+                raise WordDocumentError(
+                    ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create bookmark: {str(e)}")
         else:
-            raise ValueError("bookmark_name is required for create operation")
+            raise ValueError("bookmark_name and locator are required for create operation")
 
     elif sub_operation == "get":
         bookmark_name = kwargs.get("bookmark_name")
@@ -297,17 +331,33 @@ def handle_citation_operations(
         citation_text = kwargs.get("citation_text")
         locator = kwargs.get("locator")
         citation_name = kwargs.get("citation_name", "Citation")
-        if citation_text:
-            # 修复引用创建问题，create_citation期望source_data字典而不是字符串
-            source_data = {
-                'Tag': citation_name,
-                'Author': 'Author',
-                'Title': citation_text,
-                'Type': 1  # 1代表普通引用类型
-            }
-            result = create_citation(document, source_data, locator)
+        if citation_text and locator:
+            # 修复引用创建问题，改进source_data格式以解决XML数据处理错误
+            try:
+                # 创建符合Word引用XML格式的source_data字典
+                source_data = {
+                    'Tag': citation_name,
+                    'Author': 'Author',
+                    'Title': citation_text,
+                    'Type': 1,  # 1代表普通引用类型
+                    'Year': '2023',  # 添加必要的年份字段
+                    'JournalName': 'Journal',  # 添加必要的期刊名称字段
+                    'Volume': '1',  # 添加必要的卷号字段
+                    'Pages': '1-10',  # 添加必要的页码字段
+                }
+                result = create_citation(document, source_data, locator)
+            except Exception as e:
+                log_error(f"Failed to create citation: {str(e)}")
+                # 如果完整的引用创建失败，尝试使用更简单的方法在文档中插入引用文本
+                try:
+                    from ..operations.text_ops import insert_text
+                    result = insert_text(document, f"[{citation_text}]", locator)
+                    result['warning'] = "Failed to create proper citation, inserted plain text instead"
+                except Exception as e2:
+                    raise WordDocumentError(
+                        ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create citation: {str(e2)}")
         else:
-            raise ValueError("citation_text is required for create operation")
+            raise ValueError("citation_text and locator are required for create operation")
 
     elif sub_operation == "get":
         citation_name = kwargs.get("citation_name")
@@ -361,15 +411,48 @@ def handle_hyperlink_operations(
         locator = kwargs.get("locator")
         display_text = kwargs.get("display_text")
         if url and locator:
-            # 修复超链接创建问题，确保参数名称匹配且清理URL格式
-            # 移除URL中可能存在的反引号
-            clean_url = url.strip('`')
-            result = create_hyperlink(
-                document=document,
-                address=clean_url,  # 注意参数名是address而不是url
-                locator=locator,
-                text_to_display=display_text
-            )
+            try:
+                # 改进超链接创建，确保使用正确的Range对象
+                # 移除URL中可能存在的反引号和其他特殊字符
+                clean_url = url.strip('`').strip()
+                # 确保URL有协议前缀
+                if not clean_url.startswith(('http://', 'https://', 'file://', 'mailto:')):
+                    clean_url = 'https://' + clean_url
+                
+                engine = SelectorEngine()
+                selection = engine.select(document, locator)
+                if not selection:
+                    raise WordDocumentError(ErrorCode.SELECTOR_ERROR, "Failed to locate position for hyperlink")
+                
+                # 正确处理selection对象
+                if hasattr(selection, "_com_ranges") and selection._com_ranges:
+                    ranges = selection._com_ranges
+                else:
+                    # 如果是段落对象，使用其Range
+                    try:
+                        ranges = [selection.Range]
+                    except AttributeError:
+                        # 如果没有Range属性，尝试直接使用selection
+                        ranges = [selection]
+                
+                # 使用第一个找到的Range创建超链接
+                hyperlink = document.Hyperlinks.Add(
+                    Anchor=ranges[0],
+                    Address=clean_url,
+                    TextToDisplay=display_text if display_text else clean_url
+                )
+                result = {"success": True, "hyperlink_index": hyperlink.Index if hasattr(hyperlink, 'Index') else 0}
+            except Exception as e:
+                log_error(f"Failed to create hyperlink: {str(e)}")
+                # 如果超链接创建失败，尝试使用更简单的方法在文档中插入链接文本
+                try:
+                    from ..operations.text_ops import insert_text
+                    link_text = display_text if display_text else clean_url
+                    result = insert_text(document, f"{link_text}", locator)
+                    result['warning'] = "Failed to create proper hyperlink, inserted plain text instead"
+                except Exception as e2:
+                    raise WordDocumentError(
+                        ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create hyperlink: {str(e2)}")
         else:
             raise ValueError("url and locator are required for create operation")
 

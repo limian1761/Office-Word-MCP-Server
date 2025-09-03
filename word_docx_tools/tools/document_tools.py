@@ -39,6 +39,7 @@ except Exception as e:
 
 
 @mcp_server.tool()
+@handle_tool_errors
 def document_tools(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     operation_type: Optional[str] = Field(
@@ -341,10 +342,41 @@ def document_tools(
             return structure
 
         elif operation_type and operation_type.lower() == "set_property":
-            raise NotImplementedError("set_property operation not implemented")
+            if property_name is None or property_value is None:
+                raise ValueError("property_name and property_value parameters must be provided for set_property operation")
+
+            log_info(f"Setting document property: {property_name}")
+            try:
+                # 设置文档内置属性
+                properties = active_doc.BuiltInDocumentProperties
+                if hasattr(properties, property_name):
+                    properties(property_name).Value = property_value
+                    return json.dumps({
+                        "success": True,
+                        "property_name": property_name,
+                        "property_value": property_value
+                    }, ensure_ascii=False)
+                else:
+                    raise WordDocumentError(ErrorCode.NOT_FOUND, f"Property not found: {property_name}")
+            except Exception as e:
+                raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to set property: {str(e)}")
 
         elif operation_type and operation_type.lower() == "get_property":
-            raise NotImplementedError("get_property operation not implemented")
+            if property_name is None:
+                raise ValueError("property_name parameter must be provided for get_property operation")
+
+            log_info(f"Getting document property: {property_name}")
+            try:
+                # 获取文档内置属性
+                properties = active_doc.BuiltInDocumentProperties
+                value = properties(property_name).Value if hasattr(properties, property_name) else None
+                return json.dumps({
+                    "success": True,
+                    "property_name": property_name,
+                    "value": value
+                }, ensure_ascii=False)
+            except Exception as e:
+                raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get property: {str(e)}")
 
         elif operation_type and operation_type.lower() == "print":
             raise NotImplementedError("print operation not implemented")

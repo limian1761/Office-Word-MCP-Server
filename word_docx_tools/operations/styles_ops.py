@@ -375,17 +375,24 @@ def set_paragraph_style(
     if not style_name:
         raise ValueError("Style name parameter must be provided")
 
-    # 检查样式是否存在（使用Name属性而非本地化名称以确保兼容性）
+    # 检查样式是否存在（使用NameLocal属性并添加异常处理以提高兼容性）
     style_exists = False
     paragraph_styles = []
     target_style = None
     for style in document.Styles:
-        if style.Type == 1:  # wdStyleTypeParagraph = 1
-            paragraph_styles.append(style.Name)
-            if style.Name == style_name:
-                style_exists = True
-                target_style = style
-                break
+        try:
+            if style.Type == 1:  # wdStyleTypeParagraph = 1
+                # 优先使用NameLocal属性，这在不同语言环境下更可靠
+                style_name_local = style.NameLocal
+                paragraph_styles.append(style_name_local)
+                # 同时检查Name和NameLocal，以增加兼容性
+                if style_name_local == style_name or (hasattr(style, 'Name') and style.Name == style_name):
+                    style_exists = True
+                    target_style = style
+                    break
+        except Exception as e:
+            log_error(f"Error accessing style property: {str(e)}")
+            continue
 
     if not style_exists:
         # 准备可用段落样式列表
@@ -422,31 +429,33 @@ def set_paragraph_style(
         # Selection._com_ranges中只包含Range对象
         for range_obj in selection._com_ranges:
             try:
-                range_obj.Paragraphs(1).Style = target_style
-                styled_count += 1
-            except Exception as e:
-                # 如果使用对象失败，尝试使用名称
-                try:
+                # 首先尝试使用样式对象
+                if target_style:
+                    range_obj.Paragraphs(1).Style = target_style
+                    styled_count += 1
+                else:
+                    # 如果没有找到样式对象，尝试直接使用样式名称
                     range_obj.Paragraphs(1).Style = style_name
                     styled_count += 1
-                except Exception as e2:
-                    log_error(f"Failed to apply style to object: {str(e2)}")
+            except Exception as e:
+                log_error(f"Failed to apply style to object: {str(e)}")
     else:
         # 如果没有定位器，使用当前选区
         try:
             range_obj = document.Application.Selection.Range
-            range_obj.Paragraphs(1).Style = target_style
-            styled_count = 1
-        except Exception as e:
-            # 如果使用对象失败，尝试使用名称
-            try:
+            # 首先尝试使用样式对象
+            if target_style:
+                range_obj.Paragraphs(1).Style = target_style
+                styled_count = 1
+            else:
+                # 如果没有找到样式对象，尝试直接使用样式名称
                 range_obj.Paragraphs(1).Style = style_name
                 styled_count = 1
-            except Exception as e2:
-                raise WordDocumentError(
-                    ErrorCode.FORMATTING_ERROR,
-                    f"Failed to apply style to selection: {str(e2)}",
-                )
+        except Exception as e:
+            raise WordDocumentError(
+                ErrorCode.FORMATTING_ERROR,
+                f"Failed to apply style to selection: {str(e)}",
+            )
 
     log_info(
         f"Successfully applied style '{style_name}' to {styled_count} paragraph(s)"
@@ -503,6 +512,7 @@ def set_paragraph_formatting(
 
     selector = SelectorEngine()
     formatting_count = 0
+    successfully_applied = {}
 
     # 获取要设置格式的范围
     if locator:
@@ -528,35 +538,80 @@ def set_paragraph_formatting(
                     continue
                 
                 for para in paragraphs:
+                    # 为每个段落创建一个记录字典
+                    para_applied = {}
+                    
                     # 设置对齐方式
                     if alignment:
-                        text_format_ops.set_alignment_for_range(document, range_obj, alignment)
+                        try:
+                            text_format_ops.set_alignment_for_range(document, range_obj, alignment)
+                            para_applied['alignment'] = alignment
+                        except Exception as e:
+                            log_error(f"Failed to set alignment: {str(e)}")
                     
                     # 设置行距
                     if line_spacing is not None:
-                        para.LineSpacingRule = 4  # wdLineSpaceMultiple = 4
-                        para.LineSpacing = line_spacing
+                        try:
+                            if hasattr(para, 'LineSpacingRule'):
+                                para.LineSpacingRule = 4  # wdLineSpaceMultiple = 4
+                            if hasattr(para, 'LineSpacing'):
+                                para.LineSpacing = line_spacing
+                                para_applied['line_spacing'] = line_spacing
+                        except Exception as e:
+                            log_error(f"Failed to set line spacing: {str(e)}")
                     
                     # 设置段前间距
                     if space_before is not None:
-                        para.SpaceBefore = space_before
+                        try:
+                            if hasattr(para, 'SpaceBefore'):
+                                para.SpaceBefore = space_before
+                                para_applied['space_before'] = space_before
+                        except Exception as e:
+                            log_error(f"Failed to set space before: {str(e)}")
                     
                     # 设置段后间距
                     if space_after is not None:
-                        para.SpaceAfter = space_after
+                        try:
+                            if hasattr(para, 'SpaceAfter'):
+                                para.SpaceAfter = space_after
+                                para_applied['space_after'] = space_after
+                        except Exception as e:
+                            log_error(f"Failed to set space after: {str(e)}")
                     
                     # 设置首行缩进
                     if first_line_indent is not None:
-                        para.FirstLineIndent = first_line_indent
+                        try:
+                            if hasattr(para, 'FirstLineIndent'):
+                                para.FirstLineIndent = first_line_indent
+                                para_applied['first_line_indent'] = first_line_indent
+                        except Exception as e:
+                            log_error(f"Failed to set first line indent: {str(e)}")
                     
                     # 设置左缩进
                     if left_indent is not None:
-                        para.LeftIndent = left_indent
+                        try:
+                            if hasattr(para, 'LeftIndent'):
+                                para.LeftIndent = left_indent
+                                para_applied['left_indent'] = left_indent
+                        except Exception as e:
+                            log_error(f"Failed to set left indent: {str(e)}")
                     
                     # 设置右缩进
                     if right_indent is not None:
-                        para.RightIndent = right_indent
-                formatting_count += 1
+                        try:
+                            if hasattr(para, 'RightIndent'):
+                                para.RightIndent = right_indent
+                                para_applied['right_indent'] = right_indent
+                        except Exception as e:
+                            log_error(f"Failed to set right indent: {str(e)}")
+                    
+                    # 如果这个段落有成功应用的设置，增加计数
+                    if para_applied:
+                        formatting_count += 1
+                        # 合并成功应用的设置
+                        for key, value in para_applied.items():
+                            if key not in successfully_applied or successfully_applied[key] < value:
+                                successfully_applied[key] = value
             except Exception as e:
                 log_error(f"Failed to apply formatting to object: {str(e)}")
     else:
@@ -571,49 +626,93 @@ def set_paragraph_formatting(
                 )
             
             for para in paragraphs:
+                # 为每个段落创建一个记录字典
+                para_applied = {}
+                
                 # 设置对齐方式
                 if alignment:
-                    text_format_ops.set_alignment_for_range(document, range_obj, alignment)
+                    try:
+                        text_format_ops.set_alignment_for_range(document, range_obj, alignment)
+                        para_applied['alignment'] = alignment
+                    except Exception as e:
+                        log_error(f"Failed to set alignment: {str(e)}")
                 
                 # 设置行距
                 if line_spacing is not None:
-                    para.LineSpacingRule = 4  # wdLineSpaceMultiple = 4
-                    para.LineSpacing = line_spacing
+                    try:
+                        if hasattr(para, 'LineSpacingRule'):
+                            para.LineSpacingRule = 4  # wdLineSpaceMultiple = 4
+                        if hasattr(para, 'LineSpacing'):
+                            para.LineSpacing = line_spacing
+                            para_applied['line_spacing'] = line_spacing
+                    except Exception as e:
+                        log_error(f"Failed to set line spacing: {str(e)}")
                 
                 # 设置段前间距
                 if space_before is not None:
-                    para.SpaceBefore = space_before
+                    try:
+                        if hasattr(para, 'SpaceBefore'):
+                            para.SpaceBefore = space_before
+                            para_applied['space_before'] = space_before
+                    except Exception as e:
+                        log_error(f"Failed to set space before: {str(e)}")
                 
                 # 设置段后间距
                 if space_after is not None:
-                    para.SpaceAfter = space_after
+                    try:
+                        if hasattr(para, 'SpaceAfter'):
+                            para.SpaceAfter = space_after
+                            para_applied['space_after'] = space_after
+                    except Exception as e:
+                        log_error(f"Failed to set space after: {str(e)}")
                 
                 # 设置首行缩进
                 if first_line_indent is not None:
-                    para.FirstLineIndent = first_line_indent
+                    try:
+                        if hasattr(para, 'FirstLineIndent'):
+                            para.FirstLineIndent = first_line_indent
+                            para_applied['first_line_indent'] = first_line_indent
+                    except Exception as e:
+                        log_error(f"Failed to set first line indent: {str(e)}")
                 
                 # 设置左缩进
                 if left_indent is not None:
-                    para.LeftIndent = left_indent
+                    try:
+                        if hasattr(para, 'LeftIndent'):
+                            para.LeftIndent = left_indent
+                            para_applied['left_indent'] = left_indent
+                    except Exception as e:
+                        log_error(f"Failed to set left indent: {str(e)}")
                 
                 # 设置右缩进
                 if right_indent is not None:
-                    para.RightIndent = right_indent
-            formatting_count = 1
+                    try:
+                        if hasattr(para, 'RightIndent'):
+                            para.RightIndent = right_indent
+                            para_applied['right_indent'] = right_indent
+                    except Exception as e:
+                        log_error(f"Failed to set right indent: {str(e)}")
+                
+                # 如果这个段落有成功应用的设置，增加计数
+                if para_applied:
+                    formatting_count += 1
+                    # 合并成功应用的设置
+                    for key, value in para_applied.items():
+                        if key not in successfully_applied or successfully_applied[key] < value:
+                            successfully_applied[key] = value
         except Exception as e:
             raise WordDocumentError(
                 ErrorCode.FORMATTING_ERROR,
                 f"Failed to apply formatting to selection: {str(e)}",
             )
 
+    # 构建应用设置的字符串表示
     applied_settings = []
-    if alignment: applied_settings.append(f"alignment='{alignment}'")
-    if line_spacing is not None: applied_settings.append(f"line_spacing={line_spacing}")
-    if space_before is not None: applied_settings.append(f"space_before={space_before}")
-    if space_after is not None: applied_settings.append(f"space_after={space_after}")
-    if first_line_indent is not None: applied_settings.append(f"first_line_indent={first_line_indent}")
-    if left_indent is not None: applied_settings.append(f"left_indent={left_indent}")
-    if right_indent is not None: applied_settings.append(f"right_indent={right_indent}")
+    for key, value in successfully_applied.items():
+        if isinstance(value, str):
+            applied_settings.append(f"{key}='{value}'")
+        else:
+            applied_settings.append(f"{key}={value}")
 
     settings_str = ", ".join(applied_settings)
     log_info(
@@ -622,10 +721,11 @@ def set_paragraph_formatting(
     
     return json.dumps(
         {
-            "success": True,
-            "message": "Successfully applied paragraph formatting",
+            "success": len(successfully_applied) > 0,
+            "message": "Successfully applied paragraph formatting" if formatting_count > 0 else "No formatting applied",
             "applied_settings": applied_settings,
             "object_count": formatting_count,
+            "successfully_applied": successfully_applied,
         },
         ensure_ascii=False,
     )

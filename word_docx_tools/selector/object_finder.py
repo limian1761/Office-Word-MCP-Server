@@ -159,12 +159,18 @@ class ObjectFinder(FilterHandlers):
         candidates = []
 
         # Handle document-specific candidates
-        if (
-            object_type == "document"
-            or object_type == "document_start"
-            or object_type == "document_end"
-        ):
+        if object_type == "document":
             return [self.document.Content]
+        elif object_type == "document_start":
+            # Return the start of the document
+            start_range = self.document.Content
+            start_range.Collapse(Direction=0)  # wdCollapseStart
+            return [start_range]
+        elif object_type == "document_end":
+            # Return the end of the document
+            end_range = self.document.Content
+            end_range.Collapse(Direction=1)  # wdCollapseEnd
+            return [end_range]
 
         # Handle different object types
         if object_type == "paragraph":

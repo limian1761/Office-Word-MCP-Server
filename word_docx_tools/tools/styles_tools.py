@@ -170,12 +170,46 @@ def styles_tools(
                     "style_name and locator parameters must be provided for set_paragraph_style operation"
                 )
 
-            log_info("Setting paragraph style")
+            log_info(f"Setting paragraph style: {style_name}")
             try:
-                result = set_paragraph_style(
-                    document=active_doc, style_name=style_name, locator=locator
-                )
-                return str(result)
+                # 修复段落样式设置逻辑 - 正确处理Selection对象
+                engine = SelectorEngine()
+                selection = engine.select(active_doc, locator)
+                if not selection:
+                    raise WordDocumentError(ErrorCode.SELECTOR_ERROR, "No paragraphs found for the given locator")
+                
+                # 检查selection是否有_com_ranges属性，如果有则使用它
+                if hasattr(selection, "_com_ranges") and selection._com_ranges:
+                    paragraphs = selection._com_ranges
+                else:
+                    # 如果是单个段落对象，包装成列表
+                    try:
+                        # 尝试迭代selection，如果成功则直接使用
+                        iter(selection)
+                        paragraphs = selection
+                    except TypeError:
+                        # 如果不能迭代，则包装成列表
+                        paragraphs = [selection]
+                
+                for para in paragraphs:
+                    # 确保样式名称正确并处理可能的异常
+                    try:
+                        para.Style = active_doc.Styles(style_name)
+                    except Exception as style_err:
+                        # 尝试使用NameLocal属性
+                        found = False
+                        for s in active_doc.Styles:
+                            try:
+                                if s.NameLocal == style_name:
+                                    para.Style = s
+                                    found = True
+                                    break
+                            except Exception:
+                                continue
+                        if not found:
+                            raise WordDocumentError(ErrorCode.STYLE_NOT_FOUND, f"Style '{style_name}' not found")
+                
+                return json.dumps({"success": True, "message": f"Successfully applied style '{style_name}'"}, ensure_ascii=False)
             except WordDocumentError as e:
                 if e.error_code == ErrorCode.STYLE_NOT_FOUND:
                     # 获取所有可用样式
@@ -183,7 +217,7 @@ def styles_tools(
                     for style in active_doc.Styles:
                         try:
                             if style.InUse:
-                                available_styles.append(style.Name)
+                                available_styles.append(style.NameLocal)
                         except Exception as ex:
                             log_error(f"Failed to get style name: {ex}")
                     return json.dumps({

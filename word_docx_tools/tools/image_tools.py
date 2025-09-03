@@ -137,6 +137,12 @@ async def image_tools(
                     ErrorCode.INVALID_INPUT,
                     "Image path is required for insert operation",
                 )
+            
+            if locator is None:
+                raise WordDocumentError(
+                    ErrorCode.INVALID_INPUT,
+                    "Locator is required for insert operation",
+                )
 
             if not os.path.exists(image_path):
                 raise WordDocumentError(
@@ -144,7 +150,34 @@ async def image_tools(
                 )
 
             log_info(f"Inserting image from path: {image_path}")
-            result = insert_image(document, image_path, locator, position or "after")
+            
+            # 改进定位器处理
+            engine = SelectorEngine()
+            selection = engine.select(document, locator)
+            if not selection:
+                raise WordDocumentError(ErrorCode.SELECTOR_ERROR, "Failed to locate position for image insertion")
+            # 使用selection的_com_ranges属性
+            ranges = selection._com_ranges
+            
+            # 获取要插入的Range对象
+            range_obj = ranges[0]
+            
+            # 根据position参数调整插入位置
+            if position and position.lower() == "before":
+                range_obj.Collapse(1)  # 折叠到开始位置
+            else:
+                range_obj.Collapse(0)  # 折叠到结束位置
+            
+            # 插入图片
+            shape = document.Shapes.AddPicture(
+                FileName=image_path,
+                LinkToFile=False,
+                SaveWithDocument=True,
+                Range=range_obj
+            )
+            
+            result = {"success": True, "shape_id": shape.ID if hasattr(shape, 'ID') else 0}
+            
             log_info("Image inserted successfully")
             return json.dumps(
                 {

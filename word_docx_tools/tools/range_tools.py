@@ -117,7 +117,7 @@ async def range_tools(
                 )
 
             log_info(f"Selecting objects with locator: {locator}")
-            result = select_objects(active_doc, [locator])
+            result = select_objects(active_doc, locator)
             log_info(f"Successfully selected {len(result) if result else 0} objects")
             return json.dumps(
                 {
@@ -225,5 +225,5 @@ async def range_tools(
             raise WordDocumentError(ErrorCode.INVALID_INPUT, error_msg)
 
     except Exception as e:
-        log_error(f"Error in object_tools: {str(e)}", exc_info=True)
+        log_error(f"Error in range_tools: {str(e)}", exc_info=True)
         raise

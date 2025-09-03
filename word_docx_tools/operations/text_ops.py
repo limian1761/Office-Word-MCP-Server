@@ -243,40 +243,110 @@ def apply_formatting_to_object(range_obj: Any, formatting: Dict[str, Any]) -> st
     Returns:
         操作结果的JSON字符串
     """
+    result = {
+        "success": True,
+        "message": "Formatting applied successfully",
+        "applied_formats": [],
+        "failed_formats": []
+    }
+    
     try:
-        # 应用格式化选项
+        # 检查Range对象是否有Font属性
+        if not hasattr(range_obj, "Font"):
+            return json.dumps({
+                "success": False,
+                "message": "Range object does not have Font property",
+                "applied_formats": [],
+                "failed_formats": list(formatting.keys())
+            })
+        
+        font_obj = range_obj.Font
+        
+        # 应用粗体
         if "bold" in formatting:
-            range_obj.Font.Bold = formatting["bold"]
-
+            try:
+                font_obj.Bold = formatting["bold"]
+                result["applied_formats"].append("bold")
+            except Exception as e:
+                result["failed_formats"].append(f"bold: {str(e)}")
+        
+        # 应用斜体
         if "italic" in formatting:
-            range_obj.Font.Italic = formatting["italic"]
-
+            try:
+                font_obj.Italic = formatting["italic"]
+                result["applied_formats"].append("italic")
+            except Exception as e:
+                result["failed_formats"].append(f"italic: {str(e)}")
+        
+        # 应用字体大小
         if "font_size" in formatting:
-            range_obj.Font.Size = formatting["font_size"]
-
+            try:
+                font_obj.Size = float(formatting["font_size"])
+                result["applied_formats"].append("font_size")
+            except Exception as e:
+                result["failed_formats"].append(f"font_size: {str(e)}")
+        
+        # 应用字体名称
         if "font_name" in formatting:
-            range_obj.Font.Name = formatting["font_name"]
-
+            try:
+                font_obj.Name = str(formatting["font_name"])
+                result["applied_formats"].append("font_name")
+            except Exception as e:
+                result["failed_formats"].append(f"font_name: {str(e)}")
+        
+        # 应用字体颜色
         if "font_color" in formatting:
-            # font_color 应该是一个RGB值的元组 (R, G, B)
-            if (
-                isinstance(formatting["font_color"], (list, tuple))
-                and len(formatting["font_color"]) == 3
-            ):
-                range_obj.Font.Color = (
-                    formatting["font_color"][0]
-                    + (formatting["font_color"][1] << 8)
-                    + (formatting["font_color"][2] << 16)
-                )
-
-        return json.dumps(
-            {"success": True, "message": "Formatting applied successfully"}
-        )
-
+            try:
+                color_value = formatting["font_color"]
+                # 支持多种颜色格式
+                if isinstance(color_value, (list, tuple)) and len(color_value) == 3:
+                    # RGB元组格式 (R, G, B)
+                    font_obj.Color = color_value[0] + (color_value[1] << 8) + (color_value[2] << 16)
+                elif isinstance(color_value, int):
+                    # 整数格式的颜色值
+                    font_obj.Color = color_value
+                elif isinstance(color_value, str):
+                    # 字符串格式的颜色值（十六进制或命名颜色）
+                    try:
+                        # 尝试解析十六进制颜色
+                        if color_value.startswith('#'):
+                            color_value = color_value[1:]
+                        r = int(color_value[0:2], 16)
+                        g = int(color_value[2:4], 16)
+                        b = int(color_value[4:6], 16)
+                        font_obj.Color = r + (g << 8) + (b << 16)
+                    except:
+                        # 如果解析失败，使用系统默认的颜色映射（如果有）
+                        try:
+                            # Word VBA中的颜色常量映射
+                            color_map = {
+                                "black": 0, "white": 16777215, "red": 255, 
+                                "green": 65280, "blue": 16711680, "yellow": 65535,
+                                "cyan": 16776960, "magenta": 16711935, "gray": 12632256
+                            }
+                            if color_value.lower() in color_map:
+                                font_obj.Color = color_map[color_value.lower()]
+                            else:
+                                raise ValueError(f"Unsupported color string: {color_value}")
+                        except:
+                            raise ValueError(f"Invalid color format: {color_value}")
+                else:
+                    raise ValueError(f"Unsupported color type: {type(color_value)}")
+                result["applied_formats"].append("font_color")
+            except Exception as e:
+                result["failed_formats"].append(f"font_color: {str(e)}")
+        
+        # 如果有失败的格式，更新成功状态和消息
+        if result["failed_formats"]:
+            result["success"] = False
+            result["message"] = f"Some formatting operations failed: {', '.join(result['failed_formats'][:3])}{'...' if len(result['failed_formats']) > 3 else ''}"
+        
+        return json.dumps(result)
     except Exception as e:
-        return json.dumps(
-            {"success": False, "message": f"Failed to apply formatting: {str(e)}"}
-        )
+        result["success"] = False
+        result["message"] = f"Failed to apply formatting: {str(e)}"
+        result["failed_formats"] = list(formatting.keys())
+        return json.dumps(result)
 
 
 def replace_object_text(range_obj: Any, new_text: str) -> str:
