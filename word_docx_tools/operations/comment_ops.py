@@ -176,7 +176,7 @@ def get_comment_thread(
     thread.append(
         {
             "index": index,
-            "text": comment.Text,
+            "text": comment.Range.Text,
             "author": comment.Author,
             "initials": comment.Initial,
             "date": str(comment.Date),
@@ -192,7 +192,7 @@ def get_comment_thread(
         thread.append(
             {
                 "index": f"{index}-reply-{i-1}",
-                "text": reply.Text,
+                "text": reply.Range.Text,
                 "author": reply.Author,
                 "initials": reply.Initial,
                 "date": str(reply.Date),
@@ -291,5 +291,5 @@ def reply_to_comment(
     # Get the comment at the specified index
     comment = document.Comments(index + 1)  # COM is 1-based
     # Add the reply
-    reply = comment.Replies.Add(text, author)
+    reply = comment.Replies.Add(comment.Scope, text, author)
     return True

@@ -151,54 +151,16 @@ async def image_tools(
 
             log_info(f"Inserting image from path: {image_path}")
             
-            # 改进定位器处理
-            engine = SelectorEngine()
-            selection = engine.select(document, locator)
-            if not selection:
-                raise WordDocumentError(ErrorCode.SELECTOR_ERROR, "Failed to locate position for image insertion")
-            # 使用selection的_com_ranges属性
-            ranges = selection._com_ranges
+            # 调用operations模块中的insert_image函数
+            result = insert_image(document, image_path, locator, position)
             
-            # 获取要插入的Range对象
-            range_obj = ranges[0]
-            
-            # 根据position参数调整插入位置
-            if position and position.lower() == "before":
-                range_obj.Collapse(1)  # 折叠到开始位置
-            else:
-                range_obj.Collapse(0)  # 折叠到结束位置
-            
-            # 插入图片
-            try:
-                # 先尝试使用带Range参数的方法
-                picture = document.InlineShapes.AddPicture(
-                    FileName=image_path,
-                    LinkToFile=False,
-                    SaveWithDocument=True,
-                    Range=range_obj
-                )
-            except Exception as first_exception:
-                # 备用方法：先选择Range，然后插入图片
-                try:
-                    range_obj.Select()
-                    picture = document.InlineShapes.AddPicture(
-                        FileName=image_path,
-                        LinkToFile=False,
-                        SaveWithDocument=True
-                    )
-                except Exception as second_exception:
-                    log_error(f"Failed to insert image {image_path}: {str(second_exception)}")
-                    raise WordDocumentError(
-                        ErrorCode.SERVER_ERROR, f"Failed to insert image: {str(second_exception)}"
-                    )
-            
-            result = {"success": True, "shape_id": picture.Index if hasattr(picture, 'Index') else 0}
-            
+            # 解析结果并返回
+            result_dict = json.loads(result)
             log_info("Image inserted successfully")
             return json.dumps(
                 {
                     "success": True,
-                    "result": result,
+                    "result": {"success": True, "shape_id": result_dict.get("image_index", 0)},
                     "message": "Image inserted successfully",
                 },
                 ensure_ascii=False,

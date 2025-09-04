@@ -419,29 +419,13 @@ def handle_hyperlink_operations(
                 if not clean_url.startswith(('http://', 'https://', 'file://', 'mailto:')):
                     clean_url = 'https://' + clean_url
                 
-                engine = SelectorEngine()
-                selection = engine.select(document, locator)
-                if not selection:
-                    raise WordDocumentError(ErrorCode.SELECTOR_ERROR, "Failed to locate position for hyperlink")
-                
-                # 正确处理selection对象
-                if hasattr(selection, "_com_ranges") and selection._com_ranges:
-                    ranges = selection._com_ranges
-                else:
-                    # 如果是段落对象，使用其Range
-                    try:
-                        ranges = [selection.Range]
-                    except AttributeError:
-                        # 如果没有Range属性，尝试直接使用selection
-                        ranges = [selection]
-                
-                # 使用第一个找到的Range创建超链接
-                hyperlink = document.Hyperlinks.Add(
-                    Anchor=ranges[0],
-                    Address=clean_url,
-                    TextToDisplay=display_text if display_text else clean_url
+                from ..operations.objects_ops import create_hyperlink
+                result = create_hyperlink(
+                    document,
+                    address=clean_url,
+                    locator=locator,
+                    text_to_display=display_text
                 )
-                result = {"success": True, "hyperlink_index": hyperlink.Index if hasattr(hyperlink, 'Index') else 0}
             except Exception as e:
                 log_error(f"Failed to create hyperlink: {str(e)}")
                 # 如果超链接创建失败，尝试使用更简单的方法在文档中插入链接文本

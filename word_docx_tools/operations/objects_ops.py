@@ -45,8 +45,6 @@ def _get_range_from_locator(document: Any, locator: Optional[Dict[str, Any]]) ->
 
 
 # === Bookmark Operations ===
-
-
 @handle_com_error(ErrorCode.OBJECT_TYPE_ERROR, "create bookmark")
 def create_bookmark(
     document: win32com.client.CDispatch,
