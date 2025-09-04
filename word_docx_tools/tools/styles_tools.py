@@ -222,7 +222,7 @@ def styles_tools(
                             log_error(f"Failed to get style name: {ex}")
                     return json.dumps({
                         "success": False,
-                        "error_code": e.error_code,
+                        "error_code": int(e.error_code),  # 转换为整数以支持JSON序列化
                         "error_message": str(e),
                         "available_styles": available_styles
                     }, ensure_ascii=False)
@@ -323,4 +323,13 @@ def styles_tools(
 
     except Exception as e:
         log_error(f"Error in styles_tools: {e}", exc_info=True)
-        return str(format_error_response(e))
+        # 确保错误响应可以正确序列化
+        error_response = format_error_response(e)
+        if isinstance(error_response, dict) and 'error_code' in error_response:
+            # 确保error_code是整数类型
+            error_response['error_code'] = int(error_response['error_code'])
+        # 如果已经是JSON字符串，则直接返回，否则转换为JSON字符串
+        if isinstance(error_response, str):
+            return error_response
+        else:
+            return json.dumps(error_response, ensure_ascii=False)

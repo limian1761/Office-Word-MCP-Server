@@ -342,41 +342,185 @@ def document_tools(
             return structure
 
         elif operation_type and operation_type.lower() == "set_property":
+            if not active_doc:
+                raise WordDocumentError(
+                    ErrorCode.DOCUMENT_ERROR, "No active document found"
+                )
+            
             if property_name is None or property_value is None:
                 raise ValueError("property_name and property_value parameters must be provided for set_property operation")
 
             log_info(f"Setting document property: {property_name}")
             try:
-                # 设置文档内置属性
-                properties = active_doc.BuiltInDocumentProperties
-                if hasattr(properties, property_name):
-                    properties(property_name).Value = property_value
+                # 属性名称映射字典，用于支持不同语言的属性名
+                property_name_map = {
+                    # 英文到英文的映射
+                    "Title": "Title",
+                    "Subject": "Subject",
+                    "Author": "Author",
+                    "Keywords": "Keywords",
+                    "Comments": "Comments",
+                    "Template": "Template",
+                    "Last Author": "Last Author",
+                    "Revision Number": "Revision Number",
+                    "Application Name": "Application Name",
+                    "Last Print Date": "Last Print Date",
+                    "Creation Date": "Creation Date",
+                    "Last Save Time": "Last Save Time",
+                    "Total Editing Time": "Total Editing Time",
+                    "Number of Pages": "Number of Pages",
+                    "Number of Words": "Number of Words",
+                    "Number of Characters": "Number of Characters",
+                    "Security": "Security",
+                    "Category": "Category",
+                    "Format": "Format",
+                    "Manager": "Manager",
+                    "Company": "Company",
+                    "Number of Bytes": "Number of Bytes",
+                    "Number of Lines": "Number of Lines",
+                    "Number of Paragraphs": "Number of Paragraphs",
+                    "Number of Slides": "Number of Slides",
+                    "Number of Notes": "Number of Notes",
+                    "Number of Hidden Slides": "Number of Hidden Slides",
+                    "Number of Multimedia Clips": "Number of Multimedia Clips",
+                    "Hyperlink Base": "Hyperlink Base",
+                    "Number of Characters (with spaces)": "Number of Characters (with spaces)",
+                    # 中文到英文的映射
+                    "标题": "Title",
+                    "主题": "Subject",
+                    "作者": "Author",
+                    "关键词": "Keywords",
+                    "备注": "Comments",
+                    "模板": "Template",
+                    "上次作者": "Last Author",
+                    "修订号": "Revision Number",
+                    "应用程序名称": "Application Name",
+                    "上次打印日期": "Last Print Date",
+                    "创建日期": "Creation Date",
+                    "上次保存时间": "Last Save Time",
+                    "总编辑时间": "Total Editing Time",
+                    "页数": "Number of Pages",
+                    "字数": "Number of Words",
+                    "字符数": "Number of Characters",
+                    "安全性": "Security",
+                    "类别": "Category",
+                    "格式": "Format",
+                    "管理员": "Manager",
+                    "公司": "Company",
+                    "字节数": "Number of Bytes",
+                    "行数": "Number of Lines",
+                    "段落数": "Number of Paragraphs",
+                    "幻灯片数": "Number of Slides",
+                    "备注数": "Number of Notes",
+                    "隐藏幻灯片数": "Number of Hidden Slides",
+                    "多媒体剪辑数": "Number of Multimedia Clips",
+                    "超链接基础": "Hyperlink Base",
+                    "字符数(含空格)": "Number of Characters (with spaces)",
+                }
+                
+                # 获取标准化的属性名称
+                standard_property_name = property_name_map.get(property_name, property_name)
+                
+                # 尝试设置文档内置属性
+                try:
+                    # Word文档属性需要通过名称访问，而不是作为对象的属性
+                    property_obj = active_doc.BuiltInDocumentProperties(standard_property_name)
+                    property_obj.Value = property_value
                     return json.dumps({
                         "success": True,
                         "property_name": property_name,
-                        "property_value": property_value
+                        "standard_property_name": standard_property_name,
+                        "property_value": property_value,
+                        "is_built_in": True
                     }, ensure_ascii=False)
-                else:
-                    raise WordDocumentError(ErrorCode.NOT_FOUND, f"Property not found: {property_name}")
+                except Exception as e:
+                    # 如果内置属性访问失败，尝试检查自定义属性
+                    try:
+                        custom_properties = active_doc.CustomDocumentProperties
+                        # 检查属性是否已存在
+                        prop_exists = False
+                        for i in range(1, custom_properties.Count + 1):
+                            if custom_properties(i).Name == property_name:
+                                custom_properties(i).Value = property_value
+                                prop_exists = True
+                                break
+                        
+                        # 如果不存在，则添加新的自定义属性
+                        if not prop_exists:
+                            # 对于自定义属性，需要先检查属性类型
+                            property_type = 4  # 默认设置为文本类型
+                            if isinstance(property_value, bool):
+                                property_type = 1  # 布尔类型
+                            elif isinstance(property_value, int):
+                                property_type = 2  # 整数类型
+                            elif isinstance(property_value, float):
+                                property_type = 3  # 浮点数类型
+                            
+                            # 添加新的自定义属性
+                            custom_properties.Add(Name=property_name, Type=property_type, Value=property_value)
+                        
+                        return json.dumps({
+                            "success": True,
+                            "property_name": property_name,
+                            "property_value": property_value,
+                            "is_custom_property": True
+                        }, ensure_ascii=False)
+                    except Exception as inner_e:
+                        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to set property: {str(inner_e)}")
             except Exception as e:
-                raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to set property: {str(e)}")
+                # 更友好的错误处理
+                error_message = str(e)
+                if "Property not found" in error_message:
+                    supported_properties = ", ".join(list(property_name_map.keys()))
+                    raise WordDocumentError(ErrorCode.NOT_FOUND, 
+                        f"Property not found: {property_name}. Supported built-in properties: {supported_properties}")
+                else:
+                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to set property: {str(e)}")
 
         elif operation_type and operation_type.lower() == "get_property":
-            if property_name is None:
-                raise ValueError("property_name parameter must be provided for get_property operation")
+                if property_name is None:
+                    raise ValueError("property_name parameter must be provided for get_property operation")
 
-            log_info(f"Getting document property: {property_name}")
-            try:
-                # 获取文档内置属性
-                properties = active_doc.BuiltInDocumentProperties
-                value = properties(property_name).Value if hasattr(properties, property_name) else None
-                return json.dumps({
-                    "success": True,
-                    "property_name": property_name,
-                    "value": value
-                }, ensure_ascii=False)
-            except Exception as e:
-                raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get property: {str(e)}")
+                log_info(f"Getting document property: {property_name}")
+                try:
+                    # 尝试获取文档内置属性
+                    try:
+                        # Word文档属性需要通过名称访问，而不是作为对象的属性
+                        property_obj = active_doc.BuiltInDocumentProperties(property_name)
+                        value = property_obj.Value
+                        return json.dumps({
+                            "success": True,
+                            "property_name": property_name,
+                            "value": value,
+                            "is_built_in": True
+                        }, ensure_ascii=False)
+                    except Exception as e:
+                        # 如果内置属性访问失败，尝试检查自定义属性
+                        try:
+                            custom_properties = active_doc.CustomDocumentProperties
+                            # 遍历自定义属性查找指定名称的属性
+                            value = None
+                            for i in range(1, custom_properties.Count + 1):
+                                if custom_properties(i).Name == property_name:
+                                    value = custom_properties(i).Value
+                                    return json.dumps({
+                                        "success": True,
+                                        "property_name": property_name,
+                                        "value": value,
+                                        "is_custom_property": True
+                                    }, ensure_ascii=False)
+                            
+                            # 如果未找到属性，返回None值
+                            return json.dumps({
+                                "success": True,
+                                "property_name": property_name,
+                                "value": None,
+                                "message": "Property not found"
+                            }, ensure_ascii=False)
+                        except Exception as inner_e:
+                            raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get property: {str(inner_e)}")
+                except Exception as e:
+                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get property: {str(e)}")
 
         elif operation_type and operation_type.lower() == "print":
             raise NotImplementedError("print operation not implemented")

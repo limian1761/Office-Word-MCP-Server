@@ -189,6 +189,7 @@ def insert_image(
     image_path: str,
     locator: Optional[Dict[str, Any]] = None,
     position: str = "after",
+    is_independent_paragraph: bool = False,
 ) -> str:
     """在文档中插入图片
 
@@ -197,6 +198,7 @@ def insert_image(
         image_path: 图片文件路径
         locator: 定位器对象，用于指定插入位置
         position: 插入位置，可选值：'before', 'after', 'replace'
+        is_independent_paragraph: 图片是否作为独立段落插入，默认为False
 
     Returns:
         插入图片成功的消息
@@ -232,9 +234,9 @@ def insert_image(
                 
                 # 根据位置参数调整范围
                 if position == "before":
-                    range_obj.Collapse(Direction=1)  # wdCollapseStart
+                    range_obj.Collapse(True)  # wdCollapseStart
                 elif position == "after":
-                    range_obj.Collapse(Direction=0)  # wdCollapseEnd
+                    range_obj.Collapse(False)  # wdCollapseEnd
                 # 如果是"replace"，则不折叠范围，直接替换
             else:
                 raise WordDocumentError(
@@ -257,7 +259,7 @@ def insert_image(
                  ErrorCode.OBJECT_TYPE_ERROR,
                  "Failed to create valid Range object"
              )
-         range_obj.Collapse(Direction=0)  # wdCollapseEnd
+         range_obj.Collapse(False)  # wdCollapseEnd
 
     try:
         # 增强Range对象验证
@@ -266,6 +268,22 @@ def insert_image(
                 ErrorCode.OBJECT_TYPE_ERROR,
                 "Invalid Range object for image insertion"
             )
+
+        # 如果需要作为独立段落插入
+        if is_independent_paragraph:
+            try:
+                # 检查当前范围是否已经在段落末尾
+                if hasattr(range_obj, 'Paragraphs') and range_obj.Paragraphs.Count > 0:
+                    current_paragraph = range_obj.Paragraphs(1)
+                    # 如果范围不在段落末尾，创建新段落
+                    if range_obj.Start != current_paragraph.Range.End - 1:
+                        # 在当前范围前插入段落标记创建新段落
+                        range_obj.InsertBefore('\n')
+                        # 更新范围到新段落
+                        range_obj.Start = range_obj.Start
+                        range_obj.End = range_obj.Start
+            except Exception as e:
+                log_error(f"Failed to prepare independent paragraph: {str(e)}")
         
         # 插入图片
         # 如果直接使用Range参数失败，尝试先选择范围再插入
@@ -346,7 +364,7 @@ def add_caption(
             selection = selector.select(document, locator)
             if hasattr(selection, "_com_ranges") and selection._com_ranges:
                 range_obj = selection._com_ranges[0]  # _com_ranges 已包含 Range 对象
-                range_obj.Collapse(Direction=0)  # wdCollapseEnd
+                range_obj.Collapse(False)  # wdCollapseEnd
             else:
                 raise WordDocumentError(
                     ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
@@ -364,7 +382,7 @@ def add_caption(
                     ErrorCode.OBJECT_TYPE_ERROR,
                     "Failed to create valid Range object"
                 )
-            range_obj.Collapse(Direction=0)  # wdCollapseEnd
+            range_obj.Collapse(False)  # wdCollapseEnd
 
         # 添加题注
         try:
@@ -372,6 +390,21 @@ def add_caption(
             full_caption_text = caption_text
             if label:
                 full_caption_text = f"{label}: {caption_text}"
+            
+            # 确保题注作为独立段落添加
+            try:
+                # 检查当前范围是否已经在段落末尾
+                if hasattr(range_obj, 'Paragraphs') and range_obj.Paragraphs.Count > 0:
+                    current_paragraph = range_obj.Paragraphs(1)
+                    # 如果范围不在段落末尾，创建新段落
+                    if range_obj.Start != current_paragraph.Range.End - 1:
+                        # 在当前范围前插入段落标记创建新段落
+                        range_obj.InsertBefore('\n')
+                        # 更新范围到新段落
+                        range_obj.Start = range_obj.Start
+                        range_obj.End = range_obj.Start
+            except Exception as e:
+                log_error(f"Failed to prepare independent paragraph for caption: {str(e)}")
             
             # 先尝试使用AutoTextEntries方法
             try:
@@ -385,7 +418,7 @@ def add_caption(
                 # 设置题注文本
                 if hasattr(document.Application, 'Selection'):
                     caption_range = document.Application.Selection.Range
-                    caption_range.Collapse(0)  # wdCollapseEnd
+                    caption_range.Collapse(False)  # wdCollapseEnd
                     caption_range.Text = f" {full_caption_text}"
                 else:
                     # 备用方法：直接在range_obj后插入文本
@@ -727,7 +760,7 @@ def add_image_caption(
             selection = selector.select(document, locator)
             if hasattr(selection, "_com_ranges") and selection._com_ranges:
                 range_obj = selection._com_ranges[0]  # _com_ranges 已包含 Range 对象
-                range_obj.Collapse(Direction=0)  # wdCollapseEnd
+                range_obj.Collapse(False)  # wdCollapseEnd
             else:
                 raise WordDocumentError(
                     ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
@@ -745,7 +778,7 @@ def add_image_caption(
                     ErrorCode.OBJECT_TYPE_ERROR,
                     "Failed to create valid Range object"
                 )
-            range_obj.Collapse(Direction=0)  # wdCollapseEnd
+            range_obj.Collapse(False)  # wdCollapseEnd
 
         # 添加题注
         try:
@@ -760,7 +793,7 @@ def add_image_caption(
 
         # 设置题注文本
         caption_range = document.Application.Selection.Range
-        caption_range.Collapse(0)  # wdCollapseEnd
+        caption_range.Collapse(False)  # wdCollapseEnd
         caption_range.Text = f" {caption_text}"
     except Exception as e:
         raise WordDocumentError(

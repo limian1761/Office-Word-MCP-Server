@@ -290,6 +290,41 @@ def reply_to_comment(
     """
     # Get the comment at the specified index
     comment = document.Comments(index + 1)  # COM is 1-based
-    # Add the reply
-    reply = comment.Replies.Add(comment.Scope, text, author)
-    return True
+    
+    try:
+        # 确保text是字符串类型并正确转换为COM可接受的格式
+        reply_text = str(text)
+        
+        # 使用Range对象方式添加回复，这种方式在某些Word版本中更稳定
+        # 首先获取评论的Range
+        comment_range = comment.Range
+        
+        # 使用Range对象的Comments集合添加回复
+        # 先获取评论的文本，然后创建新的回复
+        reply = comment.Replies.Add(Comment:=reply_text)
+        
+        # 另一种备选方法（如果上面的方法失败）
+        if reply is None:
+            # 直接使用Add方法，但确保参数正确
+            reply = comment.Replies.Add(Text:=reply_text)
+        
+        # Set author if provided
+        if author:
+            try:
+                reply.Author = str(author)
+            except Exception as e:
+                logging.warning(f"Failed to set author for reply: {e}")
+        
+        return True
+    except Exception as e:
+        # 如果上述方法都失败，尝试使用最基础的方法
+        try:
+            # 最基本的调用方式，直接传递文本参数
+            reply = comment.Replies.Add(reply_text)
+            return True
+        except Exception as e2:
+            logging.error(f"Failed to add reply using multiple methods: {e}, {e2}")
+            raise WordDocumentError(
+                ErrorCode.COMMENT_ERROR,
+                f"Failed to reply to comment: {str(e2)}"
+            )

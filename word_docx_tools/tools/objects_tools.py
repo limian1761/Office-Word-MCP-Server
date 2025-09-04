@@ -274,8 +274,9 @@ def handle_bookmark_operations(
                 range_obj = ranges[0]
                 # 如果Range为空，可以插入一个空字符作为书签位置
                 if range_obj.Start == range_obj.End:
+                    # 如果Range为空，插入一个空字符
                     range_obj.InsertAfter(" ")
-                    range_obj.Collapse(1)  # 折叠到开始位置
+                    range_obj.Collapse(True)  # 折叠到开始位置
                 
                 bookmark = document.Bookmarks.Add(Name=clean_bookmark_name, Range=range_obj)
                 result = {"success": True, "bookmark_name": bookmark.Name}
@@ -289,14 +290,14 @@ def handle_bookmark_operations(
     elif sub_operation == "get":
         bookmark_name = kwargs.get("bookmark_name")
         if bookmark_name:
-            result = op_get_bookmark(document, bookmark_name)
+            result = get_bookmark(document, bookmark_name)
         else:
             raise ValueError("bookmark_name is required for get operation")
 
     elif sub_operation == "delete":
         bookmark_name = kwargs.get("bookmark_name")
         if bookmark_name:
-            result = op_delete_bookmark(document, bookmark_name)
+            result = delete_bookmark(document, bookmark_name)
         else:
             raise ValueError("bookmark_name is required for delete operation")
 
@@ -351,7 +352,10 @@ def handle_citation_operations(
                 # 如果完整的引用创建失败，尝试使用更简单的方法在文档中插入引用文本
                 try:
                     from ..operations.text_ops import insert_text
-                    result = insert_text(document, f"[{citation_text}]", locator)
+                    # 确保locator是字典类型
+                    if locator is not None and not isinstance(locator, dict):
+                        locator = {'type': 'document', 'position': 'end'}
+                    result = insert_text(document, locator, f"[{citation_text}]")
                     result['warning'] = "Failed to create proper citation, inserted plain text instead"
                 except Exception as e2:
                     raise WordDocumentError(
@@ -432,7 +436,10 @@ def handle_hyperlink_operations(
                 try:
                     from ..operations.text_ops import insert_text
                     link_text = display_text if display_text else clean_url
-                    result = insert_text(document, f"{link_text}", locator)
+                    # 确保locator是字典类型
+                    if locator is not None and not isinstance(locator, dict):
+                        locator = {'type': 'document', 'position': 'end'}
+                    result = insert_text(document, locator, f"{link_text}")
                     result['warning'] = "Failed to create proper hyperlink, inserted plain text instead"
                 except Exception as e2:
                     raise WordDocumentError(

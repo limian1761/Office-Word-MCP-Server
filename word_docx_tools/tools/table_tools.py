@@ -5,7 +5,7 @@ This module provides a unified tool for table-related operations.
 
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 # Standard library imports
 from dotenv import load_dotenv
@@ -72,9 +72,9 @@ def table_tools(
         default=None,
         description="Object locator for specifying position when creating table. Required for: create",
     ),
-    position: Optional[str] = Field(
+    position: Optional[Union[str, int]] = Field(
         default=None,
-        description="Insertion position, e.g. 'before', 'after' or row/column insertion position. Optional for: create, insert_row, insert_column",
+        description="Insertion position, e.g. 'before', 'after' or row/column insertion position (integer). Optional for: create, insert_row, insert_column",
     ),
     count: Optional[int] = Field(
         default=None,
@@ -160,6 +160,12 @@ def table_tools(
             return str(result)
 
         elif operation_type and operation_type.lower() == "get_info":
+            # 添加对table_index的验证
+            if table_index is not None and table_index <= 0:
+                raise WordDocumentError(
+                    ErrorCode.VALIDATION_ERROR, "Table index must be a positive integer"
+                )
+            
             log_info(f"Getting info for table {table_index if table_index is not None else 'all tables'}")
             result = get_table_info(document=active_doc, table_index=table_index)
             log_info("Table info retrieved successfully")
@@ -170,12 +176,29 @@ def table_tools(
                 raise ValueError(
                     "table_index parameter must be provided for insert_row operation"
                 )
+                
+            # 处理position参数类型矛盾问题
+            # 如果position是字符串类型，需要进行适当处理
+            insert_position = position
+            if isinstance(position, str):
+                if position.lower() == "after":
+                    # 如果是"after"，则设置为表格当前行数+1，表示在末尾插入
+                    insert_position = None  # 由底层函数处理
+                else:
+                    # 尝试将字符串转换为整数
+                    try:
+                        insert_position = int(position)
+                    except ValueError:
+                        raise ValueError("position must be an integer or 'after' for insert_row operation")
+            elif position is None:
+                # 默认在末尾插入
+                insert_position = None
 
-            log_info(f"Inserting row in table {table_index}")
+            log_info(f"Inserting row in table {table_index} at position {insert_position}")
             result = insert_row(
                 document=active_doc,
                 table_index=table_index,
-                position=position,
+                position=insert_position if insert_position is not None else 9999,  # 使用大数值表示末尾
                 count=count,
             )
             log_info("Row inserted successfully")

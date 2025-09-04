@@ -80,7 +80,7 @@ class ObjectFinder(FilterHandlers):
             return cast(CDispatch, self.document.Content)
         elif anchor_id == "document_end":
             end_range = self.document.Content
-            end_range.Collapse()  # wdCollapseEnd
+            end_range.Collapse(False)  # wdCollapseEnd
             return cast(CDispatch, end_range)
         elif anchor_id == "current_selection":
             return cast(CDispatch, self.document.Application.Selection)
@@ -171,7 +171,7 @@ class ObjectFinder(FilterHandlers):
         elif object_type == "document_end":
             # Return the end of the document
             end_range = self.document.Content
-            end_range.Collapse()  # wdCollapseEnd (0 is correct value)
+            end_range.Collapse(False)  # wdCollapseEnd (0 is correct value)
             return [end_range]
 
         # Handle different object types

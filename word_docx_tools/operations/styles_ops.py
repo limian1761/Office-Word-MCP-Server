@@ -308,7 +308,7 @@ def set_font(
             range_obj = document.Application.Selection.Range
         except Exception:
             range_obj = document.Content
-            range_obj.Collapse(0)
+            range_obj.Collapse(False)  # wdCollapseEnd
 
         text_format_ops.set_font_name_for_range(range_obj, font_name)
         if font_size is not None:
@@ -555,6 +555,7 @@ def set_paragraph_formatting(
                             if hasattr(para, 'LineSpacingRule'):
                                 para.LineSpacingRule = 4  # wdLineSpaceMultiple = 4
                             if hasattr(para, 'LineSpacing'):
+                                # line_spacing表示行距的倍数，直接设置为传入的值
                                 para.LineSpacing = line_spacing
                                 para_applied['line_spacing'] = line_spacing
                         except Exception as e:
@@ -643,6 +644,7 @@ def set_paragraph_formatting(
                         if hasattr(para, 'LineSpacingRule'):
                             para.LineSpacingRule = 4  # wdLineSpaceMultiple = 4
                         if hasattr(para, 'LineSpacing'):
+                            # line_spacing表示行距的倍数，直接设置为传入的值
                             para.LineSpacing = line_spacing
                             para_applied['line_spacing'] = line_spacing
                     except Exception as e:

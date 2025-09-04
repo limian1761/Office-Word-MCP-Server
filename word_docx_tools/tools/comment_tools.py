@@ -56,9 +56,9 @@ async def comment_tools(
         default=None,
         description="Comment text for add and reply operations\n\n    Required for: add, reply, edit\n    ",
     ),
-    comment_id: Optional[str] = Field(
+    comment_id: Optional[Any] = Field(
         default=None,
-        description="Comment ID for delete and reply operations\n\n    Required for: delete, reply, get_thread, edit\n    ",
+        description="Comment ID for delete and reply operations (can be string or integer)\n\n    Required for: delete, reply, get_thread, edit\n    ",
     ),
     locator: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -123,17 +123,36 @@ async def comment_tools(
                         range_obj = selection._com_ranges[0]  # 使用第一个Range对象
                     else:
                         # 如果locator定位失败，使用文档末尾作为默认位置
-                        range_obj = document.Content
-                        range_obj.Collapse(0)  # 折叠到文档末尾
+                        if document and hasattr(document, "Content"):
+                            range_obj = document.Content
+                            range_obj.Collapse(0)  # 折叠到文档末尾
+                        else:
+                            raise WordDocumentError(
+                                ErrorCode.SERVER_ERROR, "Document object is invalid or missing Content attribute"
+                            )
                 except Exception as e:
                     # locator定位失败，使用文档末尾作为默认位置
-                    range_obj = document.Content
-                    range_obj.Collapse(0)  # 折叠到文档末尾
+                    if document and hasattr(document, "Content"):
+                        range_obj = document.Content
+                        range_obj.Collapse(0)  # 折叠到文档末尾
+                    else:
+                        raise WordDocumentError(
+                            ErrorCode.SERVER_ERROR, "Document object is invalid or missing Content attribute"
+                        )
             else:
                 # 没有提供locator，使用文档末尾作为默认位置
-                range_obj = document.Content
-                range_obj.Collapse(0)  # 折叠到文档末尾
-    
+                if document is None:
+                    raise WordDocumentError(
+                        ErrorCode.SERVER_ERROR, "No active document found"
+                    )
+                if hasattr(document, "Content"):
+                    range_obj = document.Content
+                    range_obj.Collapse(0)  # 折叠到文档末尾
+                else:
+                    raise WordDocumentError(
+                        ErrorCode.SERVER_ERROR, "Document object is invalid or missing Content attribute"
+                    )
+
             # 添加评论
             result = add_comment(document, range_obj, comment_text, author)
             
@@ -202,8 +221,12 @@ async def comment_tools(
 
         # 确保comment_id是整数
         try:
-            comment_index = int(comment_id)
-        except ValueError:
+            # 允许comment_id是字符串或整数
+            if isinstance(comment_id, int):
+                comment_index = comment_id
+            else:
+                comment_index = int(comment_id)
+        except (ValueError, TypeError):
             # 如果comment_id是字符串格式的COM对象引用，尝试提取ID
             if isinstance(comment_id, str) and "Add" in comment_id:
                 # 使用文档中最后一个评论作为回退

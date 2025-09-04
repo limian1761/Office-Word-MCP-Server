@@ -272,10 +272,16 @@ def batch_apply_formatting(
                         try:
                             result = apply_formatting_to_object(range_obj, formatting)
                             # 解析结果以检查是否成功
-                            result_dict = json.loads(result)
-                            if not result_dict.get("success", False):
-                                all_success = False
-                                logger.warning(f"Formatting failed for range object: {result_dict.get('message', 'Unknown error')}")
+                            try:
+                                result_dict = json.loads(result)
+                                if not result_dict.get("success", False):
+                                    all_success = False
+                                    logger.warning(f"Formatting failed for range object: {result_dict.get('message', 'Unknown error')}")
+                            except json.JSONDecodeError:
+                                # 如果结果不是有效的JSON，尝试检查字符串内容
+                                if "error" in result.lower() or "failed" in result.lower():
+                                    all_success = False
+                                    logger.warning(f"Formatting may have failed (invalid JSON response): {result}")
                         except Exception as inner_e:
                             all_success = False
                             logger.warning(f"Error applying formatting to range object: {inner_e}")

@@ -24,6 +24,7 @@ def create_table(
     cols: int,
     locator: Dict[str, Any],
     position: str = "after",
+    is_independent_paragraph: bool = False,
 ) -> str:
     """创建新表格
 
@@ -33,6 +34,7 @@ def create_table(
         cols: 表格列数
         locator: 定位器对象，用于指定创建位置
         position: 插入位置，可选值：'before', 'after'
+        is_independent_paragraph: 表格是否作为独立段落插入，默认为False
 
     Returns:
         创建表格成功的消息
@@ -64,10 +66,26 @@ def create_table(
 
             # 根据位置参数调整范围
             if position == "before":
-                range_obj.Collapse(Direction=1)  # wdCollapseStart
+                range_obj.Collapse(True)  # wdCollapseStart
             elif position == "after":
-                range_obj.Collapse(Direction=0)  # wdCollapseEnd
+                range_obj.Collapse(False)  # wdCollapseEnd
             # 如果是"replace"，则不折叠范围，直接替换
+
+            # 如果需要作为独立段落插入
+            if is_independent_paragraph:
+                try:
+                    # 检查当前范围是否已经在段落末尾
+                    if hasattr(range_obj, 'Paragraphs') and range_obj.Paragraphs.Count > 0:
+                        current_paragraph = range_obj.Paragraphs(1)
+                        # 如果范围不在段落末尾，创建新段落
+                        if range_obj.Start != current_paragraph.Range.End - 1:
+                            # 在当前范围前插入段落标记创建新段落
+                            range_obj.InsertBefore('\n')
+                            # 更新范围到新段落
+                            range_obj.Start = range_obj.Start
+                            range_obj.End = range_obj.Start
+                except Exception as e:
+                    log_error(f"Failed to prepare independent paragraph: {str(e)}")
         else:
             raise WordDocumentError(
                 ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
@@ -628,10 +646,27 @@ def insert_column(
         for i in range(count):
             # 在指定位置插入列
             if actual_position <= table.Columns.Count:
-                # 插入在指定列之前
-                column = table.Columns(actual_position)
-                column.Select()
-                document.Application.Selection.InsertColumnsLeft()
+                try:
+                    # 方法1：尝试使用Select和InsertColumnsLeft
+                    column = table.Columns(actual_position)
+                    column.Select()
+                    document.Application.Selection.InsertColumnsLeft()
+                except Exception as e:
+                    # 方法1失败，尝试方法2：使用Columns.Add并指定位置
+                    try:
+                        # 先保存原始列数，以便验证插入是否成功
+                        original_cols = table.Columns.Count
+                        # 使用Add方法添加列
+                        new_column = table.Columns.Add()
+                        # 如果添加成功，将新列移动到指定位置
+                        if table.Columns.Count > original_cols:
+                            new_column.Select()
+                            # 多次执行左移，直到到达指定位置
+                            for _ in range(table.Columns.Count - actual_position):
+                                document.Application.CommandBars.ExecuteMso("TableColumnsToTheLeft")
+                    except Exception as inner_e:
+                        # 如果两种方法都失败，尝试在末尾插入
+                        table.Columns.Add()
                 # 由于在指定列前插入了新列，后续插入位置需要+1
                 actual_position += 1
             else:

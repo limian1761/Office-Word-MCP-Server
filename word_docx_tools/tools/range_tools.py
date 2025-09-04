@@ -7,7 +7,7 @@ This module provides a unified MCP tool for object operations.
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 # Standard library imports
 from dotenv import load_dotenv
@@ -55,9 +55,9 @@ async def range_tools(
         default=None,
         description="Range locator for range operations. Required for: select, delete",
     ),
-    object_id: Optional[str] = Field(
+    object_id: Optional[Union[str, int]] = Field(
         default=None,
-        description="Range ID for get_by_id operation. Required for: get_by_id",
+        description="Range ID for get_by_id operation. Required for: get_by_id. Can be string or integer.",
     ),
     locators: Optional[List[Dict[str, Any]]] = Field(
         default=None,

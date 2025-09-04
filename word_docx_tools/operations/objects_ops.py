@@ -23,9 +23,15 @@ logger = logging.getLogger(__name__)
 
 def _get_range_from_locator(document: Any, locator: Optional[Dict[str, Any]]) -> Any:
     """Helper function to get a Range object from a locator."""
+    # 检查locator是否为None或字典类型
+    if locator is not None and not isinstance(locator, dict):
+        raise WordDocumentError(
+            ErrorCode.INVALID_INPUT, "Locator must be a dictionary"
+        )
+    
     if not locator:
         range_obj = document.Range()
-        range_obj.Collapse(Direction=0)  # wdCollapseEnd
+        range_obj.Collapse(False)  # wdCollapseEnd
         return range_obj
 
     selector = SelectorEngine()

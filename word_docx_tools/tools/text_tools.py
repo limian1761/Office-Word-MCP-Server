@@ -56,6 +56,10 @@ def text_tools(
         default=None,
         description="Paragraph style name\n\n    Optional for: insert_paragraph\n",
     ),
+    is_independent_paragraph: bool = Field(
+        default=False,
+        description="Whether to insert the paragraph as an independent paragraph\n\n    Optional for: insert_paragraph\n",
+    ),
     formatting: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Formatting options: bold, italic, font_size, font_name, font_color, alignment\n\n    Required for: apply_formatting\n",
@@ -93,7 +97,7 @@ def text_tools(
       * No required parameters
     - insert_paragraph: Insert a new paragraph at specific object
       * Required parameters: text, locator
-      * Optional parameters: style
+      * Optional parameters: style, is_independent_paragraph
     - get_paragraphs_in_range: Get paragraphs within a specific range
       * No required parameters
 
@@ -423,6 +427,22 @@ def text_tools(
                 )
             # Selection._com_ranges中只包含Range对象
             range_obj = selection._com_ranges[0]
+
+            # 如果需要作为独立段落插入
+            if is_independent_paragraph:
+                try:
+                    # 检查当前范围是否已经在段落末尾
+                    if hasattr(range_obj, 'Paragraphs') and range_obj.Paragraphs.Count > 0:
+                        current_paragraph = range_obj.Paragraphs(1)
+                        # 如果范围不在段落末尾，创建新段落
+                        if range_obj.Start != current_paragraph.Range.End - 1:
+                            # 在当前范围前插入段落标记创建新段落
+                            range_obj.InsertBefore('\n')
+                            # 更新范围到新段落
+                            range_obj.Start = range_obj.Start
+                            range_obj.End = range_obj.Start
+                except Exception as e:
+                    log_error(f"Failed to prepare independent paragraph: {str(e)}")
 
             # 插入段落
             # 改进Range对象检测逻辑，确保document_end返回的Range对象能被正确处理

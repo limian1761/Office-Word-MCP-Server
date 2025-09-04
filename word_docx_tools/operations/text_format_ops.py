@@ -251,9 +251,9 @@ def create_bulleted_list_relative_to(
 
             # 如果不是最后一项，添加段落标记
             if i < len(items) - 1:
-                insertion_range.Collapse(0)
+                insertion_range.Collapse(False)  # wdCollapseEnd
                 insertion_range.InsertAfter("\r")
-                insertion_range.Collapse(0)
+                insertion_range.Collapse(False)  # wdCollapseEnd
 
         # 为新插入的文本应用项目符号列表格式
         # 获取刚刚插入的文本范围
@@ -315,11 +315,11 @@ def create_bulleted_list(
             elif position == "before":
                 # 折叠范围到开始
                 insertion_range = object.Range.Duplicate
-                insertion_range.Collapse(1)  # wdCollapseStart = 1
+                insertion_range.Collapse(True)  # wdCollapseStart
             else:  # position == "after"
                 # 折叠范围到结束
                 insertion_range = object.Range.Duplicate
-                insertion_range.Collapse(0)  # wdCollapseEnd = 0
+                insertion_range.Collapse(False)  # wdCollapseEnd
 
             # 在插入点创建项目符号列表
             create_bulleted_list_relative_to(document, insertion_range, items, "after")
