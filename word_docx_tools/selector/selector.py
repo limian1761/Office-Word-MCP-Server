@@ -12,25 +12,20 @@ from typing import (TYPE_CHECKING, Any, Dict, Generic, List, Optional, TypeVar,
 
 import win32com.client
 
-from .exceptions import (
-    AmbiguousLocatorError,
-    LocatorSyntaxError
-)
+from ..mcp_service.core_utils import (ErrorCode, ObjectNotFoundError,
+                                      WordDocumentError)
+from .exceptions import AmbiguousLocatorError, LocatorSyntaxError
 from .filter_handlers import FilterHandlers
 from .locator_parser import LocatorParser
 from .object_finder import ObjectFinder
 from .selection import Selection
-from ..mcp_service.core_utils import (
-    ErrorCode,
-    ObjectNotFoundError,
-    WordDocumentError
-)
 
 logger = logging.getLogger(__name__)
 
 # 定义类型变量
 T = TypeVar("T")  # 通用类型变量
 ObjectT = TypeVar("ObjectT", bound=win32com.client.CDispatch)  # 元素类型变量
+
 
 class SelectorEngine:
     """
@@ -180,40 +175,85 @@ class SelectorEngine:
         # Create ObjectFinder instance
         object_finder = ObjectFinder(document)
 
-        # If no anchor, perform a global search from the start of the document
-        if "anchor" not in locator:
-            candidates = object_finder.get_initial_candidates(modified_target["type"])
-            objects = object_finder.apply_filters(
-                candidates, modified_target.get("filters", [])
-            )
-        else:
-            # If anchor and relation are present, perform a relational search
-            if "relation" not in locator:
-                raise LocatorSyntaxError(
-                    "Locator with 'anchor' must also have a 'relation'."
-                )
+        # Handle special locator types
+        if "type" in locator:
+            if locator["type"] == "document_start":
+                # Get the start of the document
+                start_range = document.Content
+                start_range.Collapse(True)  # wdCollapseStart
+                objects = [start_range]
+            elif locator["type"] == "document_end":
+                # Get the end of the document
+                end_range = document.Content
+                end_range.Collapse(False)  # wdCollapseEnd
+                objects = [end_range]
+            else:
+                # If no anchor, perform a global search from the start of the document
+                if "anchor" not in locator:
+                    candidates = object_finder.get_initial_candidates(modified_target["type"])
+                    
+                    # Create a copy of the filters to avoid modifying the original
+                    filters = modified_target.get("filters", []).copy()
+                    
+                    # Convert start and end parameters to range_start and range_end filters
+                    if "start" in locator:
+                        filters.append({"range_start": locator["start"]})
+                    if "end" in locator:
+                        filters.append({"range_end": locator["end"]})
+                    
+                    # Add index filter if value, index or id is specified for paragraph type
+                    if modified_target.get("type") == "paragraph":
+                        # Check for common position parameter names
+                        for param_name in ["value", "index", "id"]:
+                            if param_name in modified_target:
+                                param_value = modified_target[param_name]
+                                try:
+                                    # Try to convert to integer (1-based index)
+                                    index = int(param_value)
+                                    if 0 < index <= len(candidates):
+                                        # Return only the specified index
+                                        objects = [candidates[index - 1]]
+                                    else:
+                                        # Index out of range
+                                        objects = []
+                                except (ValueError, TypeError):
+                                    # Not an integer, proceed with filters
+                                    pass
+                                break
+                        else:
+                            # No valid index parameter found, apply filters normally
+                            objects = object_finder.apply_filters(candidates, filters)
+                    else:
+                        # For non-paragraph types, apply filters normally
+                        objects = object_finder.apply_filters(candidates, filters)
+                else:
+                    # If anchor and relation are present, perform a relational search
+                    if "relation" not in locator:
+                        raise LocatorSyntaxError(
+                            "Locator with 'anchor' must also have a 'relation'."
+                        )
 
-            # 1. Find the anchor object(s) first
-            anchor_spec = locator["anchor"]
-            anchor_object = object_finder.find_anchor(anchor_spec)
+                    # 1. Find the anchor object(s) first
+                    anchor_spec = locator["anchor"]
+                    anchor_object = object_finder.find_anchor(anchor_spec)
 
-            if not anchor_object:
-                raise ObjectNotFoundError(
-                    {"anchor": anchor_spec},
-                    f"Anchor object not found for: {anchor_spec}",
-                )
+                    if not anchor_object:
+                        raise ObjectNotFoundError(
+                            {"anchor": anchor_spec},
+                            f"Anchor object not found for: {anchor_spec}"
+                        )
 
-            # 2. Perform the relational selection
-            relation = locator["relation"]
-            candidates = object_finder.get_initial_candidates(
-                modified_target["type"], within_range=anchor_object
-            )
-            objects = object_finder.select_relative_to_anchor(
-                candidates, anchor_object, relation
-            )
-            objects = object_finder.apply_filters(
-                objects, modified_target.get("filters", [])
-            )
+                    # 2. Perform the relational selection
+                    relation = locator["relation"]
+                    candidates = object_finder.get_initial_candidates(
+                        modified_target["type"], within_range=anchor_object
+                    )
+                    objects = object_finder.select_relative_to_anchor(
+                        candidates, anchor_object, relation
+                    )
+                    objects = object_finder.apply_filters(
+                        objects, modified_target.get("filters", [])
+                    )
 
         if not objects:
             raise ObjectNotFoundError(
@@ -233,7 +273,7 @@ class SelectorEngine:
         range_objects = []
         for obj in objects:
             range_obj = None
-            
+
             # 1. 检查对象是否已经是Range对象（检查是否有Text、Start和End属性）
             if hasattr(obj, "Text") and hasattr(obj, "Start") and hasattr(obj, "End"):
                 # 验证这是一个有效的Range对象
@@ -244,21 +284,29 @@ class SelectorEngine:
                     _ = obj.End
                     range_obj = obj
                 except Exception:
-                    logger.warning(f"Object of type {type(obj).__name__} has Range-like attributes but is not a valid Range")
-            
+                    logger.warning(
+                        f"Object of type {type(obj).__name__} has Range-like attributes but is not a valid Range"
+                    )
+
             # 2. 如果不是Range对象，尝试获取其Range属性
             if range_obj is None and hasattr(obj, "Range"):
                 try:
                     range_property = obj.Range
                     # 验证Range属性是否为有效的Range对象
-                    if hasattr(range_property, "Text") and hasattr(range_property, "Start") and hasattr(range_property, "End"):
+                    if (
+                        hasattr(range_property, "Text")
+                        and hasattr(range_property, "Start")
+                        and hasattr(range_property, "End")
+                    ):
                         _ = range_property.Text
                         _ = range_property.Start
                         _ = range_property.End
                         range_obj = range_property
                 except Exception:
-                    logger.warning(f"Failed to access valid Range property from object of type {type(obj).__name__}")
-            
+                    logger.warning(
+                        f"Failed to access valid Range property from object of type {type(obj).__name__}"
+                    )
+
             # 3. 如果以上都不行，尝试基于对象位置创建一个Range
             if range_obj is None:
                 try:
@@ -272,15 +320,19 @@ class SelectorEngine:
                             _ = range_obj.Text
                     else:
                         # 如果无法获取位置信息，记录警告
-                        logger.warning(f"Object of type {type(obj).__name__} has no position information for Range conversion")
+                        logger.warning(
+                            f"Object of type {type(obj).__name__} has no position information for Range conversion"
+                        )
                 except Exception as e:
                     logger.warning(f"Failed to create Range from object: {e}")
-            
+
             # 4. 如果成功转换为Range对象，添加到结果列表
             if range_obj is not None:
                 range_objects.append(range_obj)
             else:
-                logger.error(f"Failed to convert object of type {type(obj).__name__} to a valid Range object")
+                logger.error(
+                    f"Failed to convert object of type {type(obj).__name__} to a valid Range object"
+                )
 
         if not range_objects:
             raise ObjectNotFoundError(

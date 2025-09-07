@@ -16,19 +16,17 @@ from pydantic import Field
 
 # Local imports
 from ..mcp_service.core import mcp_server
-from ..operations.table_ops import (create_table,
-                                                       get_cell_text,
-                                                       get_table_info,
-                                                       insert_column,
-                                                       insert_row,
-                                                       set_cell_text)
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
+                                      format_error_response,
+                                      get_active_document, handle_tool_errors,
+                                      log_error, log_info,
+                                      require_active_document_validation)
+from ..operations.table_ops import (create_table, get_cell_text,
+                                    get_table_info, insert_column, insert_row,
+                                    set_cell_text)
 from ..selector.selector import SelectorEngine
 # 工具模块
-from ..utils.app_context import AppContext
-from ..mcp_service.core_utils import (
-    ErrorCode, WordDocumentError, format_error_response, get_active_document,
-    handle_tool_errors, log_error, log_info,
-    require_active_document_validation)
+from ..mcp_service.app_context import AppContext
 
 
 @mcp_server.tool()
@@ -163,10 +161,12 @@ def table_tools(
             # 添加对table_index的验证
             if table_index is not None and table_index <= 0:
                 raise WordDocumentError(
-                    ErrorCode.VALIDATION_ERROR, "Table index must be a positive integer"
+                    ErrorCode.INVALID_INPUT, "Table index must be a positive integer"
                 )
-            
-            log_info(f"Getting info for table {table_index if table_index is not None else 'all tables'}")
+
+            log_info(
+                f"Getting info for table {table_index if table_index is not None else 'all tables'}"
+            )
             result = get_table_info(document=active_doc, table_index=table_index)
             log_info("Table info retrieved successfully")
             return str(result)
@@ -176,7 +176,7 @@ def table_tools(
                 raise ValueError(
                     "table_index parameter must be provided for insert_row operation"
                 )
-                
+
             # 处理position参数类型矛盾问题
             # 如果position是字符串类型，需要进行适当处理
             insert_position = position
@@ -189,16 +189,22 @@ def table_tools(
                     try:
                         insert_position = int(position)
                     except ValueError:
-                        raise ValueError("position must be an integer or 'after' for insert_row operation")
+                        raise ValueError(
+                            "position must be an integer or 'after' for insert_row operation"
+                        )
             elif position is None:
                 # 默认在末尾插入
                 insert_position = None
 
-            log_info(f"Inserting row in table {table_index} at position {insert_position}")
+            log_info(
+                f"Inserting row in table {table_index} at position {insert_position}"
+            )
+            # 确保传递给底层函数的position参数始终是整数
+            final_position = insert_position if insert_position is not None else 9999
             result = insert_row(
                 document=active_doc,
                 table_index=table_index,
-                position=insert_position if insert_position is not None else 9999,  # 使用大数值表示末尾
+                position=final_position,  # 使用大数值表示末尾
                 count=count,
             )
             log_info("Row inserted successfully")
@@ -209,7 +215,7 @@ def table_tools(
                 raise ValueError(
                     "table_index parameter must be provided for insert_column operation"
                 )
-            
+
             # 处理position参数类型矛盾问题
             # 如果position是字符串类型，需要进行适当处理
             insert_position = position
@@ -222,16 +228,22 @@ def table_tools(
                     try:
                         insert_position = int(position)
                     except ValueError:
-                        raise ValueError("position must be an integer or 'after' for insert_column operation")
+                        raise ValueError(
+                            "position must be an integer or 'after' for insert_column operation"
+                        )
             elif position is None:
                 # 默认在末尾插入
                 insert_position = None
 
-            log_info(f"Inserting column in table {table_index} at position {insert_position}")
+            log_info(
+                f"Inserting column in table {table_index} at position {insert_position}"
+            )
+            # 确保传递给底层函数的position参数始终是整数
+            final_position = insert_position if insert_position is not None else 9999
             result = insert_column(
                 document=active_doc,
                 table_index=table_index,
-                position=insert_position if insert_position is not None else 9999,  # 使用大数值表示末尾
+                position=final_position,  # 使用大数值表示末尾
                 count=count,
             )
             log_info("Column inserted successfully")

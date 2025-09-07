@@ -11,9 +11,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
-from ..mcp_service.core_utils import (ErrorCode,
-                                                   WordDocumentError,
-                                                   log_error, log_info)
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
+                                      log_info)
 
 if TYPE_CHECKING:
     from win32com.client import CDispatch
@@ -143,8 +142,10 @@ def convert_document_format(
             ErrorCode.INVALID_INPUT, f"Invalid format type: {format_type}"
         )
 
-    if not hasattr(document, 'SaveAs2'):
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support SaveAs2 method")
+    if not hasattr(document, "SaveAs2"):
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR, "Document does not support SaveAs2 method"
+        )
 
     document.SaveAs2(output_path, format_constants[format_type])
     log_info(f"Successfully converted document to {format_type}: {output_path}")
@@ -220,8 +221,10 @@ def print_document(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    if not hasattr(document, 'Application') or document.Application is None:
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not have an Application instance")
+    if not hasattr(document, "Application") or document.Application is None:
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR, "Document does not have an Application instance"
+        )
 
     word_app = document.Application
     if printer_name:
@@ -294,13 +297,41 @@ def get_document_statistics(document: win32com.client.CDispatch) -> Dict[str, An
 
     # 获取文档基本统计信息
     stats = {
-        "paragraphs": document.Paragraphs.Count if hasattr(document, 'Paragraphs') and document.Paragraphs is not None else 0,
-        "tables": document.Tables.Count if hasattr(document, 'Tables') and document.Tables is not None else 0,
-        "inline_shapes": document.InlineShapes.Count if hasattr(document, 'InlineShapes') and document.InlineShapes is not None else 0,
-        "sections": document.Sections.Count if hasattr(document, 'Sections') and document.Sections is not None else 0,
-        "comments": document.Comments.Count if hasattr(document, 'Comments') and document.Comments is not None else 0,
-        "words": document.Words.Count if hasattr(document, 'Words') and document.Words is not None else 0,
-        "characters": document.Characters.Count if hasattr(document, 'Characters') and document.Characters is not None else 0,
+        "paragraphs": (
+            document.Paragraphs.Count
+            if hasattr(document, "Paragraphs") and document.Paragraphs is not None
+            else 0
+        ),
+        "tables": (
+            document.Tables.Count
+            if hasattr(document, "Tables") and document.Tables is not None
+            else 0
+        ),
+        "inline_shapes": (
+            document.InlineShapes.Count
+            if hasattr(document, "InlineShapes") and document.InlineShapes is not None
+            else 0
+        ),
+        "sections": (
+            document.Sections.Count
+            if hasattr(document, "Sections") and document.Sections is not None
+            else 0
+        ),
+        "comments": (
+            document.Comments.Count
+            if hasattr(document, "Comments") and document.Comments is not None
+            else 0
+        ),
+        "words": (
+            document.Words.Count
+            if hasattr(document, "Words") and document.Words is not None
+            else 0
+        ),
+        "characters": (
+            document.Characters.Count
+            if hasattr(document, "Characters") and document.Characters is not None
+            else 0
+        ),
         "pages": document.Range().Information(4),  # wdNumberOfPagesInDocument
         "bookmarks": document.Bookmarks.Count if hasattr(document, "Bookmarks") else 0,
     }

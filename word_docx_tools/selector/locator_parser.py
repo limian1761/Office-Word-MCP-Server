@@ -144,6 +144,7 @@ class LocatorParser:
                 value = value.strip().strip('"').strip("'")
 
                 # Try to convert to appropriate type
+                parsed_value: Union[str, bool, int]
                 try:
                     # Convert to boolean if applicable
                     if value.lower() == "true":
@@ -185,7 +186,7 @@ class LocatorParser:
 
         # Validate relation if anchor is specified
         if parsed_locator["anchor"] is not None:
-            valid_relations = [
+            valid_relations: List[str] = [
                 "all_occurrences_within",
                 "first_occurrence_after",
                 "parent_of",

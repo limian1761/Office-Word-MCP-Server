@@ -36,9 +36,6 @@ sources = ["."]
 [tool.hatch.metadata]
 allow-direct-references = true
 
-[project.scripts]
-directofficeword_mcp = "word_docx_tools.main:run_server"
-
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",

@@ -40,7 +40,8 @@ class ObjectFinder(FilterHandlers):
             objects = self.get_all_tables()
         elif object_type == "comment":
             objects = self.get_all_comments()
-        elif object_type == "image":
+        elif object_type == "image" or object_type == "inline_shape":
+            # 处理image和inline_shape类型，都是获取所有内嵌图片
             objects = self.get_all_images()
         else:
             # 默认返回所有段落
@@ -50,15 +51,75 @@ class ObjectFinder(FilterHandlers):
         if filters:
             objects = self.apply_filters(objects, filters)
 
-        # 如果有值（索引），返回特定元素
-        if value:
-            try:
-                index = int(value)
-                if 0 < index <= len(objects):
-                    return [objects[index - 1]]
-            except ValueError:
-                pass
+        # 调试日志
+        print(f"[DEBUG] 初始对象数量: {len(objects)}")
+        print(f"[DEBUG] 定位器: {locator}")
 
+        # 处理可能的不同参数名（value、index、id等），支持多种类型
+        # 定义可能的参数名列表，按优先级排序
+        possible_param_names = ["value", "index", "id"]
+        
+        # 存储找到的对象
+        found_objects = None
+        
+        for param_name in possible_param_names:
+            param_value = locator.get(param_name)
+            if param_value is not None and param_value != "":
+                try:
+                    # 尝试作为索引处理（1-based）
+                    print(f"[DEBUG] 尝试将{param_name}={param_value}作为索引处理")
+                    index = int(param_value)
+                    if 0 < index <= len(objects):
+                        print(f"[DEBUG] 索引{index}有效，返回单个对象")
+                        return [objects[index - 1]]
+                    else:
+                        # 索引超出范围，设置found_objects为空列表
+                        print(f"[DEBUG] 索引{index}超出范围（对象数量: {len(objects)}），设置found_objects为空列表")
+                        found_objects = []
+                except (ValueError, TypeError):
+                    # 如果不能作为索引，将其作为文本内容处理
+                    # 添加contains_text过滤器并重新应用所有过滤器
+                    # 确保text_filters是一个新的列表
+                    text_filters = list(filters) if filters else []
+                    text_filters.append({"contains_text": param_value})
+                    
+                    # 重新从所有对象开始应用过滤，而不是在已过滤的对象上继续过滤
+                    # 根据object_type获取所有对象
+                    if object_type == "paragraph":
+                        all_objects = self.get_all_paragraphs()
+                    elif object_type == "table":
+                        all_objects = self.get_all_tables()
+                    elif object_type == "comment":
+                        all_objects = self.get_all_comments()
+                    elif object_type == "image" or object_type == "inline_shape":
+                        all_objects = self.get_all_images()
+                    else:
+                        all_objects = self.get_all_paragraphs()
+                    
+                    text_matched_objects = self.apply_filters(all_objects, text_filters)
+                    print(f"[DEBUG] 文本过滤后对象数量: {len(text_matched_objects)}")
+                    
+                    # 如果有匹配的对象，返回它们
+                    if text_matched_objects:
+                        print(f"[DEBUG] 文本过滤找到匹配对象，返回")
+                        return text_matched_objects
+                    else:
+                        # 没有匹配的对象，设置found_objects为空列表
+                        print(f"[DEBUG] 文本过滤没有找到匹配对象，设置found_objects为空列表")
+                        found_objects = []
+                    
+                    # 继续尝试下一个参数名
+                    continue
+
+        # 如果尝试了所有参数名都没有匹配，但设置了found_objects为空列表
+        # 则返回空列表，而不是所有对象
+        print(f"[DEBUG] 循环结束后，found_objects: {found_objects}")
+        if found_objects is not None:
+            print(f"[DEBUG] 返回found_objects: {len(found_objects)}个对象")
+            return found_objects
+            
+        # 如果没有提供任何参数名，返回应用过滤器后的对象
+        print(f"[DEBUG] 返回应用过滤器后的对象: {len(objects)}个对象")
         return objects
 
     def find_anchor(self, anchor_id: str) -> Optional[CDispatch]:

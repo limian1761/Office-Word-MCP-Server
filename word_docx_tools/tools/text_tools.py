@@ -6,7 +6,7 @@ This module provides a unified MCP tool for text operations.
 
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 # Standard library imports
 from dotenv import load_dotenv
@@ -17,18 +17,23 @@ from pydantic import Field
 
 # Local imports
 from ..mcp_service.core import mcp_server
-from ..operations.text_ops import (
-    apply_formatting_to_object, get_character_count, get_object_text,
-    insert_text_after_range, insert_text_before_range, replace_object_text,
-    set_alignment_for_range, set_bold_for_range, set_font_color_for_range,
-    set_font_name_for_range, set_font_size_for_range, set_italic_for_range,
-    set_paragraph_style)
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
+                                      format_error_response,
+                                      get_active_document, handle_tool_errors,
+                                      log_error, log_info,
+                                      require_active_document_validation)
+from ..operations.text_ops import (apply_formatting_to_object,
+                                   get_character_count, get_object_text,
+                                   insert_text_after_range,
+                                   insert_text_before_range,
+                                   replace_object_text,
+                                   set_alignment_for_range, set_bold_for_range,
+                                   set_font_color_for_range,
+                                   set_font_name_for_range,
+                                   set_font_size_for_range,
+                                   set_italic_for_range, set_paragraph_style)
 from ..selector.selector import SelectorEngine
-from ..utils.app_context import AppContext
-from ..mcp_service.core_utils import (
-    ErrorCode, WordDocumentError, format_error_response, get_active_document,
-    handle_tool_errors, log_error, log_info,
-    require_active_document_validation)
+from ..mcp_service.app_context import AppContext
 
 
 @mcp_server.tool()
@@ -68,7 +73,7 @@ def text_tools(
         default=None,
         description="Text format type: bold, italic, font_size, font_name, font_color, alignment, paragraph_style\n\n    Required for: format_text\n",
     ),
-    format_value: Optional[Any] = Field(
+    format_value: Optional[Union[str, int, float, bool]] = Field(
         default=None,
         description="Value for the text format operation\n\n    Required for: format_text\n",
     ),
@@ -269,7 +274,7 @@ def text_tools(
                 )
 
             # 获取选择区域
-            if not hasattr(selection, '_com_ranges') or not selection._com_ranges:
+            if not hasattr(selection, "_com_ranges") or not selection._com_ranges:
                 raise WordDocumentError(
                     ErrorCode.OBJECT_TYPE_ERROR,
                     "Failed to get objects from selection",
@@ -278,52 +283,16 @@ def text_tools(
             range_obj = selection._com_ranges[0]
 
             # 应用格式
-            result = apply_formatting_to_object(range_obj=range_obj, formatting=formatting)
+            result = apply_formatting_to_object(
+                range_obj=range_obj, formatting=formatting
+            )
 
             return json.dumps(
                 {"success": True, "message": "Formatting applied successfully"},
                 ensure_ascii=False,
             )
 
-        elif operation_type and operation_type.lower() == "replace_text":
-            # 验证替换文本所需的参数
-            if text is None:
-                raise ValueError(
-                    "text parameter must be provided for replace_text operation"
-                )
-            if locator is None:
-                raise ValueError(
-                    "locator parameter must be provided for replace_text operation"
-                )
 
-            log_info(f"Replacing text with: {text}")
-
-            # 使用选择器引擎定位元素
-            selector_engine = SelectorEngine()
-            selection = selector_engine.select(active_doc, locator)
-
-            if not selection or not selection.get_object_types():
-                raise WordDocumentError(
-                    ErrorCode.OBJECT_TYPE_ERROR,
-                    "Failed to locate object for text replacement",
-                )
-
-            # 获取选择区域
-            if not hasattr(selection, '_com_ranges') or not selection._com_ranges:
-                raise WordDocumentError(
-                    ErrorCode.OBJECT_TYPE_ERROR,
-                    "Failed to get objects from selection",
-                )
-            # Selection._com_ranges中只包含Range对象
-            range_obj = selection._com_ranges[0]
-
-            # 替换文本
-            result = replace_object_text(range_obj=range_obj, new_text=text)
-
-            return json.dumps(
-                {"success": True, "message": "Text replaced successfully"},
-                ensure_ascii=False,
-            )
 
         elif operation_type and operation_type.lower() == "format_text":
             # 验证格式化文本所需的参数
@@ -353,21 +322,13 @@ def text_tools(
                 )
 
             # 获取选择区域
-            if not hasattr(selection, '_com_ranges') or not selection._com_ranges:
+            if not hasattr(selection, "_com_ranges") or not selection._com_ranges:
                 raise WordDocumentError(
                     ErrorCode.OBJECT_TYPE_ERROR,
                     "Failed to get objects from selection",
                 )
             # Selection._com_ranges中只包含Range对象
-            range_obj = selection._com_ranges[0]
-            
-            # 检查Range属性
-            if not hasattr(range_obj, "Range"):
-                raise WordDocumentError(
-                    ErrorCode.OBJECT_TYPE_ERROR,
-                    "Selected object does not have a Range property",
-                )
-            com_range = range_obj.Range
+            com_range = selection._com_ranges[0]
 
             # 应用文本格式
             if format_type.lower() == "bold":
@@ -379,15 +340,11 @@ def text_tools(
             elif format_type.lower() == "font_name":
                 result = set_font_name_for_range(com_range, format_value)
             elif format_type.lower() == "font_color":
-                result = set_font_color_for_range(
-                    active_doc, com_range, format_value
-                )
+                result = set_font_color_for_range(active_doc, com_range, format_value)
             elif format_type.lower() == "alignment":
-                result = set_alignment_for_range(
-                    active_doc, com_range, format_value
-                )
+                result = set_alignment_for_range(active_doc, com_range, format_value)
             elif format_type.lower() == "paragraph_style":
-                result = set_paragraph_style(range_obj, format_value)
+                result = set_paragraph_style(com_range, format_value)
             else:
                 raise ValueError(f"Unsupported format type: {format_type}")
 
@@ -420,7 +377,7 @@ def text_tools(
                 )
 
             # 获取选择区域
-            if not hasattr(selection, '_com_ranges') or not selection._com_ranges:
+            if not hasattr(selection, "_com_ranges") or not selection._com_ranges:
                 raise WordDocumentError(
                     ErrorCode.OBJECT_TYPE_ERROR,
                     "Failed to get objects from selection",
@@ -432,12 +389,15 @@ def text_tools(
             if is_independent_paragraph:
                 try:
                     # 检查当前范围是否已经在段落末尾
-                    if hasattr(range_obj, 'Paragraphs') and range_obj.Paragraphs.Count > 0:
+                    if (
+                        hasattr(range_obj, "Paragraphs")
+                        and range_obj.Paragraphs.Count > 0
+                    ):
                         current_paragraph = range_obj.Paragraphs(1)
                         # 如果范围不在段落末尾，创建新段落
                         if range_obj.Start != current_paragraph.Range.End - 1:
                             # 在当前范围前插入段落标记创建新段落
-                            range_obj.InsertBefore('\n')
+                            range_obj.InsertBefore("\n")
                             # 更新范围到新段落
                             range_obj.Start = range_obj.Start
                             range_obj.End = range_obj.Start
@@ -445,21 +405,7 @@ def text_tools(
                     log_error(f"Failed to prepare independent paragraph: {str(e)}")
 
             # 插入段落
-            # 改进Range对象检测逻辑，确保document_end返回的Range对象能被正确处理
-            try:
-                # 先尝试直接使用object作为Range对象
-                result = insert_text_after_range(com_range=range_obj, text=f"\n{text}")
-            except Exception:
-                # 如果失败，再尝试使用object.Range
-                if hasattr(range_obj, "Range"):
-                    result = insert_text_after_range(
-                        com_range=range_obj.Range, text=f"\n{text}"
-                    )
-                else:
-                    raise WordDocumentError(
-                        ErrorCode.OBJECT_TYPE_ERROR,
-                        "Cannot insert paragraph: Invalid object type",
-                    )
+            result = insert_text_after_range(com_range=range_obj, text=f"\n{text}")
 
             if style:
                 # 应用段落样式
@@ -467,38 +413,85 @@ def text_tools(
                 selection = selector_engine.select(
                     active_doc, {"type": "paragraph", "index": -1}  # 最后一个段落
                 )
-                if selection and hasattr(selection, '_com_ranges') and selection._com_ranges:
+                if (
+                    selection
+                    and hasattr(selection, "_com_ranges")
+                    and selection._com_ranges
+                ):
                     # Selection._com_ranges中只包含Range对象
                     set_paragraph_style(selection._com_ranges[0], style)
 
-            return json.dumps(
-                {"success": True, "message": "Paragraph inserted successfully"},
-                ensure_ascii=False,
-            )
+            return result
 
         elif operation_type and operation_type.lower() == "get_all_paragraphs":
             log_info("Getting all paragraphs from document")
-            
+
             try:
                 paragraphs = []
                 # 获取文档中的所有段落
                 for i in range(1, active_doc.Paragraphs.Count + 1):
                     paragraph = active_doc.Paragraphs(i)
                     paragraph_range = paragraph.Range
-                    paragraphs.append({
-                        "text": paragraph_range.Text,
-                        "index": i
-                    })
-                
-                return json.dumps({
-                    "success": True,
-                    "paragraphs": paragraphs
-                }, ensure_ascii=False)
+                    paragraphs.append({"text": paragraph_range.Text, "index": i})
+
+                return json.dumps(
+                    {"success": True, "paragraphs": paragraphs}, ensure_ascii=False
+                )
             except Exception as e:
                 log_error(f"Error getting all paragraphs: {e}")
                 raise WordDocumentError(
-                    ErrorCode.SERVER_ERROR,
-                    f"Failed to get all paragraphs: {str(e)}"
+                    ErrorCode.SERVER_ERROR, f"Failed to get all paragraphs: {str(e)}"
+                )
+
+        elif operation_type and operation_type.lower() == "get_paragraphs_info":
+            log_info("Getting paragraph statistics")
+
+            try:
+                total_paragraphs = active_doc.Paragraphs.Count
+                empty_paragraphs = 0
+                total_characters = 0
+                total_words = 0
+
+                # 统计段落信息
+                for i in range(1, total_paragraphs + 1):
+                    paragraph = active_doc.Paragraphs(i)
+                    paragraph_range = paragraph.Range
+                    text = paragraph_range.Text.strip()
+                    
+                    # 计算字符数和字数
+                    paragraph_chars = len(text)
+                    paragraph_words = len(text.split()) if text else 0
+                    
+                    total_characters += paragraph_chars
+                    total_words += paragraph_words
+                    
+                    # 统计空段落
+                    if not text:
+                        empty_paragraphs += 1
+                
+                # 计算平均值
+                non_empty_paragraphs = total_paragraphs - empty_paragraphs
+                avg_chars_per_paragraph = total_characters / non_empty_paragraphs if non_empty_paragraphs > 0 else 0
+                avg_words_per_paragraph = total_words / non_empty_paragraphs if non_empty_paragraphs > 0 else 0
+                
+                # 构建结果
+                stats = {
+                    "total_paragraphs": total_paragraphs,
+                    "empty_paragraphs": empty_paragraphs,
+                    "non_empty_paragraphs": non_empty_paragraphs,
+                    "total_characters": total_characters,
+                    "total_words": total_words,
+                    "avg_characters_per_paragraph": round(avg_chars_per_paragraph, 2),
+                    "avg_words_per_paragraph": round(avg_words_per_paragraph, 2)
+                }
+                
+                return json.dumps(
+                    {"success": True, "statistics": stats}, ensure_ascii=False
+                )
+            except Exception as e:
+                log_error(f"Error getting paragraph statistics: {e}")
+                raise WordDocumentError(
+                    ErrorCode.SERVER_ERROR, f"Failed to get paragraph statistics: {str(e)}"
                 )
 
         else:

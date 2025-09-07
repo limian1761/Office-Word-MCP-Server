@@ -17,20 +17,21 @@ from pydantic import Field
 
 # Local imports
 from ..mcp_service.core import mcp_server
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
+                                      format_error_response,
+                                      get_active_document, handle_tool_errors,
+                                      log_error, log_info,
+                                      require_active_document_validation)
 from ..selector.selector import SelectorEngine
-from ..utils.app_context import AppContext
-from ..mcp_service.core_utils import (
-    ErrorCode, WordDocumentError, format_error_response, get_active_document,
-    handle_tool_errors, log_error, log_info,
-    require_active_document_validation)
+from ..mcp_service.app_context import AppContext
 
 
 # 延迟导入以避免循环导入
 def _import_image_operations():
     """延迟导入image操作函数以避免循环导入"""
-    from ..operations.image_ops import (
-        add_caption, get_image_info, insert_image, resize_image,
-        set_image_color_type)
+    from ..operations.image_ops import (add_caption, get_image_info,
+                                        insert_image, resize_image,
+                                        set_image_color_type)
 
     return (
         add_caption,
@@ -84,7 +85,15 @@ async def image_tools(
     ),
     position: Optional[str] = Field(
         default=None,
-        description="Insertion position, options: 'before', 'after'. Optional for: insert",
+        description="Insertion position, options: 'before', 'after' for insert; 'above', 'below' for add_caption. Optional for: insert, add_caption",
+    ),
+    is_independent_paragraph: Optional[bool] = Field(
+        default=True,
+        description="Whether the inserted image or caption should be an independent paragraph. Optional for: insert, add_caption",
+    ),
+    exclude_label: Optional[bool] = Field(
+        default=False,
+        description="Whether to exclude the caption label when adding a caption. Optional for: add_caption",
     ),
 ) -> str:
     """
@@ -137,7 +146,7 @@ async def image_tools(
                     ErrorCode.INVALID_INPUT,
                     "Image path is required for insert operation",
                 )
-            
+
             if locator is None:
                 raise WordDocumentError(
                     ErrorCode.INVALID_INPUT,
@@ -150,17 +159,20 @@ async def image_tools(
                 )
 
             log_info(f"Inserting image from path: {image_path}")
-            
+
             # 调用operations模块中的insert_image函数
-            result = insert_image(document, image_path, locator, position)
-            
+            result = insert_image(document, image_path, locator, position, is_independent_paragraph)
+
             # 解析结果并返回
             result_dict = json.loads(result)
             log_info("Image inserted successfully")
             return json.dumps(
                 {
                     "success": True,
-                    "result": {"success": True, "shape_id": result_dict.get("image_index", 0)},
+                    "result": {
+                        "success": True,
+                        "shape_id": result_dict.get("image_index", 0),
+                    },
                     "message": "Image inserted successfully",
                 },
                 ensure_ascii=False,
@@ -179,7 +191,9 @@ async def image_tools(
                 )
 
             log_info(f"Adding caption: {caption_text}")
-            result = add_caption(document, caption_text, locator, label)
+            # 确定题注位置，如果未指定则默认为'below'
+            caption_position = position if position in ['above', 'below'] else 'below'
+            result = add_caption(document, caption_text, locator, label, caption_position, exclude_label, is_independent_paragraph)
             log_info("Caption added successfully")
             return json.dumps(
                 {

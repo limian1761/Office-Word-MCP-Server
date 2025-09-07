@@ -74,6 +74,12 @@ class WordBackend:
         Opens or creates a document.
         """
         try:
+            # Pre-flight check to ensure Word COM server is available
+            win32com.client.Dispatch("Word.Application")
+        except com_error as e:
+            raise RuntimeError(f"Word COM server is not available: {e}") from e
+
+        try:
             # First, try to get an active instance of Word
             self.word_app = win32com.client.GetActiveObject("Word.Application")
             logging.info("Attached to an existing Word application instance.")

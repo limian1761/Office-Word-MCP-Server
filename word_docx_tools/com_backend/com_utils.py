@@ -30,9 +30,16 @@ def handle_com_error(error_code: ErrorCode, operation_name: str):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                raise WordDocumentError(
-                    error_code, f"Failed to {operation_name}: {str(e)}"
-                )
+                # 确保error_code是ErrorCode类型的实例
+                if isinstance(error_code, ErrorCode):
+                    raise WordDocumentError(
+                        error_code, f"Failed to {operation_name}: {str(e)}"
+                    )
+                else:
+                    # 如果不是ErrorCode类型，使用SERVER_ERROR作为默认错误码
+                    raise WordDocumentError(
+                        ErrorCode.SERVER_ERROR, f"Failed to {operation_name}: {str(e)}"
+                    )
 
         return wrapper
 

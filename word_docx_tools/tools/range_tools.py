@@ -18,22 +18,22 @@ from pydantic import Field
 
 # Local imports
 from ..mcp_service.core import mcp_server
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
+                                      get_active_document, log_error, log_info)
 from ..selector.selector import SelectorEngine
-from ..utils.app_context import AppContext
-from ..mcp_service.core_utils import (ErrorCode,
-                                                   WordDocumentError,
-                                                   get_active_document,
-                                                   log_error, log_info)
+from ..mcp_service.app_context import AppContext
 
 # Configure logger
 logger = logging.getLogger(__name__)
 
+
 # 延迟导入以避免循环导入
 def _import_range_operations():
     """延迟导入range操作函数以避免循环导入"""
-    from ..operations.range_ops import (
-        batch_apply_formatting, batch_select_objects, delete_object_by_locator,
-        get_object_by_id, select_objects)
+    from ..operations.range_ops import (batch_apply_formatting,
+                                        batch_select_objects,
+                                        delete_object_by_locator,
+                                        get_object_by_id, select_objects)
 
     return (
         batch_apply_formatting,
@@ -180,9 +180,10 @@ async def range_tools(
             log_info(
                 f"Applying batch formatting with {len(operations) if operations else 0} operations"
             )
-            result = batch_apply_formatting(active_doc, operations)
+            result_str = batch_apply_formatting(active_doc, operations)
+            result = json.loads(result_str)
             successful_ops = (
-                sum(1 for r in result if r.get("success", False)) if result else 0
+                sum(1 for r in result if r.get("status") == "success") if result else 0
             )
             log_info(
                 f"Batch formatting completed. {successful_ops}/{len(result) if result else 0} operations successful"

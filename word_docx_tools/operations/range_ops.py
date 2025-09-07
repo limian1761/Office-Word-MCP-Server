@@ -10,11 +10,10 @@ from typing import Any, Dict, List, Optional
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
-from .text_ops import apply_formatting_to_object
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
+                                      log_info)
 from ..selector.selector import SelectorEngine
-from ..mcp_service.core_utils import (ErrorCode,
-                                                   WordDocumentError,
-                                                   log_error, log_info)
+from .text_ops import apply_formatting_to_object
 
 logger = logging.getLogger(__name__)
 
@@ -276,16 +275,25 @@ def batch_apply_formatting(
                                 result_dict = json.loads(result)
                                 if not result_dict.get("success", False):
                                     all_success = False
-                                    logger.warning(f"Formatting failed for range object: {result_dict.get('message', 'Unknown error')}")
+                                    logger.warning(
+                                        f"Formatting failed for range object: {result_dict.get('message', 'Unknown error')}"
+                                    )
                             except json.JSONDecodeError:
                                 # 如果结果不是有效的JSON，尝试检查字符串内容
-                                if "error" in result.lower() or "failed" in result.lower():
+                                if (
+                                    "error" in result.lower()
+                                    or "failed" in result.lower()
+                                ):
                                     all_success = False
-                                    logger.warning(f"Formatting may have failed (invalid JSON response): {result}")
+                                    logger.warning(
+                                        f"Formatting may have failed (invalid JSON response): {result}"
+                                    )
                         except Exception as inner_e:
                             all_success = False
-                            logger.warning(f"Error applying formatting to range object: {inner_e}")
-                    
+                            logger.warning(
+                                f"Error applying formatting to range object: {inner_e}"
+                            )
+
                     if not all_success:
                         raise Exception("Some formatting operations failed")
 
@@ -325,8 +333,13 @@ def delete_object_by_locator(
             raise RuntimeError("No document open.")
 
         # 使用选择器引擎选择元素
+        # 对于段落类型的定位器，无论使用什么参数名（value、index、id等），都强制要求单个对象
+        is_paragraph = locator.get('type') == 'paragraph'
+        has_position_param = any(param in locator for param in ['value', 'index', 'id'])
+        expect_single = is_paragraph and has_position_param
+        
         selector = SelectorEngine()
-        selection = selector.select(document, locator, expect_single=True)
+        selection = selector.select(document, locator, expect_single=expect_single)
 
         # 删除元素 - 所有对象都是Range对象，可以直接调用Delete方法
         for range_obj in selection._com_ranges:
@@ -337,5 +350,4 @@ def delete_object_by_locator(
     except Exception as e:
         logger.error(f"Error in delete_object_by_locator: {e}")
         raise WordDocumentError(
-            ErrorCode.OBJECT_NOT_FOUND, f"Failed to delete object: {str(e)}"
-        )
+            ErrorCode.OBJECT_NOT_FOUND, f"Failed to delete object: {str(e)}")

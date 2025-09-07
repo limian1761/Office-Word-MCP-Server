@@ -9,7 +9,6 @@ The main entry point for the application is word_docx_tools.main.run_server().
 
 # Import all operations
 from .operations import *
-
 # Import all tools
 from .tools import *
 
@@ -18,4 +17,5 @@ __version__ = "1.1.9"
 
 # Define main entry point
 from .main import run_server
-__all__ = ['run_server']
+
+__all__ = ["run_server"]

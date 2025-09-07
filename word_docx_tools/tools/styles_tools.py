@@ -17,14 +17,17 @@ from pydantic import Field
 
 # Local imports
 from ..mcp_service.core import mcp_server
-from ..operations.styles_ops import (
-    apply_formatting, set_font, set_paragraph_alignment, set_paragraph_style, set_paragraph_formatting)
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
+                                      format_error_response,
+                                      get_active_document, handle_tool_errors,
+                                      log_error, log_info,
+                                      require_active_document_validation)
+from ..operations.styles_ops import (apply_formatting, set_font,
+                                     set_paragraph_alignment,
+                                     set_paragraph_formatting,
+                                     set_paragraph_style)
 from ..selector.selector import SelectorEngine
-from ..utils.app_context import AppContext
-from ..mcp_service.core_utils import (
-    ErrorCode, WordDocumentError, format_error_response, get_active_document,
-    handle_tool_errors, log_error, log_info,
-    require_active_document_validation)
+from ..mcp_service.app_context import AppContext
 
 
 @mcp_server.tool()
@@ -68,7 +71,12 @@ def styles_tools(
         description="Alignment, options: 'left', 'center', 'right', 'justify'. Required for: set_alignment. Optional for: set_paragraph_formatting",
     ),
     line_spacing: Optional[float] = Field(
-        default=None, description="Line spacing. Optional for: set_paragraph_formatting"
+        default=None,
+        description="Line spacing value. Optional for: set_paragraph_formatting",
+    ),
+    line_spacing_type: Optional[str] = Field(
+        default=None,
+        description="Line spacing type: 'multiple' (default) or 'exact'. Optional for: set_paragraph_formatting",
     ),
     space_before: Optional[float] = Field(
         default=None,
@@ -110,7 +118,7 @@ def styles_tools(
       * Optional parameters: None
     - set_paragraph_formatting: Set paragraph formatting
       * Required parameters: locator
-      * Optional parameters: alignment, line_spacing, space_before, space_after, first_line_indent, left_indent, right_indent
+      * Optional parameters: alignment, line_spacing, line_spacing_type, space_before, space_after, first_line_indent, left_indent, right_indent
     - get_available_styles: Get available styles
       * Required parameters: None
       * Optional parameters: None
@@ -176,8 +184,11 @@ def styles_tools(
                 engine = SelectorEngine()
                 selection = engine.select(active_doc, locator)
                 if not selection:
-                    raise WordDocumentError(ErrorCode.SELECTOR_ERROR, "No paragraphs found for the given locator")
-                
+                    raise WordDocumentError(
+                        ErrorCode.SELECTOR_ERROR,
+                        "No paragraphs found for the given locator",
+                    )
+
                 # 检查selection是否有_com_ranges属性，如果有则使用它
                 if hasattr(selection, "_com_ranges") and selection._com_ranges:
                     paragraphs = selection._com_ranges
@@ -190,7 +201,7 @@ def styles_tools(
                     except TypeError:
                         # 如果不能迭代，则包装成列表
                         paragraphs = [selection]
-                
+
                 for para in paragraphs:
                     # 确保样式名称正确并处理可能的异常
                     try:
@@ -207,9 +218,18 @@ def styles_tools(
                             except Exception:
                                 continue
                         if not found:
-                            raise WordDocumentError(ErrorCode.STYLE_NOT_FOUND, f"Style '{style_name}' not found")
-                
-                return json.dumps({"success": True, "message": f"Successfully applied style '{style_name}'"}, ensure_ascii=False)
+                            raise WordDocumentError(
+                                ErrorCode.STYLE_NOT_FOUND,
+                                f"Style '{style_name}' not found",
+                            )
+
+                return json.dumps(
+                    {
+                        "success": True,
+                        "message": f"Successfully applied style '{style_name}'",
+                    },
+                    ensure_ascii=False,
+                )
             except WordDocumentError as e:
                 if e.error_code == ErrorCode.STYLE_NOT_FOUND:
                     # 获取所有可用样式
@@ -220,12 +240,17 @@ def styles_tools(
                                 available_styles.append(style.NameLocal)
                         except Exception as ex:
                             log_error(f"Failed to get style name: {ex}")
-                    return json.dumps({
-                        "success": False,
-                        "error_code": int(e.error_code),  # 转换为整数以支持JSON序列化
-                        "error_message": str(e),
-                        "available_styles": available_styles
-                    }, ensure_ascii=False)
+                    return json.dumps(
+                        {
+                            "success": False,
+                            "error_code": int(
+                                e.error_code
+                            ),  # 转换为整数以支持JSON序列化
+                            "error_message": str(e),
+                            "available_styles": available_styles,
+                        },
+                        ensure_ascii=False,
+                    )
                 raise
 
         elif operation_type and operation_type.lower() == "set_paragraph_formatting":
@@ -239,12 +264,13 @@ def styles_tools(
                 document=active_doc,
                 alignment=alignment,
                 line_spacing=line_spacing,
+                line_spacing_type=line_spacing_type,
                 space_before=space_before,
                 space_after=space_after,
                 first_line_indent=first_line_indent,
                 left_indent=left_indent,
                 right_indent=right_indent,
-                locator=locator
+                locator=locator,
             )
             return str(result)
 
@@ -325,9 +351,9 @@ def styles_tools(
         log_error(f"Error in styles_tools: {e}", exc_info=True)
         # 确保错误响应可以正确序列化
         error_response = format_error_response(e)
-        if isinstance(error_response, dict) and 'error_code' in error_response:
+        if isinstance(error_response, dict) and "error_code" in error_response:
             # 确保error_code是整数类型
-            error_response['error_code'] = int(error_response['error_code'])
+            error_response["error_code"] = int(error_response["error_code"])
         # 如果已经是JSON字符串，则直接返回，否则转换为JSON字符串
         if isinstance(error_response, str):
             return error_response

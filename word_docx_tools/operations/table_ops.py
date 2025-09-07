@@ -10,9 +10,9 @@ from typing import Any, Dict, List, Optional, Union
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
-from ..selector.selector import SelectorEngine
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
-                                log_info)
+                                      log_info)
+from ..selector.selector import SelectorEngine
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +46,10 @@ def create_table(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    if not hasattr(document, 'Tables') or document.Tables is None:
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support tables")
+    if not hasattr(document, "Tables") or document.Tables is None:
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR, "Document does not support tables"
+        )
 
     selector = SelectorEngine()
 
@@ -75,12 +77,15 @@ def create_table(
             if is_independent_paragraph:
                 try:
                     # 检查当前范围是否已经在段落末尾
-                    if hasattr(range_obj, 'Paragraphs') and range_obj.Paragraphs.Count > 0:
+                    if (
+                        hasattr(range_obj, "Paragraphs")
+                        and range_obj.Paragraphs.Count > 0
+                    ):
                         current_paragraph = range_obj.Paragraphs(1)
                         # 如果范围不在段落末尾，创建新段落
                         if range_obj.Start != current_paragraph.Range.End - 1:
                             # 在当前范围前插入段落标记创建新段落
-                            range_obj.InsertBefore('\n')
+                            range_obj.InsertBefore("\n")
                             # 更新范围到新段落
                             range_obj.Start = range_obj.Start
                             range_obj.End = range_obj.Start
@@ -102,7 +107,7 @@ def create_table(
         # 添加默认样式并确保表格有边框
         try:
             # 尝试应用Table Grid样式（通常包含边框）
-            if hasattr(document, 'Styles') and document.Styles is not None:
+            if hasattr(document, "Styles") and document.Styles is not None:
                 table.Style = "Table Grid"
             else:
                 log_error("Document does not support styles")
@@ -114,7 +119,7 @@ def create_table(
                     for cell in row.Cells:
                         # 设置所有边框为单实线
                         cell.Borders.OutsideLineStyle = 1  # wdLineStyleSingle
-                        cell.Borders.InsideLineStyle = 1   # wdLineStyleSingle
+                        cell.Borders.InsideLineStyle = 1  # wdLineStyleSingle
             except Exception:
                 log_error("Failed to set table borders manually")
 
@@ -211,8 +216,10 @@ def get_cell_text(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    if not hasattr(document, 'Tables') or document.Tables is None:
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support tables")
+    if not hasattr(document, "Tables") or document.Tables is None:
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR, "Document does not support tables"
+        )
 
     # 验证参数
     if table_index <= 0:
@@ -292,8 +299,10 @@ def set_cell_text(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    if not hasattr(document, 'Tables') or document.Tables is None:
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support tables")
+    if not hasattr(document, "Tables") or document.Tables is None:
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR, "Document does not support tables"
+        )
 
     # 验证参数
     if table_index <= 0:
@@ -392,7 +401,9 @@ def set_cell_text(
 
 
 @handle_com_error(ErrorCode.TABLE_ERROR, "get table info")
-def get_table_info(document: win32com.client.CDispatch, table_index: Optional[int] = None) -> str:
+def get_table_info(
+    document: win32com.client.CDispatch, table_index: Optional[int] = None
+) -> str:
     """获取表格信息
 
     Args:
@@ -462,13 +473,13 @@ def get_table_info(document: win32com.client.CDispatch, table_index: Optional[in
         if table_index is not None:
             if table_index <= 0:
                 raise ValueError("Table index must be a positive integer")
-            
+
             if table_index > table_count:
                 raise WordDocumentError(
                     ErrorCode.TABLE_ERROR,
                     f"Table index {table_index} out of range. There are {table_count} tables in the document",
                 )
-            
+
             info = get_single_table_info(table_index)
             log_info(f"Successfully retrieved info for table {table_index}")
             return json.dumps(info, ensure_ascii=False)
@@ -482,15 +493,9 @@ def get_table_info(document: win32com.client.CDispatch, table_index: Optional[in
                 except Exception as e:
                     # 单个表格获取失败不影响其他表格
                     log_error(f"Failed to get info for table {idx}: {str(e)}")
-                    all_tables_info.append({
-                        "table_index": idx,
-                        "error": str(e)
-                    })
-            
-            result = {
-                "tables": all_tables_info,
-                "total_tables": table_count
-            }
+                    all_tables_info.append({"table_index": idx, "error": str(e)})
+
+            result = {"tables": all_tables_info, "total_tables": table_count}
             log_info(f"Successfully retrieved info for all {table_count} tables")
             return json.dumps(result, ensure_ascii=False)
     except Exception as e:
@@ -663,7 +668,9 @@ def insert_column(
                             new_column.Select()
                             # 多次执行左移，直到到达指定位置
                             for _ in range(table.Columns.Count - actual_position):
-                                document.Application.CommandBars.ExecuteMso("TableColumnsToTheLeft")
+                                document.Application.CommandBars.ExecuteMso(
+                                    "TableColumnsToTheLeft"
+                                )
                     except Exception as inner_e:
                         # 如果两种方法都失败，尝试在末尾插入
                         table.Columns.Add()

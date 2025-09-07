@@ -18,21 +18,15 @@ from pydantic import Field
 
 # Local imports
 from ..mcp_service.core import mcp_server
-from ..operations.objects_ops import \
-    create_bookmark
-from ..operations.objects_ops import \
-    create_citation
-from ..operations.objects_ops import \
-    create_hyperlink
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
+                                      format_error_response,
+                                      get_active_document, handle_tool_errors,
+                                      log_error, log_info,
+                                      require_active_document_validation)
+from ..operations.objects_ops import (create_bookmark, create_citation,
+                                      create_hyperlink)
 from ..selector.selector import SelectorEngine
-from ..utils.app_context import AppContext
-from ..mcp_service.core_utils import (ErrorCode,
-                                                   WordDocumentError,
-                                                   format_error_response,
-                                                   get_active_document,
-                                                   handle_tool_errors,
-                                                   log_error, log_info,
-                                                   require_active_document_validation)
+from ..mcp_service.app_context import AppContext
 
 # 加载环境变量
 try:
@@ -151,78 +145,6 @@ def objects_tools(
 
 
 @handle_tool_errors
-def handle_objects_operations(
-    ctx: Context[ServerSession, AppContext],
-    operation_type: str,
-    bookmark_name: Optional[str] = None,
-    citation_text: Optional[str] = None,
-    url: Optional[str] = None,
-    locator: Optional[Dict[str, Any]] = None,
-    sub_operation: Optional[str] = None,
-    display_text: Optional[str] = None,
-    citation_name: Optional[str] = None,
-    hyperlink_name: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    处理文档对象相关操作的统一入口
-
-    Args:
-        ctx: MCP上下文对象
-        operation_type: 操作类型
-        bookmark_name: 书签名称
-        citation_text: 引用文本
-        url: 超链接URL
-        locator: 元素定位器
-        sub_operation: 子操作类型
-        display_text: 超链接显示文本
-        citation_name: 引用名称
-        hyperlink_name: 超链接名称
-
-    Returns:
-        操作结果字典
-    """
-    try:
-        document = ctx.request_context.lifespan_context.get_active_document()
-
-        # 处理不同类型的操作
-        result: Dict[str, Any] = {}
-        if operation_type == "bookmark_operations":
-            result = handle_bookmark_operations(
-                ctx,
-                document,
-                sub_operation,
-                bookmark_name=bookmark_name,
-                locator=locator,
-            )
-        elif operation_type == "citation_operations":
-            result = handle_citation_operations(
-                ctx,
-                document,
-                sub_operation,
-                citation_text=citation_text,
-                locator=locator,
-                citation_name=citation_name,
-            )
-        elif operation_type == "hyperlink_operations":
-            result = handle_hyperlink_operations(
-                ctx,
-                document,
-                sub_operation,
-                url=url,
-                locator=locator,
-                display_text=display_text,
-                hyperlink_name=hyperlink_name,
-            )
-        else:
-            raise ValueError(f"不支持的操作类型: {operation_type}")
-
-        return result
-    except Exception as e:
-        error_message = format_error_response(e)
-        return {"error": error_message}  # 返回包含错误信息的字典
-
-
-@handle_tool_errors
 def handle_bookmark_operations(
     ctx: Context[ServerSession, AppContext],
     document: win32com.client.CDispatch,
@@ -251,14 +173,17 @@ def handle_bookmark_operations(
                 # 改进书签创建，正确处理Range对象
                 # 确保书签名称不包含非法字符
                 clean_bookmark_name = bookmark_name
-                for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|']:
-                    clean_bookmark_name = clean_bookmark_name.replace(char, '_')
-                
+                for char in ["/", "\\", ":", "*", "?", '"', "<", ">", "|"]:
+                    clean_bookmark_name = clean_bookmark_name.replace(char, "_")
+
                 engine = SelectorEngine()
                 selection = engine.select(document, locator)
                 if not selection:
-                    raise WordDocumentError(ErrorCode.SELECTOR_ERROR, "Failed to locate position for bookmark")
-                
+                    raise WordDocumentError(
+                        ErrorCode.SELECTOR_ERROR,
+                        "Failed to locate position for bookmark",
+                    )
+
                 # 正确处理selection对象
                 if hasattr(selection, "_com_ranges") and selection._com_ranges:
                     ranges = selection._com_ranges
@@ -269,7 +194,7 @@ def handle_bookmark_operations(
                     except AttributeError:
                         # 如果没有Range属性，尝试直接使用selection
                         ranges = [selection]
-                
+
                 # 创建书签
                 range_obj = ranges[0]
                 # 如果Range为空，可以插入一个空字符作为书签位置
@@ -277,15 +202,20 @@ def handle_bookmark_operations(
                     # 如果Range为空，插入一个空字符
                     range_obj.InsertAfter(" ")
                     range_obj.Collapse(True)  # 折叠到开始位置
-                
-                bookmark = document.Bookmarks.Add(Name=clean_bookmark_name, Range=range_obj)
+
+                bookmark = document.Bookmarks.Add(
+                    Name=clean_bookmark_name, Range=range_obj
+                )
                 result = {"success": True, "bookmark_name": bookmark.Name}
             except Exception as e:
                 log_error(f"Failed to create bookmark: {str(e)}")
                 raise WordDocumentError(
-                    ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create bookmark: {str(e)}")
+                    ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create bookmark: {str(e)}"
+                )
         else:
-            raise ValueError("bookmark_name and locator are required for create operation")
+            raise ValueError(
+                "bookmark_name and locator are required for create operation"
+            )
 
     elif sub_operation == "get":
         bookmark_name = kwargs.get("bookmark_name")
@@ -337,14 +267,14 @@ def handle_citation_operations(
             try:
                 # 创建符合Word引用XML格式的source_data字典
                 source_data = {
-                    'Tag': citation_name,
-                    'Author': 'Author',
-                    'Title': citation_text,
-                    'Type': 1,  # 1代表普通引用类型
-                    'Year': '2023',  # 添加必要的年份字段
-                    'JournalName': 'Journal',  # 添加必要的期刊名称字段
-                    'Volume': '1',  # 添加必要的卷号字段
-                    'Pages': '1-10',  # 添加必要的页码字段
+                    "Tag": citation_name,
+                    "Author": "Author",
+                    "Title": citation_text,
+                    "Type": 1,  # 1代表普通引用类型
+                    "Year": "2023",  # 添加必要的年份字段
+                    "JournalName": "Journal",  # 添加必要的期刊名称字段
+                    "Volume": "1",  # 添加必要的卷号字段
+                    "Pages": "1-10",  # 添加必要的页码字段
                 }
                 result = create_citation(document, source_data, locator)
             except Exception as e:
@@ -352,16 +282,23 @@ def handle_citation_operations(
                 # 如果完整的引用创建失败，尝试使用更简单的方法在文档中插入引用文本
                 try:
                     from ..operations.text_ops import insert_text
+
                     # 确保locator是字典类型
                     if locator is not None and not isinstance(locator, dict):
-                        locator = {'type': 'document', 'position': 'end'}
-                    result = insert_text(document, locator, f"[{citation_text}]")
-                    result['warning'] = "Failed to create proper citation, inserted plain text instead"
+                        locator = {"type": "document", "position": "end"}
+                    insert_text(document, locator, f"[{citation_text}]")
+                    result = {
+                        "warning": "Failed to create proper citation, inserted plain text instead"
+                    }
                 except Exception as e2:
                     raise WordDocumentError(
-                        ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create citation: {str(e2)}")
+                        ErrorCode.OBJECT_TYPE_ERROR,
+                        f"Failed to create citation: {str(e2)}",
+                    )
         else:
-            raise ValueError("citation_text and locator are required for create operation")
+            raise ValueError(
+                "citation_text and locator are required for create operation"
+            )
 
     elif sub_operation == "get":
         citation_name = kwargs.get("citation_name")
@@ -418,32 +355,40 @@ def handle_hyperlink_operations(
             try:
                 # 改进超链接创建，确保使用正确的Range对象
                 # 移除URL中可能存在的反引号和其他特殊字符
-                clean_url = url.strip('`').strip()
+                clean_url = url.strip("`").strip()
                 # 确保URL有协议前缀
-                if not clean_url.startswith(('http://', 'https://', 'file://', 'mailto:')):
-                    clean_url = 'https://' + clean_url
-                
+                if not clean_url.startswith(
+                    ("http://", "https://", "file://", "mailto:")
+                ):
+                    clean_url = "https://" + clean_url
+
                 from ..operations.objects_ops import create_hyperlink
+
                 result = create_hyperlink(
                     document,
                     address=clean_url,
                     locator=locator,
-                    text_to_display=display_text
+                    text_to_display=display_text,
                 )
             except Exception as e:
                 log_error(f"Failed to create hyperlink: {str(e)}")
                 # 如果超链接创建失败，尝试使用更简单的方法在文档中插入链接文本
                 try:
                     from ..operations.text_ops import insert_text
+
                     link_text = display_text if display_text else clean_url
                     # 确保locator是字典类型
                     if locator is not None and not isinstance(locator, dict):
-                        locator = {'type': 'document', 'position': 'end'}
-                    result = insert_text(document, locator, f"{link_text}")
-                    result['warning'] = "Failed to create proper hyperlink, inserted plain text instead"
+                        locator = {"type": "document", "position": "end"}
+                    insert_text(document, locator, f"{link_text}")
+                    result = {
+                        "warning": "Failed to create proper hyperlink, inserted plain text instead"
+                    }
                 except Exception as e2:
                     raise WordDocumentError(
-                        ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create hyperlink: {str(e2)}")
+                        ErrorCode.OBJECT_TYPE_ERROR,
+                        f"Failed to create hyperlink: {str(e2)}",
+                    )
         else:
             raise ValueError("url and locator are required for create operation")
 

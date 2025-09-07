@@ -7,7 +7,7 @@ This module provides a unified MCP tool for document operations.
 # Standard library imports
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import win32com.client
 from dotenv import load_dotenv
@@ -17,19 +17,16 @@ from pydantic import Field
 
 # Local imports
 from ..mcp_service.core import mcp_server
-from ..operations.document_ops import (
-    close_document, create_document, get_document_structure, open_document,
-    save_document)
-from ..operations.others_ops import (protect_document,
-                                                        unprotect_document)
-from ..utils.app_context import AppContext
-from ..mcp_service.core_utils import (ErrorCode,
-                                                   WordDocumentError,
-                                                   format_error_response,
-                                                   get_active_document,
-                                                   handle_tool_errors,
-                                                   log_error, log_info,
-                                                   require_active_document_validation)
+from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
+                                      format_error_response,
+                                      get_active_document, handle_tool_errors,
+                                      log_error, log_info, log_warning,
+                                      require_active_document_validation)
+from ..operations.document_ops import (close_document, create_document,
+                                       get_document_structure, open_document,
+                                       save_document)
+from ..operations.others_ops import protect_document, unprotect_document
+from ..mcp_service.app_context import AppContext
 
 # 加载环境变量
 try:
@@ -48,7 +45,7 @@ def document_tools(
     ),
     file_path: Optional[str] = Field(
         default=None,
-        description="File path for document operations. Required for: open,save_as. Optional for: None.  Optional for: create, ",
+        description="File path for document operations. Required for: open,save_as, create. Optional for: None",
     ),
     template_path: Optional[str] = Field(
         default=None,
@@ -62,7 +59,7 @@ def document_tools(
         default=None,
         description="Property name for get/set operations. Required for: get_property, set_property. Optional for: None",
     ),
-    property_value: Optional[Any] = Field(
+    property_value: Optional[Union[str, int, float, bool]] = Field(
         default=None,
         description="Property value for set operation. Required for: set_property. Optional for: None",
     ),
@@ -87,8 +84,8 @@ def document_tools(
 
     This tool provides a single interface for all document operations:
     - create: Create a new document
-      * Required parameters: None
-      * Optional parameters: template_path, file_path
+      * Required parameters: file_path
+      * Optional parameters: template_path,
     - open: Open an existing document
       * Required parameters: file_path
       * Optional parameters: password
@@ -109,7 +106,7 @@ def document_tools(
       * Optional parameters: document_properties
     - get_property: Get document property
       * Required parameters: property_name
-      * Optional parameters: None
+      * Optional parameters: Nonecreate
     - print: Print the document
       * Required parameters: None
       * Optional parameters: print_settings
@@ -346,9 +343,11 @@ def document_tools(
                 raise WordDocumentError(
                     ErrorCode.DOCUMENT_ERROR, "No active document found"
                 )
-            
+
             if property_name is None or property_value is None:
-                raise ValueError("property_name and property_value parameters must be provided for set_property operation")
+                raise ValueError(
+                    "property_name and property_value parameters must be provided for set_property operation"
+                )
 
             log_info(f"Setting document property: {property_name}")
             try:
@@ -417,25 +416,36 @@ def document_tools(
                     "超链接基础": "Hyperlink Base",
                     "字符数(含空格)": "Number of Characters (with spaces)",
                 }
-                
+
                 # 获取标准化的属性名称
-                standard_property_name = property_name_map.get(property_name, property_name)
-                
+                standard_property_name = property_name_map.get(
+                    property_name, property_name
+                )
+
                 # 尝试设置文档内置属性
                 try:
+                    if active_doc is None:
+                        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
                     # Word文档属性需要通过名称访问，而不是作为对象的属性
-                    property_obj = active_doc.BuiltInDocumentProperties(standard_property_name)
+                    property_obj = active_doc.BuiltInDocumentProperties(
+                        standard_property_name
+                    )
                     property_obj.Value = property_value
-                    return json.dumps({
-                        "success": True,
-                        "property_name": property_name,
-                        "standard_property_name": standard_property_name,
-                        "property_value": property_value,
-                        "is_built_in": True
-                    }, ensure_ascii=False)
+                    return json.dumps(
+                        {
+                            "success": True,
+                            "property_name": property_name,
+                            "standard_property_name": standard_property_name,
+                            "property_value": property_value,
+                            "is_built_in": True,
+                        },
+                        ensure_ascii=False,
+                    )
                 except Exception as e:
                     # 如果内置属性访问失败，尝试检查自定义属性
                     try:
+                        if active_doc is None:
+                            raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
                         custom_properties = active_doc.CustomDocumentProperties
                         # 检查属性是否已存在
                         prop_exists = False
@@ -444,7 +454,7 @@ def document_tools(
                                 custom_properties(i).Value = property_value
                                 prop_exists = True
                                 break
-                        
+
                         # 如果不存在，则添加新的自定义属性
                         if not prop_exists:
                             # 对于自定义属性，需要先检查属性类型
@@ -455,72 +465,106 @@ def document_tools(
                                 property_type = 2  # 整数类型
                             elif isinstance(property_value, float):
                                 property_type = 3  # 浮点数类型
-                            
+
                             # 添加新的自定义属性
-                            custom_properties.Add(Name=property_name, Type=property_type, Value=property_value)
-                        
-                        return json.dumps({
-                            "success": True,
-                            "property_name": property_name,
-                            "property_value": property_value,
-                            "is_custom_property": True
-                        }, ensure_ascii=False)
+                            custom_properties.Add(
+                                Name=property_name,
+                                Type=property_type,
+                                Value=property_value,
+                            )
+
+                        return json.dumps(
+                            {
+                                "success": True,
+                                "property_name": property_name,
+                                "property_value": property_value,
+                                "is_custom_property": True,
+                            },
+                            ensure_ascii=False,
+                        )
                     except Exception as inner_e:
-                        raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to set property: {str(inner_e)}")
+                        raise WordDocumentError(
+                            ErrorCode.SERVER_ERROR,
+                            f"Failed to set property: {str(inner_e)}",
+                        )
             except Exception as e:
                 # 更友好的错误处理
                 error_message = str(e)
                 if "Property not found" in error_message:
                     supported_properties = ", ".join(list(property_name_map.keys()))
-                    raise WordDocumentError(ErrorCode.NOT_FOUND, 
-                        f"Property not found: {property_name}. Supported built-in properties: {supported_properties}")
+                    raise WordDocumentError(
+                        ErrorCode.NOT_FOUND,
+                        f"Property not found: {property_name}. Supported built-in properties: {supported_properties}",
+                    )
                 else:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to set property: {str(e)}")
+                    raise WordDocumentError(
+                        ErrorCode.SERVER_ERROR, f"Failed to set property: {str(e)}"
+                    )
 
         elif operation_type and operation_type.lower() == "get_property":
-                if property_name is None:
-                    raise ValueError("property_name parameter must be provided for get_property operation")
+            if property_name is None:
+                raise ValueError(
+                    "property_name parameter must be provided for get_property operation"
+                )
 
-                log_info(f"Getting document property: {property_name}")
+            log_info(f"Getting document property: {property_name}")
+            try:
+                if active_doc is None:
+                    raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+                # 尝试获取文档内置属性
                 try:
-                    # 尝试获取文档内置属性
-                    try:
-                        # Word文档属性需要通过名称访问，而不是作为对象的属性
-                        property_obj = active_doc.BuiltInDocumentProperties(property_name)
-                        value = property_obj.Value
-                        return json.dumps({
+                    # Word文档属性需要通过名称访问，而不是作为对象的属性
+                    property_obj = active_doc.BuiltInDocumentProperties(property_name)
+                    value = property_obj.Value
+                    return json.dumps(
+                        {
                             "success": True,
                             "property_name": property_name,
                             "value": value,
-                            "is_built_in": True
-                        }, ensure_ascii=False)
-                    except Exception as e:
-                        # 如果内置属性访问失败，尝试检查自定义属性
-                        try:
-                            custom_properties = active_doc.CustomDocumentProperties
-                            # 遍历自定义属性查找指定名称的属性
-                            value = None
-                            for i in range(1, custom_properties.Count + 1):
-                                if custom_properties(i).Name == property_name:
-                                    value = custom_properties(i).Value
-                                    return json.dumps({
+                            "is_built_in": True,
+                        },
+                        ensure_ascii=False,
+                    )
+                except Exception as e:
+                    # 如果内置属性访问失败，尝试检查自定义属性
+                    try:
+                        if active_doc is None:
+                            raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+                        custom_properties = active_doc.CustomDocumentProperties
+                        # 遍历自定义属性查找指定名称的属性
+                        value = None
+                        for i in range(1, custom_properties.Count + 1):
+                            if custom_properties(i).Name == property_name:
+                                value = custom_properties(i).Value
+                                return json.dumps(
+                                    {
                                         "success": True,
                                         "property_name": property_name,
                                         "value": value,
-                                        "is_custom_property": True
-                                    }, ensure_ascii=False)
-                            
-                            # 如果未找到属性，返回None值
-                            return json.dumps({
+                                        "is_custom_property": True,
+                                    },
+                                    ensure_ascii=False,
+                                )
+
+                        # 如果未找到属性，返回None值
+                        return json.dumps(
+                            {
                                 "success": True,
                                 "property_name": property_name,
                                 "value": None,
-                                "message": "Property not found"
-                            }, ensure_ascii=False)
-                        except Exception as inner_e:
-                            raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get property: {str(inner_e)}")
-                except Exception as e:
-                    raise WordDocumentError(ErrorCode.SERVER_ERROR, f"Failed to get property: {str(e)}")
+                                "message": "Property not found",
+                            },
+                            ensure_ascii=False,
+                        )
+                    except Exception as inner_e:
+                        raise WordDocumentError(
+                            ErrorCode.SERVER_ERROR,
+                            f"Failed to get property: {str(inner_e)}",
+                        )
+            except Exception as e:
+                raise WordDocumentError(
+                    ErrorCode.SERVER_ERROR, f"Failed to get property: {str(e)}"
+                )
 
         elif operation_type and operation_type.lower() == "print":
             raise NotImplementedError("print operation not implemented")

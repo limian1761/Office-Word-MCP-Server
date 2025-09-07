@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 
 class ErrorCode(Enum):
@@ -86,7 +86,7 @@ class WordDocumentError(Exception):
             "error_code": self.error_code.value[0],
             "error_name": self.error_code.name,
             "message": self.message,
-            "details": self.details
+            "details": self.details,
         }
 
 
@@ -101,7 +101,9 @@ class DocumentNotFoundError(WordDocumentError):
 class CommentError(WordDocumentError):
     """Raised when a comment operation fails"""
 
-    def __init__(self, message: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self, message: Optional[str] = None, details: Optional[Dict[str, Any]] = None
+    ):
         super().__init__(ErrorCode.COMMENT_ERROR, message, details)
 
 

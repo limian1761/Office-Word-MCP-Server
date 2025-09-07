@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
+
 from .app_context import AppContext
 
 # Configure logging
@@ -22,28 +23,39 @@ logger = logging.getLogger("WordDocumentServer")
 
 from enum import Enum
 
-from .errors import ErrorCode, WordDocumentError, DocumentNotFoundError, ObjectNotFoundError, StyleNotFoundError, ImageError, ImageFormatError, CommentError
+from .errors import (CommentError, DocumentNotFoundError, ErrorCode,
+                     ImageError, ImageFormatError, ObjectNotFoundError,
+                     StyleNotFoundError, WordDocumentError)
+
 
 class CommentIndexError(CommentError):
     """Raised when a comment index is out of range"""
 
     def __init__(self, comment_index: int, message: Optional[str] = None):
         details = {"comment_index": comment_index}
-        super().__init__(ErrorCode.COMMENT_INDEX_ERROR, message, details)
+        super().__init__(
+            message or f"Comment index {comment_index} is out of range.",
+            ErrorCode.COMMENT_INDEX_ERROR,
+            details,
+        )
 
 
 class CommentEmptyError(CommentError):
     """Raised when comment text is empty"""
 
     def __init__(self, message: Optional[str] = None):
-        super().__init__(ErrorCode.COMMENT_EMPTY_ERROR, message)
+        super().__init__(
+            message or "Comment text cannot be empty.", ErrorCode.COMMENT_EMPTY_ERROR
+        )
 
 
 class ReplyEmptyError(CommentError):
     """Raised when reply text is empty"""
 
     def __init__(self, message: Optional[str] = None):
-        super().__init__(ErrorCode.REPLY_EMPTY_ERROR, message)
+        super().__init__(
+            message or "Reply text cannot be empty.", ErrorCode.REPLY_EMPTY_ERROR
+        )
 
 
 def get_active_document(ctx: Context[ServerSession, "AppContext"]) -> Any:
@@ -212,14 +224,7 @@ def log_warning(message: str) -> None:
     logger.warning(message)
 
 
-def log_debug(message: str) -> None:
-    """记录调试日志
 
-    Args:
-        message: 调试信息
-    """
-    logger.debug(message)
-    logger.error(message, exc_info=True)
 
 
 def validate_input_params(
@@ -461,21 +466,7 @@ def require_active_document_validation(func):
     return wrapper
 
 
-def standardize_tool_errors(func):
-    """标准化工具函数的错误处理装饰器."""
 
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except ObjectNotFoundError as e:
-            return f"No objects found matching the locator: {e}. Please try simplifying your locator or use get_document_outline to check the actual document structure."
-        except ValueError as e:
-            return f"Invalid parameter: {e}"
-        except Exception as e:
-            return format_error_response(e)
-
-    return wrapper
 
 
 def handle_tool_errors(func):
@@ -485,11 +476,13 @@ def handle_tool_errors(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except (IOError, ConnectionError, TimeoutError) as e:
+        except Exception as e:
             # Log the error with context
             logger.error("Error in tool %s: %s", func.__name__, str(e), exc_info=True)
-            # Return formatted error response
-            return format_error_response(e)
+            # Return formatted error response as a dictionary
+            # This ensures compatibility with Pydantic's return type validation
+            error_message = format_error_response(e)
+            return {"error": error_message}
 
     return wrapper
 

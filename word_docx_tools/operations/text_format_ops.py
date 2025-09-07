@@ -9,11 +9,9 @@ from typing import Any, Dict, List, Optional, Union
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
+from ..mcp_service.core_utils import (ErrorCode, ObjectNotFoundError,
+                                      WordDocumentError, log_error, log_info)
 from ..selector.selector import SelectorEngine
-from ..mcp_service.core_utils import (ErrorCode,
-                                                          ObjectNotFoundError,
-                                                          WordDocumentError,
-                                                          log_error, log_info)
 
 logger = logging.getLogger(__name__)
 

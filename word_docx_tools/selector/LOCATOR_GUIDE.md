@@ -33,25 +33,57 @@
 
 ### 基本格式
 
-基本的定位器格式为：`type:value[filter1][filter2]...`
+Locator支持两种主要格式：
 
-- `type`: 元素类型（如 paragraph、table、text 等）
-- `value`: 可选的元素值（如文本内容、标识符等）
-- `filter`: 可选的过滤器，用于进一步缩小选择范围
+1. **字符串格式**：`type:value[filter1][filter2]...`
+   - `type`: 元素类型（如 paragraph、table、text 等）
+   - `value`: 可选的元素值（如文本内容、标识符等）
+   - `filter`: 可选的过滤器，用于进一步缩小选择范围
+
+2. **JSON对象格式**：
+
+```json
+{
+  "type": "paragraph",  // 元素类型
+  "value": "1",         // 元素标识符（索引或唯一ID）
+  "filters": [           // 可选的过滤条件
+    {"contains_text": "example"}
+  ]
+}
+```
 
 ### 带锚点的格式
 
-带锚点的定位器格式为：`type:value@anchor_id[relation]`
+对于相对定位，可以使用带锚点的格式：`type:value@anchor_id[relation]` 或JSON对象格式：
 
-- `type:value`: 目标元素的类型和值
-- `anchor_id`: 锚点元素的标识符
-- `relation`: 目标元素与锚点元素之间的关系类型
+```json
+{
+  "anchor": {
+    "type": "paragraph",
+    "identifier": {
+      "text": "锚点文本"
+    }
+  },
+  "relation": {
+    "type": "first_occurrence_after"
+  },
+  "target": {
+    "type": "paragraph"
+  }
+}
+```
 
 ## 元素类型
 
 ### 基本元素类型
 
 1. **paragraph** - 段落元素
+   根据段落位置或内容定位。
+   - 示例: `paragraph:3` (第3个段落)
+   - 示例: `paragraph:"标题文本"` (包含"标题文本"的段落)
+   
+   **重要说明**：当段落定位器包含索引参数时（如`paragraph:5`），系统会强制返回单个对象，确保操作只针对特定段落执行，避免误操作影响整个文档。
+
 2. **table** - 表格元素
 3. **text** - 文本元素（会被转换为段落搜索）
 4. **inline_shape** 或 **image** - 图片元素
@@ -60,43 +92,43 @@
 7. **document_start** - 文档开始位置
 8. **document_end** - 文档结束位置
 9. **range** - 范围元素
+10. **bookmark** - 书签
+11. **comment** - 注释
 
 ## 过滤器
 
-### 文本相关过滤器
+过滤器用于进一步缩小定位范围，常用的过滤器包括：
 
-- `contains_text`: 元素包含指定的文本（不区分大小写）
+### 文本相关过滤器
+- **contains_text**: 元素包含指定的文本
   - 示例: `[contains_text=重要信息]`
-- `text_matches_regex`: 元素文本与指定的正则表达式匹配
+- **text_matches_regex**: 元素文本与指定的正则表达式匹配
   - 示例: `[text_matches_regex=^第[0-9]+章]`
-- `is_list_item`: 元素是列表项
-  - 示例: `[is_list_item=true]` 或 `[is_list_item=false]`
+- **is_list_item**: 元素是列表项
+  - 示例: `[is_list_item=true]`
 
 ### 位置相关过滤器
-
-- `index_in_parent`: 元素在父元素中的索引位置（0 开始）
+- **index_in_parent**: 元素在父元素中的索引位置（0 开始）
   - 示例: `[index_in_parent=0]`（第一个元素）
-- `row_index`: 单元格在表格中的行索引
+- **row_index**: 单元格在表格中的行索引
   - 示例: `[row_index=2]`
-- `column_index`: 单元格在表格中的列索引
+- **column_index**: 单元格在表格中的列索引
   - 示例: `[column_index=3]`
-- `table_index`: 元素所属表格的索引
-  - 示例: `[table_index=0]`（第一个表格）
-- `range_start`: 范围元素的起始位置
+- **table_index**: 元素所属表格的索引
+  - 示例: `[table_index=0]`
+- **range_start**: 范围元素的起始位置
   - 示例: `[range_start=100]`
-- `range_end`: 范围元素的结束位置
+- **range_end**: 范围元素的结束位置
   - 示例: `[range_end=200]`
 
 ### 样式相关过滤器
-
-- `style`: 元素具有指定的样式
-  - 示例: `[style=标题1]` 或 `[style=Heading 1]`
-- `is_bold`: 元素字体为粗体
-  - 示例: `[is_bold=true]` 或 `[is_bold=false]`
+- **style**: 元素具有指定的样式
+  - 示例: `[style=标题1]`
+- **is_bold**: 元素字体为粗体
+  - 示例: `[is_bold=true]`
 
 ### 形状相关过滤器
-
-- `shape_type`: 形状类型（例如 "Picture", "Chart" 等）
+- **shape_type**: 形状类型
   - 示例: `[shape_type=Picture]`
 
 ## 关系类型
@@ -107,150 +139,51 @@
 2. **first_occurrence_after** - 查找锚点元素之后的第一个目标元素
 3. **parent_of** - 查找锚点元素的父元素
 4. **immediately_following** - 查找锚点元素之后紧接着的目标元素
+5. **immediately_preceding** - 查找锚点元素之前紧接着的目标元素
 
-## 定位器在文档修改操作后的稳定性
-
-### 问题说明
-
-在使用 Word Document MCP Server 进行文档编辑时，定位器可能会因为文档结构的变化而失效。以下是一些常见的影响：
-
-1. **段落编号变更**：插入或删除段落会改变后续段落的索引位置
-2. **起始位置变更**：在文档前部插入内容会使后面所有内容的字符位置偏移
-3. **行列变更**：表格操作可能会改变行/列索引
-4. **样式变更**：格式化操作可能会影响基于样式的定位
-
-### 解决策略
+## 定位器稳定性策略
 
 为确保定位器在文档修改后仍然有效，建议采用以下策略：
 
-#### 1. 使用相对位置
-
-优先使用相对位置而非绝对索引或位置：
-
-```
-{
-  "anchor": {
-    "type": "paragraph",
-    "identifier": {
-      "text": "锚点段落文本"
-    }
-  },
-  "relation": {
-    "type": "first_occurrence_after"
-  },
-  "target": {
-    "type": "paragraph"
-  }
-}
-```
-
-避免使用绝对索引：
-
-```
-{
-  "target": {
-    "type": "paragraph",
-    "filters": [
-      {"index_in_parent": 5}
-    ]
-  }
-}
-```
-
-#### 2. 使用内容特征进行定位
-
-基于元素的文本内容、样式等不易受修改影响的特征进行定位：
-
-```
-{
-  "target": {
-    "type": "paragraph",
-    "filters": [
-      {"contains_text": "特定标识文本"},
-      {"style": "标题1"}
-    ]
-  }
-}
-```
-
-#### 3. 使用书签或自定义标记
-
-在关键点位置插入书签或自定义标记作为定位锚点：
-
-```
-{
-  "anchor": {
-    "type": "bookmark",
-    "identifier": {
-      "name": "关键点书签"
-    }
-  },
-  "relation": {
-    "type": "first_occurrence_after"
-  },
-  "target": {
-    "type": "paragraph"
-  }
-}
-```
-
-#### 4. 先查找后操作模式
-
-在执行修改操作前，先使用定位器查找元素并获取其实时位置信息，然后基于该信息执行操作：
-
-```python
-# 1. 先查找元素
-selected_objects = selector_engine.select(document, locator)
-
-# 2. 基于查找的元素执行操作
-for object in selected_objects:
-    # 执行操作
-    pass
-
-# 3. 如果需要继续操作，更新定位器
-```
-
-#### 5. 批量执行策略
-
-将相关操作分组执行，以减少定位器失效的影响：
-
-```python
-# 一次性获取所有需要操作的元素
-objects_to_modify = selector_engine.select(document, locator)
-
-# 对所有元素执行操作
-for object in objects_to_modify:
-    # 执行操作
-    pass
-```
-
-### 最佳实践
-
-1. **避免长时间引用定位器**：定位器应在使用后立即执行操作，避免在多个操作步骤中使用相同的定位器
-
-2. **使用稳定的标识文本**：在文档中插入用于定位的标识文本，但不显示在实际内容中
-
-3. **更新定位器**：在可能导致定位器失效的操作后，重新生成或更新定位器
-
-4. **错误处理**：在使用定位器时添加适当的错误处理，以应对定位器失效的情况
-
-5. **测试验证**：在复杂的操作序列中验证定位器的有效性
+1. **使用相对位置**：优先使用相对位置而非绝对索引或位置
+2. **使用内容特征**：基于元素的文本内容、样式等不易受修改影响的特征进行定位
+3. **使用书签或自定义标记**：在关键点位置插入书签或自定义标记作为定位锚点
+4. **先查找后操作模式**：在执行修改操作前，先使用定位器查找元素并获取其实时位置信息
+5. **批量执行策略**：将相关操作分组执行，以减少定位器失效的影响
 
 ## 使用示例
 
-### 基本选择
+以下是一些定位器的使用示例，展示如何在实际应用中精确定位文档元素。
 
-选择包含指定文本的所有段落：
+### 定位特定段落
+
+```json
+{
+  "type": "paragraph",
+  "value": "3"
+}
+```
+
+这将定位文档中的第3个段落。
+
+### 定位包含特定文本的段落
+
+```json
+{
+  "type": "paragraph",
+  "filters": [
+    {"contains_text": "示例"}
+  ]
+}
+```
+
+这将定位包含"示例"文本的所有段落。
+
+### 定位文档中的第一个表格
 
 ```python
 # 定位器字符串形式
-locator_str = "paragraph[contains_text=重要信息]"
-
-# 解析定位器
-parsed_locator = selector_engine.parse_locator(locator_str)
-
-# 选择元素
-selection = selector_engine.select(document, parsed_locator)
+locator_str = "table[index_in_parent=0]"
 ```
 
 ### 带过滤器的选择
@@ -271,7 +204,7 @@ parsed_locator = selector_engine.parse_locator(locator_str)
 selection = selector_engine.select(document, parsed_locator)
 ```
 
-### 带锚点的选择
+### 相对定位示例
 
 选择包含"关键词"的段落之后的第一个表格：
 
@@ -291,9 +224,6 @@ locator = {
         "type": "table"
     }
 }
-
-selection = selector_engine.select(document, locator)
-```
 
 ### 高级用法
 

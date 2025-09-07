@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error, safe_com_call
-from ..selector.selector import SelectorEngine
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
-                                log_info)
+                                      log_info)
+from ..selector.selector import SelectorEngine
 
 if TYPE_CHECKING:
     from win32com.client import CDispatch
@@ -25,10 +25,8 @@ def _get_range_from_locator(document: Any, locator: Optional[Dict[str, Any]]) ->
     """Helper function to get a Range object from a locator."""
     # 检查locator是否为None或字典类型
     if locator is not None and not isinstance(locator, dict):
-        raise WordDocumentError(
-            ErrorCode.INVALID_INPUT, "Locator must be a dictionary"
-        )
-    
+        raise WordDocumentError(ErrorCode.INVALID_INPUT, "Locator must be a dictionary")
+
     if not locator:
         range_obj = document.Range()
         range_obj.Collapse(False)  # wdCollapseEnd
@@ -37,13 +35,20 @@ def _get_range_from_locator(document: Any, locator: Optional[Dict[str, Any]]) ->
     selector = SelectorEngine()
     try:
         selection = selector.select(document, locator)
-        if hasattr(selection, "_com_ranges") and selection._com_ranges:
-            # Selection._com_ranges中只包含Range对象
-            return selection._com_ranges[0]
-        else:
+        # 确保selection是有效的对象
+        if not hasattr(selection, "_com_ranges") or not selection._com_ranges:
             raise WordDocumentError(
                 ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
             )
+
+        range_obj = selection._com_ranges[0]
+        # 验证获取的对象是否为有效的Range对象
+        if not hasattr(range_obj, "Start") or not hasattr(range_obj, "End"):
+            # 如果不是有效的Range对象，创建一个新的Range对象
+            range_obj = document.Range()
+            range_obj.Collapse(False)  # wdCollapseEnd
+
+        return range_obj
     except Exception as e:
         raise WordDocumentError(
             ErrorCode.OBJECT_TYPE_ERROR, f"Failed to locate position: {str(e)}"
@@ -73,8 +78,10 @@ def create_bookmark(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    if not hasattr(document, 'Bookmarks') or document.Bookmarks is None:
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support bookmarks")
+    if not hasattr(document, "Bookmarks") or document.Bookmarks is None:
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR, "Document does not support bookmarks"
+        )
 
     if not bookmark_name:
         raise WordDocumentError(
@@ -128,8 +135,10 @@ def get_bookmark(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    if not hasattr(document, 'Bookmarks') or document.Bookmarks is None:
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support bookmarks")
+    if not hasattr(document, "Bookmarks") or document.Bookmarks is None:
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR, "Document does not support bookmarks"
+        )
 
     if not bookmark_name:
         raise WordDocumentError(
@@ -185,8 +194,10 @@ def delete_bookmark(document: win32com.client.CDispatch, bookmark_name: str) -> 
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    if not hasattr(document, 'Bookmarks') or document.Bookmarks is None:
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support bookmarks")
+    if not hasattr(document, "Bookmarks") or document.Bookmarks is None:
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR, "Document does not support bookmarks"
+        )
 
     if not bookmark_name:
         raise WordDocumentError(
@@ -241,8 +252,10 @@ def create_citation(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    if not hasattr(document, 'Bibliography') or document.Bibliography is None:
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support bibliography")
+    if not hasattr(document, "Bibliography") or document.Bibliography is None:
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR, "Document does not support bibliography"
+        )
 
     if not source_data:
         raise WordDocumentError(ErrorCode.INVALID_INPUT, "Source data cannot be empty")
@@ -295,8 +308,10 @@ def create_hyperlink(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    if not hasattr(document, 'Hyperlinks') or document.Hyperlinks is None:
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "Document does not support hyperlinks")
+    if not hasattr(document, "Hyperlinks") or document.Hyperlinks is None:
+        raise WordDocumentError(
+            ErrorCode.DOCUMENT_ERROR, "Document does not support hyperlinks"
+        )
 
     if not address:
         raise WordDocumentError(

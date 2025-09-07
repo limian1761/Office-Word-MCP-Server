@@ -48,7 +48,7 @@ def create_document(
         if not word_app:
             raise WordDocumentError(
                 ErrorCode.SERVER_ERROR,
-                "Failed to create or access Word application instance"
+                "Failed to create or access Word application instance",
             )
         # Try to set visibility with error handling
         try:
@@ -102,10 +102,10 @@ def open_document(
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Document file not found: {file_path}")
 
-    if document and not hasattr(document, 'Application'):
+    if document and not hasattr(document, "Application"):
         raise WordDocumentError(
             ErrorCode.DOCUMENT_ERROR,
-            "Invalid document object: missing Application attribute"
+            "Invalid document object: missing Application attribute",
         )
     # Try to get Word application from existing document, otherwise create new instance
     word_app = None
@@ -179,8 +179,7 @@ def save_document(document: CDispatch, file_path: Optional[str] = None) -> str:
             file_path = document.FullName
             if file_path is None:
                 raise WordDocumentError(
-                    ErrorCode.SERVER_ERROR,
-                    "Could not determine file path after saving"
+                    ErrorCode.SERVER_ERROR, "Could not determine file path after saving"
                 )
             logger.info(f"Document saved to: {file_path}")
 

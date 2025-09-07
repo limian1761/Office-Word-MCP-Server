@@ -3,7 +3,10 @@ Main entry point for the Word Document MCP Server.
 """
 
 import mcp
+
 from word_docx_tools.mcp_service.core import mcp_server
+
+
 def run_server():
     """
     Runs the MCP server. This function is the entry point for the script

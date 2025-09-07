@@ -11,7 +11,7 @@ import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
-                                       log_info)
+                                      log_info)
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +70,8 @@ def get_comments(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
         try:
             comment = document.Comments(i)
             # 创建一个基本的评论信息字典，只包含必要的属性
-            comment_info = {
-                "index": i - 1,  # 0-based index
-                "replies_count": 0
-            }
-            
+            comment_info = {"index": i - 1, "replies_count": 0}  # 0-based index
+
             # 尝试获取每个属性，使用try-except包装每个属性访问
             # 尝试多种方法获取Text属性
             try:
@@ -95,58 +92,62 @@ def get_comments(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
                         else:
                             raise AttributeError("Get_Text method not found")
                     except Exception as e3:
-                        logging.warning(f"Failed to get Text for comment {i} using multiple methods: {e1}, {e2}, {e3}")
+                        logging.warning(
+                            f"Failed to get Text for comment {i} using multiple methods: {e1}, {e2}, {e3}"
+                        )
                         comment_info["text"] = "[Unable to retrieve text]"
-                
+
             try:
                 comment_info["author"] = str(comment.Author)
             except Exception as e:
                 logging.warning(f"Failed to get Author for comment {i}: {e}")
                 comment_info["author"] = "[Unknown]"
-                
+
             try:
                 comment_info["initials"] = str(comment.Initial)
             except Exception as e:
                 logging.warning(f"Failed to get Initial for comment {i}: {e}")
                 comment_info["author_initial"] = ""
-                
+
             try:
                 comment_info["date"] = str(comment.Date)
             except Exception as e:
                 logging.warning(f"Failed to get Date for comment {i}: {e}")
                 comment_info["date"] = "[Unknown date]"
-                
+
             # 尝试获取Scope属性
             try:
                 if hasattr(comment, "Scope") and comment.Scope:
                     scope_info = {
                         "start": comment.Scope.Start,
                         "end": comment.Scope.End,
-                        "text": comment.Scope.Text.strip()
+                        "text": comment.Scope.Text.strip(),
                     }
                     comment_info["scope"] = scope_info
             except Exception as e:
                 logging.warning(f"Failed to get Scope for comment {i}: {e}")
-                
+
             # 尝试获取Replies.Count
             try:
                 if hasattr(comment, "Replies"):
                     comment_info["replies_count"] = comment.Replies.Count
             except Exception as e:
                 logging.warning(f"Failed to get Replies for comment {i}: {e}")
-                
+
             # 无论如何都添加评论信息，即使某些属性无法访问
             comments.append(comment_info)
-            
+
         except Exception as e:
             logging.warning(f"Failed to retrieve comment at index {i}: {e}")
             # 仍然添加一个基本的评论信息，以便至少知道有这个评论存在
-            comments.append({
-                "index": i - 1,
-                "text": "[Error retrieving comment]",
-                "author": "[Unknown]",
-                "replies_count": 0
-            })
+            comments.append(
+                {
+                    "index": i - 1,
+                    "text": "[Error retrieving comment]",
+                    "author": "[Unknown]",
+                    "replies_count": 0,
+                }
+            )
             continue
 
     return comments
@@ -290,41 +291,74 @@ def reply_to_comment(
     """
     # Get the comment at the specified index
     comment = document.Comments(index + 1)  # COM is 1-based
-    
+
     try:
         # 确保text是字符串类型并正确转换为COM可接受的格式
         reply_text = str(text)
-        
-        # 使用Range对象方式添加回复，这种方式在某些Word版本中更稳定
-        # 首先获取评论的Range
+
+        # 使用Range对象作为第一个参数添加回复，这是标准的COM调用方式
+        # 获取评论的Range对象
         comment_range = comment.Range
-        
-        # 使用Range对象的Comments集合添加回复
-        # 先获取评论的文本，然后创建新的回复
-        reply = comment.Replies.Add(Comment:=reply_text)
-        
-        # 另一种备选方法（如果上面的方法失败）
-        if reply is None:
-            # 直接使用Add方法，但确保参数正确
-            reply = comment.Replies.Add(Text:=reply_text)
-        
-        # Set author if provided
-        if author:
-            try:
-                reply.Author = str(author)
-            except Exception as e:
-                logging.warning(f"Failed to set author for reply: {e}")
-        
-        return True
-    except Exception as e:
-        # 如果上述方法都失败，尝试使用最基础的方法
+
+        # 标准方式添加回复: 第一个参数是Range对象，第二个参数是回复文本
         try:
-            # 最基本的调用方式，直接传递文本参数
-            reply = comment.Replies.Add(reply_text)
-            return True
-        except Exception as e2:
-            logging.error(f"Failed to add reply using multiple methods: {e}, {e2}")
-            raise WordDocumentError(
-                ErrorCode.COMMENT_ERROR,
-                f"Failed to reply to comment: {str(e2)}"
+            # 先保存原始的回复数量
+            original_replies_count = (
+                comment.Replies.Count if hasattr(comment, "Replies") else 0
             )
+
+            # 添加回复（不再将结果赋值给变量）
+            comment.Replies.Add(comment_range, reply_text)
+
+            # 检查回复是否成功添加
+            new_replies_count = (
+                comment.Replies.Count if hasattr(comment, "Replies") else 0
+            )
+            reply_added = new_replies_count > original_replies_count
+
+            # 如果回复成功添加且提供了作者，尝试设置作者
+            if reply_added and author:
+                try:
+                    # 获取刚添加的回复（最后一个）
+                    if comment.Replies.Count > 0:
+                        last_reply = comment.Replies(comment.Replies.Count)
+                        last_reply.Author = str(author)
+                except Exception as e:
+                    logging.warning(f"Failed to set author for reply: {e}")
+
+            return reply_added
+        except Exception as e1:
+            # 备选方案：某些Word版本可能只接受文本参数
+            logging.warning(f"Primary method failed, trying fallback: {e1}")
+
+            # 先保存原始的回复数量
+            original_replies_count = (
+                comment.Replies.Count if hasattr(comment, "Replies") else 0
+            )
+
+            # 尝试直接传递文本参数（不使用命名参数格式）
+            comment.Replies.Add(reply_text)
+
+            # 检查回复是否成功添加
+            new_replies_count = (
+                comment.Replies.Count if hasattr(comment, "Replies") else 0
+            )
+            reply_added = new_replies_count > original_replies_count
+
+            # 如果回复成功添加且提供了作者，尝试设置作者
+            if reply_added and author:
+                try:
+                    # 获取刚添加的回复（最后一个）
+                    if comment.Replies.Count > 0:
+                        last_reply = comment.Replies(comment.Replies.Count)
+                        last_reply.Author = str(author)
+                except Exception as e:
+                    logging.warning(f"Failed to set author for reply: {e}")
+
+            return reply_added
+
+    except Exception as e:
+        logging.error(f"Failed to add reply: {e}")
+        raise WordDocumentError(
+            ErrorCode.COMMENT_ERROR, f"Failed to reply to comment: {str(e)}"
+        )

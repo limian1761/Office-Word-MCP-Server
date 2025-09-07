@@ -7,8 +7,8 @@ document objects during selection.
 import re
 from typing import Any, Dict, List
 
-from .exceptions import LocatorSyntaxError
 from ..mcp_service.core_utils import get_shape_types
+from .exceptions import LocatorSyntaxError
 
 
 class FilterHandlers:

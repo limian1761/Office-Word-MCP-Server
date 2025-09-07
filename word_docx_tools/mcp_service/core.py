@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 
 from ..selector.selector import SelectorEngine
-from ..utils.app_context import AppContext
+from ..mcp_service.app_context import AppContext
 
 
 @asynccontextmanager
