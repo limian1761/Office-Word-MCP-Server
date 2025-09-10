@@ -6,7 +6,7 @@ from .comment_ops import (add_comment, delete_all_comments, delete_comment,
                           edit_comment, get_comment_thread, get_comments,
                           reply_to_comment)
 from .document_ops import (close_document, create_document,
-                           get_document_structure, open_document,
+                           get_document_outline, open_document,
                            save_document)
 # 图片操作
 from .image_ops import (add_caption, get_image_info, insert_image,
@@ -46,7 +46,7 @@ __all__ = [
     "open_document",
     "close_document",
     "save_document",
-    "get_document_structure",
+    "get_document_outline",
     # text_ops
     "get_character_count",
     "get_object_text",

@@ -451,8 +451,9 @@ def text_tools(
                 empty_paragraphs = 0
                 total_characters = 0
                 total_words = 0
+                paragraphs_info = []
 
-                # 统计段落信息
+                # 获取所有段落的详细信息
                 for i in range(1, total_paragraphs + 1):
                     paragraph = active_doc.Paragraphs(i)
                     paragraph_range = paragraph.Range
@@ -468,6 +469,47 @@ def text_tools(
                     # 统计空段落
                     if not text:
                         empty_paragraphs += 1
+                    
+                    # 获取段落样式信息
+                    style_name = ""
+                    try:
+                        if hasattr(paragraph, "Style") and paragraph.Style:
+                            style_name = paragraph.Style.NameLocal
+                    except:
+                        pass
+                    
+                    # 获取段落开头和结尾的句子
+                    opening_sentence = ""
+                    closing_sentence = ""
+                    if text:
+                        sentences = text.split('.')
+                        if sentences:
+                            opening_sentence = sentences[0].strip() + ('.' if len(sentences) > 1 else '')
+                            closing_sentence = sentences[-1].strip() + '.' if sentences and len(sentences) > 1 else ""
+                    
+                    # 构建段落信息
+                    paragraph_info = {
+                        "index": i,
+                        "text_length": paragraph_chars,
+                        "word_count": paragraph_words,
+                        "style_name": style_name,
+                        "opening_sentence": opening_sentence,
+                        "closing_sentence": closing_sentence,
+                        "is_empty": not bool(text)
+                    }
+                    
+                    # 如果段落包含文字，添加文字内容
+                    if text:
+                        paragraph_info["text_preview"] = text[:100] + "..." if len(text) > 100 else text
+                    else:
+                        # 对于空段落，添加其他属性信息
+                        paragraph_info["has_formatting"] = hasattr(paragraph, "Format") and paragraph.Format is not None
+                        try:
+                            paragraph_info["outline_level"] = paragraph.OutlineLevel if hasattr(paragraph, "OutlineLevel") else 0
+                        except:
+                            paragraph_info["outline_level"] = 0
+                        
+                    paragraphs_info.append(paragraph_info)
                 
                 # 计算平均值
                 non_empty_paragraphs = total_paragraphs - empty_paragraphs
@@ -486,7 +528,12 @@ def text_tools(
                 }
                 
                 return json.dumps(
-                    {"success": True, "statistics": stats}, ensure_ascii=False
+                    {
+                        "success": True, 
+                        "statistics": stats,
+                        "paragraphs": paragraphs_info
+                    }, 
+                    ensure_ascii=False
                 )
             except Exception as e:
                 log_error(f"Error getting paragraph statistics: {e}")

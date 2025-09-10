@@ -186,86 +186,27 @@ class AppContext:
         """Clear the current active document."""
         self._active_document = None
 
-    def open_document(self, file_path: str) -> None:
-        """Open a document in the Word application.
-
-        Args:
-            file_path: The absolute path to the document to open.
-        """
-
-        if file_path:
-            try:
-                logger.info(f"尝试打开文档: {file_path}")
-
-                # Convert to absolute path for COM
-                abs_path = os.path.abspath(file_path)
-                logger.info(f"绝对路径: {abs_path}")
-
-                # Check if file exists
-                if not os.path.exists(abs_path):
-                    raise FileNotFoundError(f"文件不存在: {abs_path}")
-
-                logger.info(f"文件存在: {os.path.exists(abs_path)}")
-                logger.info(f"文件大小: {os.path.getsize(abs_path)} bytes")
-
-                # Get or create Word application instance as needed
-                word_app = self.get_word_app(create_if_needed=True)
-                if word_app is None:
-                    raise RuntimeError("无法获取或创建Word应用程序实例")
-
-                # Make the application visible
-                word_app.Visible = True
-
-                # Try to open document using main application's Documents collection
-                logger.info("尝试访问Documents集合...")
-                documents = word_app.Documents
-                logger.info(f"Documents对象类型: {type(documents)}")
-
-                # Try to open document
-                self._active_document = documents.Open(abs_path)
-                logger.info(
-                    f"使用主应用程序Documents集合打开文档成功: {self._active_document.Name}"
-                )
-
-                # Enable track changes
-                if self._active_document and self._active_document.TrackRevisions:
-                    self._active_document.TrackRevisions = False
-            except pythoncom.com_error as e:
-                error_code = e.args[0]
-                error_message = e.args[1]
-                logger.error(f"COM错误: {error_code}, {error_message}")
-                traceback.print_exc()
-                # 不再自动关闭文档，让调用者决定是否关闭
-                # self.close_document()
-                raise WordDocumentError(
-                    ErrorCode.DOCUMENT_OPEN_ERROR,
-                    f"Word COM error while opening document: {file_path}. Details: {e}",
-                )
-            except Exception as e:
-                logger.error(f"打开文档时发生异常: {str(e)}")
-                traceback.print_exc()
-                # 不再自动关闭文档，让调用者决定是否关闭
-                # self.close_document()
-                raise IOError(f"Failed to open document: {file_path}. Error: {e}")
-        else:
-            # Get or create Word application instance as needed
-            word_app = self.get_word_app(create_if_needed=True)
-            if word_app is None:
-                raise RuntimeError("无法获取或创建Word应用程序实例")
-
-            word_app.Visible = True
-            self._active_document = word_app.Documents.Add()
-
-    def close_document(self) -> None:
-        """Close the currently active document."""
-        if self._active_document:
-            try:
-                # 只关闭活动文档，不退出Word应用
-                self._active_document.Close(SaveChanges=0)  # 0 = wdDoNotSaveChanges
-            except Exception as e:
-                logger.error(f"关闭文档时出错: {str(e)}")
-            finally:
+    def close_document(self):
+        """关闭当前活动文档"""
+        try:
+            if self._active_document is not None:
+                self._active_document.Close(SaveChanges=0)  # 不保存更改
                 self._active_document = None
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error closing document: {e}")
+            return False
 
-        # 不再关闭临时Word实例，避免Word应用意外关闭
-        # 这样可以确保Word应用程序保持运行状态
+    def quit_word_app(self):
+        """退出Word应用程序"""
+        try:
+            if self._word_app is not None:
+                self._word_app.Quit()
+                self._word_app = None
+                self._active_document = None
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error quitting Word application: {e}")
+            return False

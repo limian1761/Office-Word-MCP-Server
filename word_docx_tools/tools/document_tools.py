@@ -23,7 +23,7 @@ from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
                                       log_error, log_info, log_warning,
                                       require_active_document_validation)
 from ..operations.document_ops import (close_document, create_document,
-                                       get_document_structure, open_document,
+                                       get_document_outline, open_document,
                                        save_document)
 from ..operations.others_ops import protect_document, unprotect_document
 from ..mcp_service.app_context import AppContext
@@ -41,7 +41,7 @@ def document_tools(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     operation_type: Optional[str] = Field(
         default="open",
-        description="Type of document operation: create, open, save, save_as, close, get_info, set_property, get_property, print, protect, unprotect",
+        description="Type of document operation: create, open, save, save_as, close, get_outline, set_property, get_property, print, protect, unprotect",
     ),
     file_path: Optional[str] = Field(
         default=None,
@@ -98,7 +98,7 @@ def document_tools(
     - close: Close the current document
       * Required parameters: None
       * Optional parameters: None
-    - get_info: Get document information
+    - get_outline: Get document outline
       * Required parameters: None
       * Optional parameters: None
     - set_property: Set document property
@@ -194,50 +194,8 @@ def document_tools(
             if word_app is None:
                 raise RuntimeError("Failed to get or create Word application instance")
 
-            # 尝试打开文档，添加错误处理
-            max_retries = 3
-            retry_count = 0
-            doc = None
-
-            while retry_count < max_retries and doc is None:
-                try:
-                    # 尝试使用word_app.Documents.Open打开文档
-                    if password:
-                        doc = word_app.Documents.Open(
-                            FileName=file_path, PasswordDocument=password
-                        )
-                    else:
-                        doc = word_app.Documents.Open(FileName=file_path)
-                except AttributeError as e:
-                    retry_count += 1
-                    if retry_count >= max_retries:
-                        log_error(
-                            f"Failed to open document after {max_retries} retries: {str(e)}"
-                        )
-                        raise RuntimeError(
-                            f"Failed to access Word Documents collection: {str(e)}"
-                        )
-
-                    # 尝试重新创建Word应用实例
-                    log_warning(
-                        f"Retrying document opening (attempt {retry_count}/{max_retries}) after AttributeError"
-                    )
-                    try:
-                        # 释放当前实例并创建新实例
-                        if word_app is not None:
-                            word_app.Quit()
-                        word_app = win32com.client.Dispatch("Word.Application")
-                        ctx.request_context.lifespan_context._word_app = (
-                            word_app  # 更新上下文
-                        )
-                    except Exception as inner_e:
-                        log_error(
-                            f"Failed to recreate Word application: {str(inner_e)}"
-                        )
-                except Exception as e:
-                    # 处理其他异常
-                    log_error(f"Error opening document: {str(e)}")
-                    raise RuntimeError(f"Failed to open document: {str(e)}")
+            # 使用document_ops中的open_document函数
+            doc = open_document(word_app, file_path, visible=True, password=password)
 
             # 更新上下文中的活动文档
             ctx.request_context.lifespan_context.set_active_document(doc)
@@ -327,14 +285,14 @@ def document_tools(
                 ensure_ascii=False,
             )
 
-        elif operation_type and operation_type.lower() == "get_info":
+        elif operation_type and operation_type.lower() == "get_outline":
             if not active_doc:
                 raise WordDocumentError(
                     ErrorCode.DOCUMENT_ERROR, "No active document found"
                 )
 
-            log_info("Getting document info")
-            structure = get_document_structure(active_doc)
+            log_info("Getting document outline")
+            structure = get_document_outline(active_doc)
 
             return structure
 

@@ -75,20 +75,21 @@ class WordBackend:
         """
         try:
             # Pre-flight check to ensure Word COM server is available
-            win32com.client.Dispatch("Word.Application")
+            # Use a temporary instance for checking only, don't store it
+            temp_app = win32com.client.Dispatch("Word.Application")
+            temp_app.Quit()  # Immediately quit the temporary instance
         except com_error as e:
             raise RuntimeError(f"Word COM server is not available: {e}") from e
 
         try:
-            # First, try to get an active instance of Word
-            self.word_app = win32com.client.GetActiveObject("Word.Application")
-            logging.info("Attached to an existing Word application instance.")
-        except com_error:
-            # If that fails, start a new instance
-            try:
-                self.word_app = win32com.client.Dispatch("Word.Application")
-                logging.info("Started a new Word application instance.")
-            except Exception as e:
-                raise RuntimeError(f"Failed to start Word Application: {e}") from e
+            # Always use get_word_app to get Word application instance
+            from ..mcp_service.app_context import AppContext
+            app_context = AppContext.get_instance()
+            self.word_app = app_context.get_word_app(create_if_needed=True)
+            if not self.word_app:
+                raise RuntimeError("Failed to get Word application instance through get_word_app()")
+            logging.info("Got Word application instance through get_word_app().")
+        except Exception as e:
+            raise RuntimeError(f"Failed to get Word Application instance: {e}") from e
 
         self.word_app.Visible = self.visible
