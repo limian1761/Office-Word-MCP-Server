@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 import win32com.client
 
-from ..com_backend.com_utils import handle_com_error
+from ..com_backend.com_utils import handle_com_error, iter_com_collection
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
                                       log_info)
 from ..selector.selector import SelectorEngine
@@ -52,9 +52,8 @@ def get_image_info(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
 
         # 获取所有内嵌图片
         inline_shapes = document.InlineShapes
-        for i in range(1, inline_shapes.Count + 1):
+        for i, shape in enumerate(iter_com_collection(inline_shapes), 1):
             try:
-                shape = inline_shapes(i)
                 image_info = {
                     "index": i,
                     "type": "InlineShape",
@@ -80,9 +79,8 @@ def get_image_info(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
 
         # 获取所有浮动图片
         shapes = document.Shapes
-        for i in range(1, shapes.Count + 1):
+        for i, shape in enumerate(iter_com_collection(shapes), 1):
             try:
-                shape = shapes(i)
                 if (
                     shape.Type == 1 or shape.Type == 13
                 ):  # wdShapePicture or wdShapeLinkedPicture

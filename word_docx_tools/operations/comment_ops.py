@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import win32com.client
 
-from ..com_backend.com_utils import handle_com_error
+from ..com_backend.com_utils import handle_com_error, iter_com_collection
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
                                       log_info)
 
@@ -65,10 +65,8 @@ def get_comments(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
         raise RuntimeError("No document open.")
 
     comments: List[Dict[str, Any]] = []
-    comments_count = document.Comments.Count
-    for i in range(1, comments_count + 1):
+    for i, comment in enumerate(iter_com_collection(document.Comments), 1):
         try:
-            comment = document.Comments(i)
             # 创建一个基本的评论信息字典，只包含必要的属性
             comment_info = {"index": i - 1, "replies_count": 0}  # 0-based index
 

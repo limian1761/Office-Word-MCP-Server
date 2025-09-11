@@ -11,6 +11,7 @@ from win32com.client import CDispatch
 
 from .exceptions import AmbiguousLocatorError
 from .filter_handlers import FilterHandlers
+from ..com_backend.com_utils import iter_com_collection
 
 # Type variables for better type hinting
 ObjectT = TypeVar("ObjectT")
@@ -326,8 +327,7 @@ class ObjectFinder(FilterHandlers):
         Returns:
             A list of all paragraphs in the document.
         """
-        paragraphs = self.document.Paragraphs
-        return [paragraphs(i) for i in range(1, paragraphs.Count + 1)]
+        return iter_com_collection(self.document.Paragraphs)
 
     def get_all_tables(self) -> List[CDispatch]:
         """Retrieve all tables in the document.
@@ -335,8 +335,7 @@ class ObjectFinder(FilterHandlers):
         Returns:
             A list of all tables in the document.
         """
-        tables = self.document.Tables
-        return [tables(i) for i in range(1, tables.Count + 1)]
+        return iter_com_collection(self.document.Tables)
 
     def _get_inline_shapes_in_range(self, range_obj: CDispatch) -> List[CDispatch]:
         """Get all inline shapes within a specific range.
@@ -348,8 +347,7 @@ class ObjectFinder(FilterHandlers):
             A list of inline shapes within the specified range.
         """
         shapes_in_range = []
-        for i in range(1, self.document.InlineShapes.Count + 1):
-            shape = self.document.InlineShapes(i)
+        for shape in iter_com_collection(self.document.InlineShapes):
             if (
                 shape.Range.Start >= range_obj.Start
                 and shape.Range.End <= range_obj.End
@@ -454,8 +452,7 @@ class ObjectFinder(FilterHandlers):
         Returns:
             A list of all comments in the document.
         """
-        comments = self.document.Comments
-        return [comments(i) for i in range(1, comments.Count + 1)]
+        return iter_com_collection(self.document.Comments)
 
     def get_all_images(self) -> List[CDispatch]:
         """Retrieve all images in the document.
@@ -464,11 +461,9 @@ class ObjectFinder(FilterHandlers):
             A list of all images in the document.
         """
         # Images in Word are represented as InlineShapes
-        shapes = self.document.InlineShapes
         # Filter to include only pictures
         images = []
-        for i in range(1, shapes.Count + 1):
-            shape = shapes(i)
+        for shape in iter_com_collection(self.document.InlineShapes):
             # Check if the shape is a picture
             if shape.Type == 1:  # wdInlineShapePicture
                 images.append(shape)

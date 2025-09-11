@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import win32com.client
 
-from ..com_backend.com_utils import handle_com_error
+from ..com_backend.com_utils import handle_com_error, iter_com_collection
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
                                       log_info)
 from ..selector.selector import SelectorEngine
@@ -386,7 +386,7 @@ def set_paragraph_style(
     style_exists = False
     paragraph_styles = []
     target_style = None
-    for style in document.Styles:
+    for style in iter_com_collection(document.Styles):
         try:
             if style.Type == 1:  # wdStyleTypeParagraph = 1
                 # 优先使用NameLocal属性，这在不同语言环境下更可靠
@@ -550,7 +550,7 @@ def set_paragraph_formatting(
                 if not paragraphs:
                     continue
 
-                for para in paragraphs:
+                for para in iter_com_collection(paragraphs):
                     # 为每个段落创建一个记录字典
                     para_applied = {}
 

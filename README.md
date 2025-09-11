@@ -63,52 +63,7 @@ word_docx_tools_http
 ```
 
 This starts the server on `http://0.0.0.0:8000`.
-```
 
-Final block for README updates:
-
-c:\Users\lichao\Office-Word-MCP-Server\README.md
-```markdown
-<<<<<<< SEARCH
-## Development
-
-### Code Structure
-```
-word-docx-tools/
-├── com_backend/       # COM integration layer
-├── mcp_service/       # MCP protocol implementation
-├── operations/        # Core document operations
-├── selector/          # Element selection system
-├── tools/             # MCP tool implementations
-└── utils/             # Utility functions
-
-### Code Quality Tools
-- [Black](https://github.com/psf/black) for code formatting
-- [isort](https://pycqa.github.io/isort/) for import sorting
-- [mypy](http://mypy-lang.org/) for static type checking
-
-Run these tools before committing:
-```bash
-black word-docx-tools
-isort word-docx-tools
-mypy word-docx-tools
-```
-
-## Configuration
-
-MCP server configuration can be specified in your AI assistant's configuration file. For Claude Desktop, this is typically located at:
-
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-Example configuration:
-```json
-{
-  "mcpServers": {
-    "word-docx-tools": {
-      "command": "word_docx_tools"
-    }
-  }
-}
 ## Docker
 
 ### Build
@@ -154,46 +109,7 @@ python -m pytest tests/
 
 ## Configuration
 
-MCP configuration is defined in `mcp-config.json`:
-
-```json
-{
-    "mcpServers": {
-        "word_docx_tools": {
-            "command": "word_docx_tools",
-            "args": []
-        }
-    }
-}
-
-## Development
-
-### Code Structure
-```
-word-docx-tools/
-├── com_backend/       # COM integration layer
-├── mcp_service/       # MCP protocol implementation
-├── operations/        # Core document operations
-├── selector/          # Element selection system
-├── tools/             # MCP tool implementations
-└── utils/             # Utility functions
-```
-自动化测试 word-docx-tools 所有工具，先创建一个详细测试文档，然后逐一测试工具，包括各个操作类型，每次操作后检查操作是否成功，所有的测试错误信息汇总到一个md文件
-
-
-### Code Quality Tools
-- [Black](https://github.com/psf/black) for code formatting
-- [isort](https://pycqa.github.io/isort/) for import sorting
-- [mypy](http://mypy-lang.org/) for static type checking
-
-Run these tools before committing:
-```bash
-black word-docx-tools
-isort word-docx-tools
-mypy word-docx-tools
-```
-
-## Configuration
+### MCP Server Configuration
 
 MCP server configuration can be specified in your AI assistant's configuration file. For Claude Desktop, this is typically located at:
 
@@ -207,6 +123,21 @@ Example configuration:
       "command": "word_docx_tools"
     }
   }
+}
+```
+
+### Project Configuration
+
+MCP configuration is defined in `mcp-config.json`:
+
+```json
+{
+    "mcpServers": {
+        "word_docx_tools": {
+            "command": "word_docx_tools",
+            "args": []
+        }
+    }
 }
 ```
 
@@ -231,6 +162,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [pywin32](https://pypi.org/project/pywin32/) for COM integration with Word
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) for the Python MCP implementation
 - [Office-Word-MCP-Server](https://github.com/GongRzhe/Office-Word-MCP-Server.git) as a reference project
-
----
 

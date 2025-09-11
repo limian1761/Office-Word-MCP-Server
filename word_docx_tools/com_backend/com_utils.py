@@ -6,7 +6,7 @@ including error handling and common operations.
 """
 
 import functools
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, List, TypeVar
 
 import win32com.client
 
@@ -71,3 +71,32 @@ def safe_com_call(error_code: ErrorCode, operation_name: str):
             return False
 
     return SafeComCall()
+
+
+def iter_com_collection(collection: Any) -> List[Any]:
+    """
+    Iterate through a COM collection and return a list of elements.
+
+    Args:
+        collection: The COM collection object to iterate through.
+
+    Returns:
+        A list containing all elements from the COM collection.
+        
+    Example:
+        paragraphs = iter_com_collection(document.Paragraphs)
+    """
+    result = []
+    try:
+        count = collection.Count
+        for i in range(1, count + 1):
+            try:
+                element = collection(i)
+                result.append(element)
+            except Exception:
+                # Skip elements that can't be accessed
+                continue
+    except Exception:
+        # If collection doesn't support Count property, return empty list
+        pass
+    return result

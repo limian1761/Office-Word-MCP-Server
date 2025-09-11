@@ -20,13 +20,13 @@ from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
 from win32com.client import CDispatch
 
-from .mcp_service.core_utils import format_error_response
-from .tools.comment_tools import comment_tools
-from .tools.document_tools import document_tools
-from .tools.image_tools import image_tools
-from .tools.range_tools import range_tools
-from .tools.table_tools import table_tools
-from .tools.text_tools import text_tools
+from word_docx_tools.mcp_service.core_utils import format_error_response
+from word_docx_tools.tools.comment_tools import comment_tools
+from word_docx_tools.tools.document_tools import document_tools
+from word_docx_tools.tools.image_tools import image_tools
+from word_docx_tools.tools.range_tools import range_tools
+from word_docx_tools.tools.table_tools import table_tools
+from word_docx_tools.tools.text_tools import text_tools
 from word_docx_tools.mcp_service.app_context import AppContext
 
 # 创建工具函数的别名

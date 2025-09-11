@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import win32com.client
 
-from ..com_backend.com_utils import handle_com_error
+from ..com_backend.com_utils import handle_com_error, iter_com_collection
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
                                       log_info)
 from ..selector.selector import SelectorEngine
@@ -107,17 +107,17 @@ def get_object_by_id(document: win32com.client.CDispatch, object_id: str) -> str
                 f"Invalid object ID: {object_id}. Must be an integer.",
             )
 
-        # 获取所有段落
-        paragraphs = list(document.Paragraphs)
+        # 获取段落总数
+        paragraph_count = document.Paragraphs.Count
 
-        if index < 0 or index >= len(paragraphs):
+        if index < 0 or index >= paragraph_count:
             raise WordDocumentError(
                 ErrorCode.OBJECT_NOT_FOUND,
-                f"Object with index {index} not found. Document has {len(paragraphs)} paragraphs.",
+                f"Object with index {index} not found. Document has {paragraph_count} paragraphs.",
             )
 
         # 获取指定索引的段落并转换为Range对象
-        range_obj = paragraphs[index].Range
+        range_obj = document.Paragraphs(index + 1).Range
 
         # 构建元素信息
         object_info = {

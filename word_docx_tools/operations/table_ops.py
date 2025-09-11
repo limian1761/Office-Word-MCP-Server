@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import win32com.client
 
-from ..com_backend.com_utils import handle_com_error
+from ..com_backend.com_utils import handle_com_error, iter_com_collection
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
                                       log_info)
 from ..selector.selector import SelectorEngine
@@ -115,8 +115,8 @@ def create_table(
             # 如果默认样式不可用，手动设置表格边框
             try:
                 # 遍历表格中的所有单元格，手动设置边框
-                for row in table.Rows:
-                    for cell in row.Cells:
+                for row in iter_com_collection(table.Rows):
+                    for cell in iter_com_collection(row.Cells):
                         # 设置所有边框为单实线
                         cell.Borders.OutsideLineStyle = 1  # wdLineStyleSingle
                         cell.Borders.InsideLineStyle = 1  # wdLineStyleSingle
@@ -455,10 +455,10 @@ def get_table_info(
         # 获取表格内容（可选择性地获取，根据需要）
         # 注意：对于大表格，获取所有单元格内容可能会影响性能
         cells_data = []
-        for r in range(1, table.Rows.Count + 1):
+        for r_idx, row in enumerate(iter_com_collection(table.Rows), 1):
             row_data = []
-            for c in range(1, table.Columns.Count + 1):
-                cell_text = table.Cell(Row=r, Column=c).Range.Text
+            for c_idx, cell in enumerate(iter_com_collection(row.Cells), 1):
+                cell_text = cell.Range.Text
                 # 移除Word单元格末尾的特殊字符
                 if cell_text.endswith("\r\x07"):
                     cell_text = cell_text[:-2]
@@ -486,7 +486,7 @@ def get_table_info(
         else:
             # 否则返回所有表格的信息
             all_tables_info = []
-            for idx in range(1, table_count + 1):
+            for idx, table in enumerate(iter_com_collection(document.Tables), 1):
                 try:
                     table_info = get_single_table_info(idx)
                     all_tables_info.append(table_info)

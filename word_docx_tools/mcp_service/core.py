@@ -17,9 +17,9 @@ from ..mcp_service.app_context import AppContext
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     """Manage application lifecycle with type-safe context."""
-    # Initialize AppContext without a Word application instance
+    # Initialize AppContext
     # Word application will be started on-demand when needed
-    app_context = AppContext(word_app=None)
+    app_context = AppContext()
     try:
         yield app_context
     finally:

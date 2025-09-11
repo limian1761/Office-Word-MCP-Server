@@ -16,7 +16,7 @@ import win32com.client
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
 
-from .tools.image_tools import image_tools
+from word_docx_tools.tools.image_tools import image_tools
 from word_docx_tools.mcp_service.app_context import AppContext
 
 

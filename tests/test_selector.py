@@ -14,9 +14,9 @@ from pathlib import Path
 import pythoncom
 import win32com.client
 
-from .mcp_service.core_utils import WordDocumentError
-from .selector.exceptions import AmbiguousLocatorError, LocatorSyntaxError
-from .selector.selector import SelectorEngine
+from word_docx_tools.mcp_service.core_utils import WordDocumentError
+from word_docx_tools.selector.exceptions import AmbiguousLocatorError, LocatorSyntaxError
+from word_docx_tools.selector.selector import SelectorEngine
 
 
 class TestSelector(unittest.TestCase):

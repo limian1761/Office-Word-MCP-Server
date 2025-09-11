@@ -273,6 +273,119 @@ def get_document_structure(document: CDispatch) -> str:
             ErrorCode.SERVER_ERROR, f"Failed to get document structure: {str(e)}"
         )
 
+def get_document_outline(document: CDispatch) -> str:
+    """获取文档大纲结构
+
+    Args:
+        document: Word文档COM对象
+
+    Returns:
+        包含文档大纲信息的JSON字符串
+    """
+    try:
+        if not document:
+            raise RuntimeError("No document open.")
+
+        # 文档大纲结构
+        outline = {
+            "headings": [],
+            "total_headings": 0
+        }
+        
+        # 保存所有标题及其层级
+        heading_list = []
+        
+        # 遍历文档中的所有段落，查找标题样式
+        for i in range(1, document.Paragraphs.Count + 1):
+            try:
+                paragraph = document.Paragraphs(i)
+                style_name = paragraph.Style.NameLocal
+                
+                # 检查是否是标题样式
+                if style_name.startswith("Heading") or style_name.startswith("标题"):
+                    # 获取标题文本和层级
+                    text = paragraph.Range.Text.strip()
+                    
+                    # 提取标题级别
+                    level = 1
+                    if style_name.startswith("Heading"):
+                        # 英文标题样式，如"Heading 1"
+                        try:
+                            level = int(style_name.split()[1])
+                        except (ValueError, IndexError):
+                            level = 1
+                    elif style_name.startswith("标题"):
+                        # 中文标题样式，如"标题 1"
+                        try:
+                            level = int(style_name.split()[1])
+                        except (ValueError, IndexError):
+                            level = 1
+                    
+                    heading_info = {
+                        "text": text,
+                        "level": level,
+                        "style_name": style_name,
+                        "range_start": paragraph.Range.Start,
+                        "range_end": paragraph.Range.End
+                    }
+                    
+                    heading_list.append(heading_info)
+                    outline["total_headings"] += 1
+            except Exception as e:
+                logger.warning(f"Failed to process paragraph {i}: {e}")
+                continue
+        
+        # 构建层次化的大纲结构
+        outline["headings"] = build_hierarchical_outline(heading_list)
+        
+        import json
+        return json.dumps(outline, ensure_ascii=False, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Error in get_document_outline: {e}")
+        raise WordDocumentError(
+            ErrorCode.SERVER_ERROR, f"Failed to get document outline: {str(e)}"
+        )
+
+def build_hierarchical_outline(heading_list: list) -> list:
+    """将扁平的标题列表构建为层次化的大纲结构
+    
+    Args:
+        heading_list: 标题信息列表
+    
+    Returns:
+        层次化的大纲结构列表
+    """
+    if not heading_list:
+        return []
+        
+    hierarchical_outline = []
+    current_stack = [hierarchical_outline]
+    current_level = 0
+    
+    for heading in heading_list:
+        level = heading["level"]
+        
+        # 创建当前标题的条目，复制所有属性并添加children字段
+        current_item = heading.copy()
+        current_item["children"] = []
+        
+        # 调整堆栈以匹配当前层级
+        while level <= current_level and len(current_stack) > 1:
+            current_stack.pop()
+            current_level -= 1
+        
+        # 如果当前层级比堆栈中的最高层级大1，则添加新层级
+        if level > current_level:
+            current_stack[-1].append(current_item)
+            current_stack.append(current_item["children"])
+            current_level = level
+        else:
+            # 否则，添加到当前层级
+            current_stack[-1].append(current_item)
+    
+    return hierarchical_outline
+
 
 def find_and_replace_text(
     document: CDispatch,

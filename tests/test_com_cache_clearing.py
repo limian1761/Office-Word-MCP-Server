@@ -17,7 +17,7 @@ import pythoncom
 # Add the project root to the path so we can import our modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from .mcp_service.core_utils import WordDocumentError
+from word_docx_tools.mcp_service.core_utils import WordDocumentError
 from word_docx_tools.mcp_service.app_context import AppContext
 
 

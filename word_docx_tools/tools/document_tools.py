@@ -23,7 +23,7 @@ from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
                                       log_error, log_info, log_warning,
                                       require_active_document_validation)
 from ..operations.document_ops import (close_document, create_document,
-                                       get_document_structure, open_document,
+                                       get_document_structure, get_document_outline, open_document,
                                        save_document)
 from ..operations.others_ops import protect_document, unprotect_document
 from ..mcp_service.app_context import AppContext
@@ -41,7 +41,7 @@ def document_tools(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     operation_type: Optional[str] = Field(
         default="open",
-        description="Type of document operation: create, open, save, save_as, close, get_info, set_property, get_property, print, protect, unprotect",
+        description="Type of document operation: create, open, save, save_as, close, get_info, get_outline, set_property, get_property, print, protect, unprotect",
     ),
     file_path: Optional[str] = Field(
         default=None,
@@ -337,6 +337,17 @@ def document_tools(
             structure = get_document_structure(active_doc)
 
             return structure
+
+        elif operation_type and operation_type.lower() == "get_outline":
+            if not active_doc:
+                raise WordDocumentError(
+                    ErrorCode.DOCUMENT_ERROR, "No active document found"
+                )
+
+            log_info("Getting document outline")
+            outline = get_document_outline(active_doc)
+
+            return outline
 
         elif operation_type and operation_type.lower() == "set_property":
             if not active_doc:

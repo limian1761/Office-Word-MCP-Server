@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import win32com.client
 
-from ..com_backend.com_utils import handle_com_error
+from ..com_backend.com_utils import handle_com_error, iter_com_collection
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
                                       log_info)
 from ..selector.selector import SelectorEngine
@@ -49,7 +49,7 @@ def get_paragraphs_in_range(
 
     # Get paragraphs in the range
     paragraphs: List[Dict[str, Any]] = []
-    for i, paragraph in enumerate(range_obj.Paragraphs):
+    for i, paragraph in enumerate(iter_com_collection(range_obj.Paragraphs)):
         try:
             paragraph_info = {
                 "index": i,
@@ -87,9 +87,9 @@ def get_paragraphs_info(document: win32com.client.CDispatch) -> Dict[str, Any]:
     stats = {"total_paragraphs": document.Paragraphs.Count, "styles_used": {}}
 
     # Count style usage
-    for i in range(1, document.Paragraphs.Count + 1):
+    for i, paragraph in enumerate(iter_com_collection(document.Paragraphs)):
         try:
-            style_name = document.Paragraphs(i).Style.NameLocal
+            style_name = paragraph.Style.NameLocal
             if style_name in stats["styles_used"]:
                 stats["styles_used"][style_name] += 1
             else:

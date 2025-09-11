@@ -28,32 +28,25 @@ class AppContext:
     # Singleton instance
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
-        # Create singleton only when there's no instance and no arguments
+    def __new__(cls):
         if cls._instance is None:
             cls._instance = super(AppContext, cls).__new__(cls)
-        # If instance exists but arguments are provided, return a new instance
-        elif args or kwargs:
-            return super(AppContext, cls).__new__(cls)
+            cls._instance._initialized = False
         return cls._instance
 
-    @staticmethod
-    def get_instance() -> "AppContext":
+    @classmethod
+    def get_instance(cls) -> "AppContext":
         """Get the singleton instance of AppContext, creating it if it doesn't exist"""
-        if AppContext._instance is None:
-            # Create a parameterless instance and let __init__ handle initialization
-            AppContext._instance = AppContext()
-        return AppContext._instance
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
-    def __init__(self, word_app: Optional[CDispatch] = None):
+    def __init__(self):
         """
         Initialize the AppContext with a running Word application instance.
-
-        Args:
-            word_app: An active Word application dispatch object.
         """
         # Prevent duplicate initialization
-        if hasattr(self, "_initialized"):
+        if self._initialized:
             return
 
         # Initialize attributes first
@@ -61,11 +54,16 @@ class AppContext:
         self._active_document: Optional[CDispatch] = None
         self._word_app: Optional[CDispatch] = None
 
-        # Store the provided word_app if any
-        if word_app is not None:
-            self._word_app = word_app
-
         self._initialized = True
+
+    def set_word_app(self, word_app: Optional[CDispatch] = None) -> None:
+        """
+        Set the Word application instance for the context.
+
+        Args:
+            word_app: An active Word application dispatch object.
+        """
+        self._word_app = word_app
 
     def _clear_com_cache(self):
         """Clear win32com cache to resolve CLSIDToPackageMap errors"""
