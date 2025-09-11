@@ -24,31 +24,26 @@ logger = logging.getLogger(__name__)
 @handle_com_error(ErrorCode.DOCUMENT_ERROR, "create document")
 def create_document(
     word_app: Optional[CDispatch] = None,
-    visible: bool = True,
     template_path: Optional[str] = None,
+    visible: bool = True,
 ) -> CDispatch:
     """
-    Creates a new Word document.
+    Create a new Word document.
 
     Args:
-        word_app: Optional existing Word application object. If not provided, creates a new one.
+        word_app: Optional Word application instance. If provided, uses this instance to create the document.
+        template_path: Optional path to a template file.
         visible: Whether to make the Word application visible.
-        template_path: Optional path to a template file to use for the new document.
 
     Returns:
         The created document COM object.
     """
     try:
-        # Create or use existing Word application instance
-        if not word_app:
-            logger.info("Creating new Word application instance for document creation")
-            word_app = win32com.client.Dispatch("Word.Application")
-            logger.info("Successfully created Word application instance")
-
+        # Use provided Word application instance or raise error if not provided
         if not word_app:
             raise WordDocumentError(
                 ErrorCode.SERVER_ERROR,
-                "Failed to create or access Word application instance",
+                "Word application instance must be provided through get_word_app()",
             )
         # Try to set visibility with error handling
         try:
@@ -82,16 +77,16 @@ def create_document(
 
 @handle_com_error(ErrorCode.DOCUMENT_ERROR, "open document")
 def open_document(
-    document: Optional[CDispatch],
+    word_app: CDispatch,
     file_path: str,
     visible: bool = True,
     password: Optional[str] = None,
 ) -> CDispatch:
     """
-    Opens a Word document.
+    Open a Word document.
 
     Args:
-        document: Optional existing document object. If provided, uses its parent Word application.
+        word_app: Word application instance (must be provided through get_word_app()).
         file_path: Path to the Word document file.
         visible: Whether to make the Word application visible.
         password: Optional password for protected documents.
@@ -102,21 +97,12 @@ def open_document(
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Document file not found: {file_path}")
 
-    if document and not hasattr(document, "Application"):
-        raise WordDocumentError(
-            ErrorCode.DOCUMENT_ERROR,
-            "Invalid document object: missing Application attribute",
-        )
-    # Try to get Word application from existing document, otherwise create new instance
-    word_app = None
-    if document:
-        try:
-            word_app = document.Application
-        except Exception:
-            pass
-
+    # Word application instance must be provided
     if not word_app:
-        word_app = win32com.client.Dispatch("Word.Application")
+        raise WordDocumentError(
+            ErrorCode.SERVER_ERROR,
+            "Word application instance must be provided through get_word_app()",
+        )
     word_app.Visible = visible
 
     # Open the document
@@ -238,40 +224,61 @@ def count_objects_by_type(document: CDispatch, object_type: str) -> int:
         )
 
 
-def get_document_structure(document: CDispatch) -> str:
-    """获取文档结构概览
+def get_document_outline(document: CDispatch) -> str:
+    """获取文档大纲信息，通过段落级别来判断是否是大纲
 
     Args:
         document: Word文档COM对象
 
     Returns:
-        包含文档结构信息的JSON字符串
+        包含文档大纲层级结构的JSON字符串
     """
     try:
         if not document:
             raise RuntimeError("No document open.")
 
-        structure = {
-            "paragraphs": document.Paragraphs.Count,
-            "tables": document.Tables.Count,
-            "inline_shapes": (
-                document.InlineShapes.Count if hasattr(document, "InlineShapes") else 0
-            ),
-            "sections": document.Sections.Count,
-            "comments": document.Comments.Count,
-            "words": document.Words.Count,
-            "characters": document.Characters.Count,
-        }
+        outline_structure = []
+        
+        # 遍历所有段落，提取大纲信息
+        for i in range(1, document.Paragraphs.Count + 1):
+            paragraph = document.Paragraphs(i)
+            
+            # 获取段落样式信息
+            style_name = paragraph.Style.NameLocal if hasattr(paragraph.Style, 'NameLocal') else ""
+            
+            # 获取段落级别（大纲级别）
+            outline_level = 0
+            if hasattr(paragraph, 'OutlineLevel'):
+                outline_level = paragraph.OutlineLevel
+            
+            # 只有具有大纲级别的段落才被认为是标题（排除正文级别10）
+            if outline_level > 0 and outline_level < 10:
+                outline_item = {
+                    "index": i,
+                    "text": paragraph.Range.Text.strip(),
+                    "outline_level": outline_level,
+                    "style_name": style_name,
+                    "page_number": paragraph.Range.Information(3) if hasattr(paragraph.Range, 'Information') else 0  # wdActiveEndPageNumber
+                }
+                outline_structure.append(outline_item)
 
         import json
 
-        return json.dumps(structure, ensure_ascii=False, indent=2)
+        return json.dumps({
+            "outline_items": outline_structure,
+            "total_headings": len(outline_structure),
+            "document_statistics": {
+                "paragraphs": document.Paragraphs.Count,
+                "tables": document.Tables.Count,
+                "sections": document.Sections.Count,
+                "pages": document.Range().Information(4) if hasattr(document.Range(), 'Information') else 0  # wdNumberOfPagesInDocument
+            }
+        }, ensure_ascii=False, indent=2)
 
     except Exception as e:
-        logger.error(f"Error in get_document_structure: {e}")
+        logger.error(f"Error in get_document_outline: {e}")
         raise WordDocumentError(
-            ErrorCode.SERVER_ERROR, f"Failed to get document structure: {str(e)}"
-        )
+            ErrorCode.SERVER_ERROR, f"Failed to get document outline: {str(e)}")
 
 def get_document_outline(document: CDispatch) -> str:
     """获取文档大纲结构
