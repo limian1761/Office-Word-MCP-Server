@@ -23,6 +23,8 @@ from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
                                       log_error, log_info,
                                       require_active_document_validation)
 from ..selector.selector import SelectorEngine
+from ..selector.locator_parser import LocatorParser
+from ..selector.exceptions import LocatorSyntaxError
 from ..mcp_service.app_context import AppContext
 
 
@@ -118,6 +120,21 @@ async def image_tools(
     Returns:
         Operation result based on the operation type
     """
+    # 检查locator参数类型和规范
+    def check_locator_param(locator_value):
+        if locator_value is not None:
+            # 检查是否为字典类型
+            if not isinstance(locator_value, dict):
+                raise TypeError("locator parameter must be a dictionary")
+            
+            # 使用LocatorParser验证locator结构
+            parser = LocatorParser()
+            try:
+                parser.validate_locator(locator_value)
+            except LocatorSyntaxError:
+                # 提示用户参考定位器指南
+                raise ValueError("Invalid locator format. Please refer to the locator guide for proper syntax.")
+    
     # Get the active Word document from the context
     document = ctx.request_context.lifespan_context.get_active_document()
 
@@ -147,6 +164,9 @@ async def image_tools(
                     "Image path is required for insert operation",
                 )
 
+            # 检查locator参数
+            check_locator_param(locator)
+            
             if locator is None:
                 raise WordDocumentError(
                     ErrorCode.INVALID_INPUT,
@@ -184,6 +204,8 @@ async def image_tools(
                     ErrorCode.INVALID_INPUT,
                     "Caption text is required for add_caption operation",
                 )
+            # 检查locator参数
+            check_locator_param(locator)
             if locator is None:
                 raise WordDocumentError(
                     ErrorCode.INVALID_INPUT,
@@ -211,6 +233,9 @@ async def image_tools(
                     "Width or height is required for resize operation",
                 )
 
+            # 检查locator参数
+            check_locator_param(locator)
+            
             # 获取图片索引（如果有定位器，则需要先获取图片索引）
             image_index = 1  # 默认调整第一个图片
             if locator:
@@ -238,6 +263,9 @@ async def image_tools(
                     "Color type is required for set_color_type operation",
                 )
 
+            # 检查locator参数
+            check_locator_param(locator)
+            
             # 获取图片索引（如果有定位器，则需要先获取图片索引）
             image_index = 1  # 默认调整第一个图片
             if locator:

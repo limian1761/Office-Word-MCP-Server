@@ -115,62 +115,123 @@ class AppContext:
         Returns:
             The Word application instance or None if not available and not created.
         """
-        # Return existing Word app if available
+        # Return existing Word app if available and validate it's still functional
         if self._word_app is not None:
-            return self._word_app
+            if self._validate_word_app(self._word_app):
+                logger.debug("Returning existing valid Word application instance.")
+                return self._word_app
+            else:
+                logger.warning("Existing Word application instance is invalid, will attempt to create a new one.")
+                self._word_app = None
 
         # If we shouldn't create and don't have one, return None
         if not create_if_needed:
             return None
 
-        # Don't try to attach to existing instances, always create a new one
+        # Try multiple connection methods with retries
+        for attempt in range(3):  # Try up to 3 times
+            try:
+                logger.info(f"Attempt {attempt+1}/3 to create Word Application instance...")
+                
+                # 1. Try the standard Dispatch method first
+                result = self._create_word_app_with_dispatch()
+                if result:
+                    return result
+                
+                # 2. If standard method fails, clear cache and try again
+                if attempt == 0:
+                    if self._clear_com_cache():
+                        logger.info("Retrying after COM cache clear...")
+                        result = self._create_word_app_with_dispatch(reload_module=True)
+                        if result:
+                            return result
+                    else:
+                        logger.warning("Failed to clear COM cache, moving to next method")
+                
+                # 3. Try with DispatchEx which creates a separate process
+                logger.info("Trying with DispatchEx...")
+                result = self._create_word_app_with_dispatchex()
+                if result:
+                    return result
+                
+                # 4. Try with early binding
+                logger.info("Trying with early binding (gencache)...")
+                result = self._create_word_app_with_early_binding()
+                if result:
+                    return result
+                
+                # If all methods failed for this attempt, wait before retrying
+                if attempt < 2:  # Don't wait after the last attempt
+                    import time
+                    wait_time = 1.5 ** attempt  # Exponential backoff
+                    logger.info(f"All methods failed, waiting {wait_time:.2f}s before retry...")
+                    time.sleep(wait_time)
+                
+            except Exception as e:
+                logger.error(f"Unexpected error during attempt {attempt+1}: {e}")
+                logger.error(f"Error type: {type(e).__name__}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                
+        logger.error("Failed to create Word Application instance after multiple attempts.")
+        return None
+        
+    def _create_word_app_with_dispatch(self, reload_module: bool = False) -> Optional[CDispatch]:
+        """Create Word app using standard Dispatch method."""
         try:
-            logger.info("Attempting to create Word Application instance...")
             # 确保每次都使用新的win32com.client导入
             import win32com.client
-
+            
+            if reload_module:
+                import importlib
+                importlib.reload(win32com.client)
+                logger.info("Reloaded win32com.client module.")
+            
             self._word_app = win32com.client.Dispatch("Word.Application")
-            logger.info("Started a new Word application instance.")
+            logger.info("Successfully created Word application instance with Dispatch.")
             return self._word_app
-        except AttributeError as e:
-            logger.error(f"COM cache error detected: {e}")
-            logger.error(f"Error type: {type(e).__name__}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-
-            # Try to clear COM cache and retry
-            if self._clear_com_cache():
-                try:
-                    logger.info(
-                        "Retrying Word Application creation after cache clear..."
-                    )
-                    # 重新导入win32com.client以确保使用清除后的缓存
-                    import importlib
-
-                    import win32com.client
-
-                    importlib.reload(win32com.client)
-
-                    self._word_app = win32com.client.Dispatch("Word.Application")
-                    logger.info(
-                        "Successfully created Word application instance after cache clear."
-                    )
-                    return self._word_app
-                except Exception as retry_e:
-                    logger.error(
-                        f"Failed to start Word Application after cache clear: {retry_e}"
-                    )
-                    logger.error(f"Retry error type: {type(retry_e).__name__}")
-                    logger.error(f"Retry traceback: {traceback.format_exc()}")
-            else:
-                logger.error(
-                    "Failed to clear COM cache, cannot retry Word Application creation"
-                )
-            return None
         except Exception as e:
-            logger.error(f"Failed to start Word Application: {e}")
-            logger.error(f"Error type: {type(e).__name__}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.warning(f"Dispatch method failed: {e}")
             return None
+            
+    def _create_word_app_with_dispatchex(self) -> Optional[CDispatch]:
+        """Create Word app using DispatchEx method (creates a separate process)."""
+        try:
+            import win32com.client
+            
+            self._word_app = win32com.client.DispatchEx("Word.Application")
+            logger.info("Successfully created Word application instance with DispatchEx.")
+            return self._word_app
+        except Exception as e:
+            logger.warning(f"DispatchEx method failed: {e}")
+            return None
+            
+    def _create_word_app_with_early_binding(self) -> Optional[CDispatch]:
+        """Create Word app using early binding (gencache)."""
+        try:
+            import win32com.client.gencache
+            
+            # Ensure we have the gen_py files for Word
+            win32com.client.gencache.EnsureModule('{00020905-0000-0000-C000-000000000046}', 0, 8, 7)
+            self._word_app = win32com.client.gencache.Dispatch("Word.Application")
+            logger.info("Successfully created Word application instance with early binding.")
+            return self._word_app
+        except Exception as e:
+            logger.warning(f"Early binding method failed: {e}")
+            return None
+            
+    def _validate_word_app(self, word_app: CDispatch) -> bool:
+        """Validate that the Word application instance is still functional."""
+        if not word_app:
+            return False
+            
+        try:
+            # Simple property access to verify the COM object is still alive
+            app_version = word_app.Version
+            logger.debug(f"Word application validation successful, version: {app_version}")
+            return True
+        except Exception as e:
+            logger.warning(f"Word application validation failed: {e}")
+            return False
 
     def get_active_document(self) -> Optional[CDispatch]:
         """Get the current active document."""

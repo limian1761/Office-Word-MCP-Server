@@ -31,18 +31,29 @@ Tests are grouped into the following categories:
 - Python 3.11+
 - Required dependencies installed
 
-### Run All Tests
+### Using the Test Runner Script
+The project includes a custom test runner script that provides a more user-friendly interface for running tests:
+
 ```bash
-python -m pytest tests/ -v
+# Run all tests
+python tests/run_tests.py
+
+# Run with verbose output
+python tests/run_tests.py -v
+
+# Run tests matching a specific pattern
+python tests/run_tests.py -t text
 ```
 
-### Run Specific Test Category
-```bash
-# Run unit tests
-python -m pytest tests/test_selector.py tests/test_text_tools.py -v
+### Using pytest Directly
+You can also run tests using pytest directly:
 
-# Run integration tests
-python -m pytest tests/test_com_cache_clearing.py tests/test_precise_operations.py -v
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test category
+python -m pytest tests/test_selector.py tests/test_text_tools.py -v
 
 # Run end-to-end tests
 python -m pytest tests/test_e2e*.py tests/test_real_e2e.py -v
@@ -51,6 +62,20 @@ python -m pytest tests/test_e2e*.py tests/test_real_e2e.py -v
 ### Run Individual Test Files
 ```bash
 python -m pytest tests/test_selector.py -v
+```
+
+### Code Coverage
+The project includes coverage configuration to measure test coverage:
+
+```bash
+# Run tests with coverage
+coverage run -m pytest tests/
+
+# Generate coverage report
+coverage report
+
+# Generate HTML coverage report
+coverage html
 ```
 
 ## Test Environment

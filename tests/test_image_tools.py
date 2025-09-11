@@ -3,114 +3,22 @@ Tests for image_tools module in Word Document MCP Server.
 """
 
 import json
-import os
-import shutil
-import tempfile
-import unittest
-from io import StringIO
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pythoncom
-import win32com.client
-from mcp.server.fastmcp import Context
-from mcp.server.session import ServerSession
+from unittest.mock import patch
 
 from word_docx_tools.tools.image_tools import image_tools
-from word_docx_tools.mcp_service.app_context import AppContext
+from tests.test_utils import WordDocumentTestBase
 
 
-class TestImageTools(unittest.TestCase):
+class TestImageTools(WordDocumentTestBase):
     """Tests for image_tools module"""
 
-    @classmethod
-    def setUpClass(cls):
-        # 初始化COM
-        pythoncom.CoInitialize()
-
-        # 创建临时目录用于测试
-        cls.test_dir = tempfile.mkdtemp()
-
-        # 复制测试文档到临时目录
-        source_doc = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "tests",
-            "test_docs",
-            "valid_test_document_v2.docx",
-        )
-        cls.test_doc_path = os.path.join(cls.test_dir, "test_document.docx")
-        if os.path.exists(source_doc):
-            shutil.copy2(source_doc, cls.test_doc_path)
-        else:
-            # 如果测试文档不存在，创建一个新的
-            word_app = win32com.client.Dispatch("Word.Application")
-            doc = word_app.Documents.Add()
-            doc.SaveAs2(cls.test_doc_path)
-            doc.Close()
-            word_app.Quit()
-
-        # 创建测试图片
-        cls.test_image_path = os.path.join(cls.test_dir, "test_image.png")
-        # 创建一个简单的测试图片文件（实际内容不重要，只需要文件存在）
-        with open(cls.test_image_path, "w") as f:
-            f.write("fake image content for testing")
-
-    @classmethod
-    def tearDownClass(cls):
-        # 清理临时目录
-        try:
-            shutil.rmtree(cls.test_dir)
-        except:
-            pass
-        pythoncom.CoUninitialize()
-
     def setUp(self):
-        """测试前准备"""
-        # 创建Word应用程序实例
-        self.word_app = win32com.client.Dispatch("Word.Application")
-        # 尝试设置Visible属性，但捕获可能的异常
-        try:
-            self.word_app.Visible = False
-        except AttributeError:
-            # 某些环境中可能不支持设置Visible属性，忽略此错误
-            pass
+        """测试前准备，调用基类方法并进行必要的初始化"""
+        # 调用基类的setUp方法，创建Word应用程序、文档和上下文
+        super().setUp()
 
-        # 创建应用上下文
-        self.app_context = AppContext(self.word_app)
-
-        # 创建模拟的读写流
-        self.read_stream = StringIO()
-        self.write_stream = StringIO()
-
-        # 创建ServerSession实例
-        self.session = ServerSession(
-            read_stream=self.read_stream,
-            write_stream=self.write_stream,
-            init_options={},
-        )
-        self.session.lifespan_context = self.app_context
-
-        # 创建Context对象
-        self.context = Context(
-            server_session=self.session, request_context=self.session
-        )
-
-        # 创建测试文档
-        self.doc = self.word_app.Documents.Add()
-
-    def tearDown(self):
-        # 关闭文档
-        try:
-            if hasattr(self, "doc"):
-                self.doc.Close(SaveChanges=False)
-        except:
-            pass
-
-        # 关闭Word应用程序
-        try:
-            self.word_app.Quit()
-        except:
-            pass
+        # 创建测试图片文件
+        self.test_image_path = self.create_test_file("test_image.png", "fake image content for testing")
 
     async def test_image_tools_get_info(self):
         """Test get_info operation"""
@@ -247,30 +155,5 @@ class TestImageTools(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # 对于异步测试，需要使用异步测试运行器
-    # 这里简化为直接运行测试
-    import asyncio
-
-    def run_async_test(test_case_method):
-        """运行异步测试方法"""
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(test_case_method)
-
-    # 创建测试套件
-    test_suite = unittest.TestSuite()
-
-    # 添加所有测试方法
-    for method_name in dir(TestImageTools):
-        if method_name.startswith("test_"):
-            test_case = TestImageTools(method_name)
-            # 修改测试方法使其同步运行异步代码
-            original_method = getattr(test_case, method_name)
-            setattr(
-                test_case,
-                method_name,
-                lambda self, method=original_method: run_async_test(method(self)),
-            )
-            test_suite.addTest(test_case)
-
-    # 运行测试
-    unittest.TextTestRunner(verbosity=2).run(test_suite)
+    import unittest
+    unittest.main()

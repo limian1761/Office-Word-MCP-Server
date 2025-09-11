@@ -10,6 +10,7 @@ from .comment_tools import comment_tools
 from .document_tools import document_tools
 from .image_tools import image_tools
 from .objects_tools import objects_tools
+from .paragraph_tools import paragraph_tools
 from .range_tools import range_tools
 from .styles_tools import styles_tools
 from .table_tools import table_tools
@@ -20,6 +21,7 @@ __all__ = [
     "document_tools",
     "image_tools",
     "objects_tools",
+    "paragraph_tools",
     "range_tools",
     "styles_tools",
     "table_tools",

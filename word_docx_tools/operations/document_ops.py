@@ -7,6 +7,7 @@ This module contains functions for document-level operations.
 import logging
 import os
 import traceback
+import json  # 添加json导入
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import win32com.client
@@ -224,6 +225,7 @@ def count_objects_by_type(document: CDispatch, object_type: str) -> int:
         )
 
 
+@handle_com_error(ErrorCode.SERVER_ERROR, "get document outline")
 def get_document_outline(document: CDispatch) -> str:
     """获取文档大纲信息，通过段落级别来判断是否是大纲
 
@@ -251,8 +253,8 @@ def get_document_outline(document: CDispatch) -> str:
             if hasattr(paragraph, 'OutlineLevel'):
                 outline_level = paragraph.OutlineLevel
             
-            # 只有具有大纲级别的段落才被认为是标题（排除正文级别10）
-            if outline_level > 0 and outline_level < 10:
+            # 根据用户需求，1~9为标题样式，10为正文
+            if 1 <= outline_level <= 9:
                 outline_item = {
                     "index": i,
                     "text": paragraph.Range.Text.strip(),
@@ -262,15 +264,16 @@ def get_document_outline(document: CDispatch) -> str:
                 }
                 outline_structure.append(outline_item)
 
-        import json
+        # 构建层次化的大纲结构
+        hierarchical_outline = build_hierarchical_outline_by_level(outline_structure)
 
         return json.dumps({
-            "outline_items": outline_structure,
+            "outline_items": hierarchical_outline,
             "total_headings": len(outline_structure),
             "document_statistics": {
                 "paragraphs": document.Paragraphs.Count,
-                "tables": document.Tables.Count,
-                "sections": document.Sections.Count,
+                "tables": document.Tables.Count if hasattr(document, 'Tables') and document.Tables is not None else 0,
+                "sections": document.Sections.Count if hasattr(document, 'Sections') and document.Sections is not None else 0,
                 "pages": document.Range().Information(4) if hasattr(document.Range(), 'Information') else 0  # wdNumberOfPagesInDocument
             }
         }, ensure_ascii=False, indent=2)
@@ -280,81 +283,8 @@ def get_document_outline(document: CDispatch) -> str:
         raise WordDocumentError(
             ErrorCode.SERVER_ERROR, f"Failed to get document outline: {str(e)}")
 
-def get_document_outline(document: CDispatch) -> str:
-    """获取文档大纲结构
 
-    Args:
-        document: Word文档COM对象
-
-    Returns:
-        包含文档大纲信息的JSON字符串
-    """
-    try:
-        if not document:
-            raise RuntimeError("No document open.")
-
-        # 文档大纲结构
-        outline = {
-            "headings": [],
-            "total_headings": 0
-        }
-        
-        # 保存所有标题及其层级
-        heading_list = []
-        
-        # 遍历文档中的所有段落，查找标题样式
-        for i in range(1, document.Paragraphs.Count + 1):
-            try:
-                paragraph = document.Paragraphs(i)
-                style_name = paragraph.Style.NameLocal
-                
-                # 检查是否是标题样式
-                if style_name.startswith("Heading") or style_name.startswith("标题"):
-                    # 获取标题文本和层级
-                    text = paragraph.Range.Text.strip()
-                    
-                    # 提取标题级别
-                    level = 1
-                    if style_name.startswith("Heading"):
-                        # 英文标题样式，如"Heading 1"
-                        try:
-                            level = int(style_name.split()[1])
-                        except (ValueError, IndexError):
-                            level = 1
-                    elif style_name.startswith("标题"):
-                        # 中文标题样式，如"标题 1"
-                        try:
-                            level = int(style_name.split()[1])
-                        except (ValueError, IndexError):
-                            level = 1
-                    
-                    heading_info = {
-                        "text": text,
-                        "level": level,
-                        "style_name": style_name,
-                        "range_start": paragraph.Range.Start,
-                        "range_end": paragraph.Range.End
-                    }
-                    
-                    heading_list.append(heading_info)
-                    outline["total_headings"] += 1
-            except Exception as e:
-                logger.warning(f"Failed to process paragraph {i}: {e}")
-                continue
-        
-        # 构建层次化的大纲结构
-        outline["headings"] = build_hierarchical_outline(heading_list)
-        
-        import json
-        return json.dumps(outline, ensure_ascii=False, indent=2)
-        
-    except Exception as e:
-        logger.error(f"Error in get_document_outline: {e}")
-        raise WordDocumentError(
-            ErrorCode.SERVER_ERROR, f"Failed to get document outline: {str(e)}"
-        )
-
-def build_hierarchical_outline(heading_list: list) -> list:
+def build_hierarchical_outline_by_level(heading_list: list) -> list:
     """将扁平的标题列表构建为层次化的大纲结构
     
     Args:
@@ -366,12 +296,15 @@ def build_hierarchical_outline(heading_list: list) -> list:
     if not heading_list:
         return []
         
-    hierarchical_outline = []
+    # 按照outline_level排序
+    sorted_headings = sorted(heading_list, key=lambda x: (x["outline_level"], x["index"]))
+    
+    hierarchical_outline: list = []
     current_stack = [hierarchical_outline]
     current_level = 0
     
-    for heading in heading_list:
-        level = heading["level"]
+    for heading in sorted_headings:
+        level = heading["outline_level"]
         
         # 创建当前标题的条目，复制所有属性并添加children字段
         current_item = heading.copy()

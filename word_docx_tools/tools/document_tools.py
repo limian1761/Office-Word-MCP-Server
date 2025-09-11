@@ -210,15 +210,11 @@ def document_tools(
             try:
                 if os.path.exists(agent_guide_path):
                     with open(agent_guide_path, "r", encoding="utf-8") as f:
-                        # 由于文件可能很大，只读取前10000个字符
-                        agent_guide_content = f.read(10000)
-                        if len(agent_guide_content) == 10000:
-                            agent_guide_content += (
-                                "\n\n...文档内容过长，已从10000个字符处截断... "
-                            )
+                        # 读取整个文件内容
+                        agent_guide_content = f.read()
             except Exception as e:
                 log_error(f"Failed to read agent_guide.md: {e}")
-                agent_guide_content = "无法读取agent_guide.md文件"
+                agent_guide_content = f"无法读取agent_guide.md文件，文件路径: {agent_guide_path}"
 
             # 返回文档对象的基本信息和agent_guide.md内容
             return json.dumps(
@@ -284,18 +280,6 @@ def document_tools(
                 {"success": result, "message": "Document closed successfully"},
                 ensure_ascii=False,
             )
-
-        elif operation_type and operation_type.lower() == "get_outline":
-            if not active_doc:
-                raise WordDocumentError(
-                    ErrorCode.DOCUMENT_ERROR, "No active document found"
-                )
-
-            log_info("Getting document outline")
-            structure = get_document_outline(active_doc)
-
-            return structure
-
         elif operation_type and operation_type.lower() == "get_outline":
             if not active_doc:
                 raise WordDocumentError(

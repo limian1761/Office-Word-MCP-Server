@@ -1,16 +1,12 @@
 """
-Object Integration Tool for Word Document MCP Server.
+Range Selection Tool for Word Document MCP Server.
 
-This module provides a unified MCP tool for object operations.
+This module provides a simplified MCP tool for handling user selection ranges.
 """
 
 import json
-import logging
-import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 
-# Standard library imports
-from dotenv import load_dotenv
 # Third-party imports
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
@@ -18,30 +14,15 @@ from pydantic import Field
 
 # Local imports
 from ..mcp_service.core import mcp_server
-from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
-                                      get_active_document, log_error, log_info)
-from ..selector.selector import SelectorEngine
 from ..mcp_service.app_context import AppContext
-
-# Configure logger
-logger = logging.getLogger(__name__)
-
-
-# 延迟导入以避免循环导入
-def _import_range_operations():
-    """延迟导入range操作函数以避免循环导入"""
-    from ..operations.range_ops import (batch_apply_formatting,
-                                        batch_select_objects,
-                                        delete_object_by_locator,
-                                        get_object_by_id, select_objects)
-
-    return (
-        batch_apply_formatting,
-        batch_select_objects,
-        delete_object_by_locator,
-        get_object_by_id,
-        select_objects,
-    )
+from ..mcp_service.core_utils import (
+    ErrorCode,
+    WordDocumentError,
+    get_active_document,
+    log_error,
+    log_info
+)
+from ..operations.text_ops import apply_formatting_to_object
 
 
 @mcp_server.tool()
@@ -49,44 +30,27 @@ async def range_tools(
     ctx: Context[ServerSession, AppContext],
     operation_type: str = Field(
         ...,
-        description="Type of range operation: select, get_by_id, batch_select, batch_apply_formatting, delete",
+        description="Type of range operation: get_current_selection, modify_selection_text, modify_selection_style",
     ),
-    locator: Optional[Dict[str, Any]] = Field(
+    text: Optional[str] = Field(
         default=None,
-        description="Range locator for range operations. Required for: select, delete",
+        description="Text content for modify_selection_text operation",
     ),
-    object_id: Optional[Union[str, int]] = Field(
+    formatting: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Range ID for get_by_id operation. Required for: get_by_id. Can be string or integer.",
-    ),
-    locators: Optional[List[Dict[str, Any]]] = Field(
-        default=None,
-        description="List of range locators for batch operations. Required for: batch_select",
-    ),
-    operations: Optional[List[Dict[str, Any]]] = Field(
-        default=None,
-        description="List of operations for batch formatting. Required for: batch_apply_formatting",
+        description="Formatting options for modify_selection_style operation",
     ),
 ) -> str:
     """
-    Unified object operation tool.
+    Simplified range operation tool focused on user selection.
 
-    This tool provides a single interface for all object operations:
-    - select: Select objects based on locator
-      * Required parameters: locator
-      * Optional parameters: None
-    - get_by_id: Get object by ID
-      * Required parameters: object_id
-      * Optional parameters: None
-    - batch_select: Select multiple objects based on locators
-      * Required parameters: locators
-      * Optional parameters: None
-    - batch_apply_formatting: Apply formatting to multiple objects
-      * Required parameters: operations
-      * Optional parameters: None
-    - delete: Delete object by locator
-      * Required parameters: locator
-      * Optional parameters: None
+    This tool provides interfaces for:
+    - get_current_selection: Get information about the current user selection
+      * Required parameters: None
+    - modify_selection_text: Modify the text content of the current selection
+      * Required parameters: text
+    - modify_selection_style: Apply formatting to the current selection
+      * Required parameters: formatting
 
     Returns:
         Result of the operation in JSON format
@@ -97,134 +61,156 @@ async def range_tools(
     # Check if there is an active document
     if active_doc is None:
         raise WordDocumentError(
-            ErrorCode.NO_ACTIVE_DOCUMENT, "No active document found"
+            ErrorCode.NO_ACTIVE_DOCUMENT, "没有找到活动文档"
         )
 
-    # 延迟导入range操作函数以避免循环导入
-    (
-        batch_apply_formatting,
-        batch_select_objects,
-        delete_object_by_locator,
-        get_object_by_id,
-        select_objects,
-    ) = _import_range_operations()
-
     try:
-        if operation_type == "select":
-            if locator is None:
+        # 获取当前选择
+        if operation_type == "get_current_selection":
+            return _get_current_selection(active_doc)
+
+        # 修改当前选择的文字
+        elif operation_type == "modify_selection_text":
+            if text is None:
                 raise WordDocumentError(
-                    ErrorCode.INVALID_INPUT, "Locator is required for select operation"
+                    ErrorCode.INVALID_INPUT, "修改选择文字操作需要提供text参数"
                 )
+            return _modify_selection_text(active_doc, text)
 
-            log_info(f"Selecting objects with locator: {locator}")
-            result = select_objects(active_doc, locator)
-            log_info(f"Successfully selected {len(result) if result else 0} objects")
-            return json.dumps(
-                {
-                    "success": True,
-                    "objects": result,
-                    "message": "Objects selected successfully",
-                },
-                ensure_ascii=False,
-            )
-
-        elif operation_type == "get_by_id":
-            if object_id is None:
+        # 修改当前选择的样式
+        elif operation_type == "modify_selection_style":
+            if formatting is None:
                 raise WordDocumentError(
-                    ErrorCode.INVALID_INPUT,
-                    "Object ID is required for get_by_id operation",
+                    ErrorCode.INVALID_INPUT, "修改选择样式操作需要提供formatting参数"
                 )
-
-            log_info(f"Getting object by ID: {object_id}")
-            result = get_object_by_id(active_doc, object_id)
-            log_info("Object retrieved successfully" if result else "Object not found")
-            return json.dumps(
-                {
-                    "success": True,
-                    "object": result,
-                    "message": "Object retrieved successfully",
-                },
-                ensure_ascii=False,
-            )
-
-        elif operation_type == "batch_select":
-            if locators is None:
-                raise WordDocumentError(
-                    ErrorCode.INVALID_INPUT,
-                    "Locators list is required for batch_select operation",
-                )
-
-            log_info(
-                f"Batch selecting objects with {len(locators) if locators else 0} locators"
-            )
-            result = batch_select_objects(active_doc, locators)
-            log_info(
-                f"Successfully selected {len(result) if result else 0} objects in batch"
-            )
-            return json.dumps(
-                {
-                    "success": True,
-                    "objects": result,
-                    "message": "Objects selected successfully",
-                },
-                ensure_ascii=False,
-            )
-
-        elif operation_type == "batch_apply_formatting":
-            if operations is None:
-                raise WordDocumentError(
-                    ErrorCode.INVALID_INPUT,
-                    "Operations list is required for batch_apply_formatting operation",
-                )
-
-            log_info(
-                f"Applying batch formatting with {len(operations) if operations else 0} operations"
-            )
-            result_str = batch_apply_formatting(active_doc, operations)
-            result = json.loads(result_str)
-            successful_ops = (
-                sum(1 for r in result if r.get("status") == "success") if result else 0
-            )
-            log_info(
-                f"Batch formatting completed. {successful_ops}/{len(result) if result else 0} operations successful"
-            )
-            return json.dumps(
-                {
-                    "success": True,
-                    "results": result,
-                    "message": "Formatting applied successfully",
-                },
-                ensure_ascii=False,
-            )
-
-        elif operation_type == "delete":
-            if locator is None:
-                raise WordDocumentError(
-                    ErrorCode.INVALID_INPUT, "Locator is required for delete operation"
-                )
-
-            log_info(f"Deleting object with locator: {locator}")
-            result = delete_object_by_locator(active_doc, locator)
-            log_info(
-                "Object deleted successfully" if result else "Failed to delete object"
-            )
-            return json.dumps(
-                {
-                    "success": result,
-                    "message": (
-                        "Object deleted successfully"
-                        if result
-                        else "Failed to delete object"
-                    ),
-                },
-                ensure_ascii=False,
-            )
+            return _modify_selection_style(active_doc, formatting)
 
         else:
-            error_msg = f"Unsupported operation type: {operation_type}"
+            error_msg = f"不支持的操作类型: {operation_type}"
             log_error(error_msg)
             raise WordDocumentError(ErrorCode.INVALID_INPUT, error_msg)
 
     except Exception as e:
-        log_error(f"Error in range_tools: {str(e)}", exc_info=True)
+        log_error(f"range_tools错误: {str(e)}", exc_info=True)
         raise
+
+
+def _get_current_selection(document) -> str:
+    """
+    获取当前用户选择的信息
+    """
+    try:
+        # 获取Word应用程序的Selection对象
+        app = document.Application
+        selection = app.Selection
+        
+        # 检查是否有选择内容
+        if selection.Start == selection.End:
+            return json.dumps({
+                "success": False,
+                "message": "没有选择任何内容"
+            }, ensure_ascii=False)
+        
+        # 构建选择信息
+        selection_info = {
+            "success": True,
+            "text": selection.Text,
+            "length": len(selection.Text),
+            "start_position": selection.Start,
+            "end_position": selection.End
+        }
+        
+        # 添加样式信息（如果可用）
+        try:
+            if hasattr(selection, "Style") and hasattr(selection.Style, "NameLocal"):
+                selection_info["style"] = selection.Style.NameLocal
+        except Exception as e:
+            log_error(f"获取样式信息失败: {e}")
+        
+        log_info(f"成功获取当前选择信息，长度: {selection_info['length']}")
+        return json.dumps(selection_info, ensure_ascii=False)
+        
+    except Exception as e:
+        log_error(f"获取当前选择失败: {e}")
+        raise WordDocumentError(ErrorCode.OBJECT_NOT_FOUND, f"获取当前选择失败: {str(e)}")
+
+
+def _modify_selection_text(document, text: str) -> str:
+    """
+    修改当前选择的文字内容
+    """
+    try:
+        # 获取Word应用程序的Selection对象
+        app = document.Application
+        selection = app.Selection
+        
+        # 检查是否有选择内容
+        if selection.Start == selection.End:
+            return json.dumps({
+                "success": False,
+                "message": "没有选择任何内容，无法修改文字"
+            }, ensure_ascii=False)
+        
+        # 保存原始长度用于日志
+        original_length = len(selection.Text)
+        
+        # 修改选择的文字
+        selection.Text = text
+        
+        log_info(f"成功修改选择文字，原长度: {original_length}，新长度: {len(text)}")
+        return json.dumps({
+            "success": True,
+            "message": "选择文字修改成功",
+            "new_text": text,
+            "new_length": len(text)
+        }, ensure_ascii=False)
+        
+    except Exception as e:
+        log_error(f"修改选择文字失败: {e}")
+        raise WordDocumentError(ErrorCode.OBJECT_MODIFICATION_ERROR, f"修改选择文字失败: {str(e)}")
+
+
+def _modify_selection_style(document, formatting: Dict[str, Any]) -> str:
+    """
+    修改当前选择的样式
+    """
+    try:
+        # 获取Word应用程序的Selection对象
+        app = document.Application
+        selection = app.Selection
+        
+        # 检查是否有选择内容
+        if selection.Start == selection.End:
+            return json.dumps({
+                "success": False,
+                "message": "没有选择任何内容，无法修改样式"
+            }, ensure_ascii=False)
+        
+        # 应用格式到选择范围
+        result = apply_formatting_to_object(selection.Range, formatting)
+        
+        # 解析结果
+        try:
+            result_dict = json.loads(result)
+            if result_dict.get("success", False):
+                log_info(f"成功应用样式到选择范围")
+                return json.dumps({
+                    "success": True,
+                    "message": "选择样式修改成功",
+                    "applied_formatting": formatting
+                }, ensure_ascii=False)
+            else:
+                log_error(f"应用样式失败: {result_dict.get('message', '未知错误')}")
+                return result
+        except json.JSONDecodeError:
+            # 如果结果不是有效的JSON，假设成功
+            log_info(f"成功应用样式到选择范围")
+            return json.dumps({
+                "success": True,
+                "message": "选择样式修改成功",
+                "applied_formatting": formatting
+            }, ensure_ascii=False)
+            
+    except Exception as e:
+        log_error(f"修改选择样式失败: {e}")
+        raise WordDocumentError(ErrorCode.FORMATTING_ERROR, f"修改选择样式失败: {str(e)}")

@@ -66,7 +66,7 @@ document_operation(operation_type="shutdown")
 |---------|------|---------|---------|-------|
 | `get` | 获取文档中的文本 | - | `locator` | 请求的文本 |
 | `insert` | 插入文本或段落 | `text` | `locator`, `position`, `style` | 插入成功信息 |
-| `apply_formatting` | 应用格式化 | `locator`, `formatting` | - | 格式化成功信息 |
+| `apply_formatting` | 应用格式化（支持单格式和多格式） | `locator`, (`formatting` 或 `format_type` 和 `format_value`) | - | 格式化成功信息 |
 | `batch_apply_format` | 批量应用格式化 | `operations` | `save_document` | 批量操作结果摘要 |
 | `find` | 查找文本 | `text` | `match_case`, `match_whole_word`, `match_wildcards`, `ignore_punct`, `ignore_space` | 包含查找结果的JSON字符串 |
 | `replace` | 替换文本 | `locator`, `text` | - | 替换成功信息和替换次数 |

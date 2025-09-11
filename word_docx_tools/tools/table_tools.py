@@ -25,6 +25,7 @@ from ..operations.table_ops import (create_table, get_cell_text,
                                     get_table_info, insert_column, insert_row,
                                     set_cell_text)
 from ..selector.selector import SelectorEngine
+from ..selector.locator_parser import LocatorParser, LocatorSyntaxError
 # 工具模块
 from ..mcp_service.app_context import AppContext
 
@@ -104,6 +105,25 @@ def table_tools(
     Returns:
         Operation result based on the operation type
     """
+    
+    def check_locator_param(locator):
+        """检查locator参数是否符合要求"""
+        if not isinstance(locator, dict):
+            raise WordDocumentError(
+                ErrorCode.PARAMETER_ERROR,
+                f"locator parameter must be a dictionary, got {type(locator).__name__}"
+            )
+            
+        try:
+            # 使用LocatorParser验证locator格式
+            parser = LocatorParser(locator)
+            parser.parse()
+        except LocatorSyntaxError as e:
+            raise WordDocumentError(
+                ErrorCode.PARAMETER_ERROR,
+                f"Invalid locator syntax: {str(e)}"
+            )
+    
     try:
         # 获取活动文档
         active_doc = ctx.request_context.lifespan_context.get_active_document()
@@ -115,6 +135,9 @@ def table_tools(
                     "rows, cols, and locator parameters must be provided for create operation"
                 )
 
+            # 检查locator参数
+            check_locator_param(locator)
+            
             log_info(f"Creating table with {rows} rows and {cols} columns")
             result = create_table(
                 document=active_doc,

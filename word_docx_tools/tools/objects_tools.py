@@ -26,6 +26,8 @@ from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
 from ..operations.objects_ops import (create_bookmark, create_citation,
                                       create_hyperlink)
 from ..selector.selector import SelectorEngine
+from ..selector.locator_parser import LocatorParser
+from ..selector.exceptions import LocatorSyntaxError
 from ..mcp_service.app_context import AppContext
 
 # 加载环境变量
@@ -99,6 +101,9 @@ def objects_tools(
     Returns:
         Dictionary of operation results
     """
+    # 导入通用的locator参数检查函数
+    from .utils import check_locator_param
+    
     try:
         # 验证是否有活动文档
         require_active_document_validation(ctx)
@@ -170,6 +175,8 @@ def handle_bookmark_operations(
         locator = kwargs.get("locator")
         if bookmark_name and locator:
             try:
+                # 检查locator参数
+                check_locator_param(locator)
                 # 改进书签创建，正确处理Range对象
                 # 确保书签名称不包含非法字符
                 clean_bookmark_name = bookmark_name
@@ -265,6 +272,8 @@ def handle_citation_operations(
         if citation_text and locator:
             # 修复引用创建问题，改进source_data格式以解决XML数据处理错误
             try:
+                # 检查locator参数
+                check_locator_param(locator)
                 # 创建符合Word引用XML格式的source_data字典
                 source_data = {
                     "Tag": citation_name,
@@ -353,6 +362,8 @@ def handle_hyperlink_operations(
         display_text = kwargs.get("display_text")
         if url and locator:
             try:
+                # 检查locator参数
+                check_locator_param(locator)
                 # 改进超链接创建，确保使用正确的Range对象
                 # 移除URL中可能存在的反引号和其他特殊字符
                 clean_url = url.strip("`").strip()

@@ -5,119 +5,21 @@
 """
 
 import json
-import unittest
-from io import StringIO
 from unittest.mock import MagicMock, patch
 
-import pythoncom
-import win32com.client
-from mcp.server.fastmcp import Context
-from mcp.server.session import ServerSession
+from tests.test_utils import WordDocumentTestBase
 
 from word_docx_tools.operations.text_ops import insert_text_after_range
 from word_docx_tools.tools.text_tools import text_tools
-from word_docx_tools.mcp_service.app_context import AppContext
 
 
-class TestTextToolsInsertText(unittest.TestCase):
+class TestTextToolsInsertText(WordDocumentTestBase):
     """Tests for text_tools.insert_text operation"""
-
-    @classmethod
-    def setUpClass(cls):
-        # 初始化COM
-        pythoncom.CoInitialize()
-
-    @classmethod
-    def tearDownClass(cls):
-        # 清理COM资源
-        pythoncom.CoUninitialize()
 
     def setUp(self):
         """测试前准备"""
-        try:
-            # 创建Word应用程序实例
-            self.word_app = win32com.client.Dispatch("Word.Application")
-            # 尝试设置Visible属性，但捕获可能的异常
-            try:
-                self.word_app.Visible = False
-            except AttributeError:
-                # 某些环境中可能不支持设置Visible属性，忽略此错误
-                pass
-
-            # 创建应用上下文
-            self.app_context = AppContext()
-            self.app_context.set_word_app(self.word_app)
-
-            # 创建模拟的读写流
-            self.read_stream = StringIO()
-            self.write_stream = StringIO()
-
-            # 创建ServerSession实例
-            self.session = ServerSession(
-                read_stream=self.read_stream,
-                write_stream=self.write_stream,
-                init_options={},
-            )
-            self.session.lifespan_context = self.app_context
-
-            # 创建Context对象
-            self.context = Context(
-                server_session=self.session, request_context=self.session
-            )
-
-            # 安全地创建测试文档
-            try:
-                # 确保Word应用程序正常工作
-                if hasattr(self.word_app, 'Documents') and callable(getattr(self.word_app.Documents, 'Add', None)):
-                    self.doc = self.word_app.Documents.Add()
-                    # 将文档设置为活动文档
-                    self.app_context.active_document = self.doc
-                else:
-                    # 如果无法直接访问Documents属性，创建一个模拟文档对象
-                    self.doc = MagicMock()
-                    self.doc.Content = MagicMock()
-                    self.doc.Content.Text = ""
-                    self.app_context.active_document = self.doc
-            except Exception as e:
-                print(f"创建测试文档时出错: {str(e)}")
-                # 使用模拟对象作为后备
-                self.doc = MagicMock()
-                self.doc.Content = MagicMock()
-                self.doc.Content.Text = ""
-                self.app_context.active_document = self.doc
-        except Exception as e:
-            print(f"测试准备失败: {str(e)}")
-            self.fail(f"测试准备失败: {str(e)}")
-
-    def tearDown(self):
-        # 安全地关闭文档
-        try:
-            if hasattr(self, "doc") and hasattr(self.doc, 'Close'):
-                try:
-                    self.doc.Close(SaveChanges=False)
-                except Exception as e:
-                    print(f"关闭文档时出错: {str(e)}")
-        except Exception as e:
-            print(f"关闭文档过程中出现异常: {str(e)}")
-
-        # 安全地关闭Word应用程序
-        try:
-            if hasattr(self, "word_app") and hasattr(self.word_app, 'Quit'):
-                try:
-                    # 先检查并关闭所有可能打开的文档
-                    if hasattr(self.word_app, 'Documents') and hasattr(self.word_app.Documents, 'Count'):
-                        for i in range(self.word_app.Documents.Count):
-                            try:
-                                doc = self.word_app.Documents[1]  # 总是获取第一个文档
-                                doc.Close(SaveChanges=False)
-                            except Exception as e:
-                                print(f"关闭文档时出错: {str(e)}")
-                                continue
-                    self.word_app.Quit()
-                except Exception as e:
-                    print(f"关闭Word应用程序时出错: {str(e)}")
-        except Exception as e:
-            print(f"关闭Word应用程序过程中出现异常: {str(e)}")
+        # 调用基类的setUp方法，创建Word应用程序、文档和上下文
+        super().setUp()
 
     @patch("word_docx_tools.operations.text_ops.insert_text_after_range")
     def test_insert_text_with_document_start_locator(self, mock_insert_text_after_range):
@@ -232,14 +134,5 @@ class TestTextToolsInsertText(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # 创建测试套件
-    test_suite = unittest.TestSuite()
-
-    # 添加所有测试方法
-    for method_name in dir(TestTextToolsInsertText):
-        if method_name.startswith("test_"):
-            test_case = TestTextToolsInsertText(method_name)
-            test_suite.addTest(test_case)
-
-    # 运行测试
-    unittest.TextTestRunner(verbosity=2).run(test_suite)
+    import unittest
+    unittest.main()
