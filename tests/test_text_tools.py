@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from tests.test_utils import WordDocumentTestBase
 
-from word_docx_tools.operations.text_ops import insert_text_after_range
+from word_docx_tools.operations.text_operations import insert_text_after_range
 from word_docx_tools.tools.text_tools import text_tools
 
 

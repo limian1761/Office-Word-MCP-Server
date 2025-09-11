@@ -29,7 +29,6 @@ from ..operations.text_operations import (
     replace_text_in_document,
     get_character_count_from_document,
     apply_formatting_to_document_text,
-    format_document_text,
     validate_required_params
 )
 from ..selector.locator_parser import LocatorParser
@@ -89,26 +88,26 @@ def text_tools(
     ),
     formatting: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Formatting options: bold, italic, font_size, font_name, font_color, alignment\n\n    Used for: apply_formatting (multiple formats)\n",
+        description="Formatting options: bold, italic, font_size, font_name, font_color, alignment, Used for: apply_formatting",
     ),
-    format_type: Optional[str] = Field(
-        default=None,
-        description="Single text format type: bold, italic, font_size, font_name, font_color, alignment, paragraph_style\n\n    Used for: apply_formatting (single format)\n",
+    start_index: Optional[int] = Field(
+        default=0,
+        description="Start index for text extraction\n\n    Used for: get_text\n",
     ),
-    format_value: Optional[Union[str, int, float, bool]] = Field(
-        default=None,
-        description="Value for the single text format operation\n\n    Used for: apply_formatting (single format)\n",
+    max_length: Optional[int] = Field(
+        default=10000,
+        description="Maximum length of text from start_index to extract,default is 10000,\n\n   Used for: get_text\n",
     ),
 ) -> Any:
     """Unified text operation tool interface.
 
     This tool provides a single interface for all text operations, delegating
     the actual implementation to the operations layer:
-    - get_text: Get text from document or specific object
-    - insert_text: Insert text at specific object
-    - replace_text: Replace text in specific object
-    - get_char_count: Get character count of document or specific object
-    - apply_formatting: Apply formatting options to an object
+    - get_text: Get text from document or specific locator
+    - insert_text: Insert text at specific locator
+    - replace_text: Replace text in specific locator
+    - get_char_count: Get character count of document or specific locator
+    - apply_formatting: Apply formatting options to an locator
 
     Returns:
         Operation result based on the operation type
@@ -125,7 +124,7 @@ def text_tools(
         # 根据操作类型调用相应的处理函数
         if operation_type == "get_text":
             check_locator_param(locator)
-            return get_text_from_document(active_doc, locator)
+            return get_text_from_document(active_doc, locator, start_index, max_length)
 
         elif operation_type == "insert_text":
             check_locator_param(locator)
@@ -144,21 +143,13 @@ def text_tools(
         elif operation_type == "apply_formatting":
             check_locator_param(locator)
             # 验证必需参数
-            validate_required_params({"locator": locator}, "apply_formatting")
+            validate_required_params({"locator": locator, "formatting": formatting}, "apply_formatting")
             
-            # 检查是使用多个格式还是单个格式
-            if formatting is not None:
-                # 使用多个格式
-                return apply_formatting_to_document_text(active_doc, formatting, locator)
-            elif format_type is not None and format_value is not None:
-                # 使用单个格式
-                return format_document_text(active_doc, format_type, format_value, locator)
-            else:
-                raise ValueError("Either formatting (for multiple formats) or format_type and format_value (for single format) must be provided for apply_formatting operation")
+            # 只使用formatting参数
+            return apply_formatting_to_document_text(active_doc, formatting, locator)
 
         else:
             raise ValueError(f"Unsupported operation type: {operation_type}")
-
     except Exception as e:
         log_error(f"Error in text_tools: {e}", exc_info=True)
         return format_error_response(e)

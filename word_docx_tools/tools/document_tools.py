@@ -200,23 +200,7 @@ def document_tools(
             # 更新上下文中的活动文档
             ctx.request_context.lifespan_context.set_active_document(doc)
 
-            # 读取agent_guide.md文件内容
-            agent_guide_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                "docs",
-                "agent_guide.md",
-            )
-            agent_guide_content = ""
-            try:
-                if os.path.exists(agent_guide_path):
-                    with open(agent_guide_path, "r", encoding="utf-8") as f:
-                        # 读取整个文件内容
-                        agent_guide_content = f.read()
-            except Exception as e:
-                log_error(f"Failed to read agent_guide.md: {e}")
-                agent_guide_content = f"无法读取agent_guide.md文件，文件路径: {agent_guide_path}"
-
-            # 返回文档对象的基本信息和agent_guide.md内容
+            # 返回文档对象的基本信息
             return json.dumps(
                 {
                     "success": True,
@@ -227,7 +211,6 @@ def document_tools(
                         "full_name": doc.FullName,
                         "saved": doc.Saved,
                     },
-                    "agent_guide": agent_guide_content,
                 },
                 ensure_ascii=False,
             )

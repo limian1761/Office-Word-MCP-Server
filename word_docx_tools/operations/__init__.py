@@ -36,9 +36,9 @@ from .text_format_ops import (set_alignment_for_range, set_bold_for_range,
                               set_font_name_for_range, set_font_size_for_range,
                               set_italic_for_range, set_paragraph_style)
 # 文本操作
-from .text_ops import (get_character_count, get_object_text,
-                       insert_text_after_range, insert_text_before_range,
-                       replace_object_text)
+from .text_operations import (get_character_count, get_object_text, insert_text,
+                              insert_text_after_range, insert_text_before_range,
+                              replace_object_text)
 
 __all__ = [
     # document_ops

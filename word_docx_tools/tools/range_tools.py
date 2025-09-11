@@ -22,7 +22,7 @@ from ..mcp_service.core_utils import (
     log_error,
     log_info
 )
-from ..operations.text_ops import apply_formatting_to_object
+from ..operations.text_operations import apply_formatting_to_object
 
 
 @mcp_server.tool()

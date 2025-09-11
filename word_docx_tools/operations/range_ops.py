@@ -13,7 +13,7 @@ from ..com_backend.com_utils import handle_com_error, iter_com_collection
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
                                       log_info)
 from ..selector.selector import SelectorEngine
-from .text_ops import apply_formatting_to_object
+from .text_operations import apply_formatting_to_object
 
 logger = logging.getLogger(__name__)
 

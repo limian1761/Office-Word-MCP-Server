@@ -290,7 +290,7 @@ def handle_citation_operations(
                 log_error(f"Failed to create citation: {str(e)}")
                 # 如果完整的引用创建失败，尝试使用更简单的方法在文档中插入引用文本
                 try:
-                    from ..operations.text_ops import insert_text
+                    from ..operations.text_operations import insert_text
 
                     # 确保locator是字典类型
                     if locator is not None and not isinstance(locator, dict):
@@ -385,7 +385,7 @@ def handle_hyperlink_operations(
                 log_error(f"Failed to create hyperlink: {str(e)}")
                 # 如果超链接创建失败，尝试使用更简单的方法在文档中插入链接文本
                 try:
-                    from ..operations.text_ops import insert_text
+                    from ..operations.text_operations import insert_text
 
                     link_text = display_text if display_text else clean_url
                     # 确保locator是字典类型
