@@ -76,27 +76,33 @@ async def comment_tools(
         description="Parameters for test compatibility"
     )
 ) -> Any:
-    """Unified comment operation tool.
+    """评论操作工具
 
-    This tool provides a single interface for all comment operations:
-    - add: Add a comment to an object
-      * Required parameters: comment_text
-      * Optional parameters: locator, author
-    - delete: Delete a comment by ID
-      * Required parameters: comment_id
-    - get_all: Get all comments in the document
-      * No required parameters
-    - reply: Reply to an existing comment
-      * Required parameters: comment_text, comment_id
-    - get_thread: Get a specific comment thread
-      * Required parameters: comment_id
-    - delete_all: Delete all comments in the document
-      * No required parameters
-    - edit: Edit an existing comment
-      * Required parameters: comment_text, comment_id
+    支持的操作类型：
+    - add: 向对象添加评论
+      * 必需参数：comment_text
+      * 可选参数：locator, author
+    - delete: 通过ID删除评论
+      * 必需参数：comment_id
+      * 可选参数：无
+    - get_all: 获取文档中的所有评论
+      * 必需参数：无
+      * 可选参数：无
+    - reply: 回复现有评论
+      * 必需参数：comment_text, comment_id
+      * 可选参数：无
+    - get_thread: 获取特定评论线程
+      * 必需参数：comment_id
+      * 可选参数：无
+    - delete_all: 删除文档中的所有评论
+      * 必需参数：无
+      * 可选参数：无
+    - edit: 编辑现有评论
+      * 必需参数：comment_text, comment_id
+      * 可选参数：无
 
-    Returns:
-        Result of the operation
+    返回：
+        操作结果
     """
     # 检查locator参数类型和规范
     def check_locator_param(locator_value):

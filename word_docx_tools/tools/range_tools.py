@@ -41,19 +41,21 @@ async def range_tools(
         description="Formatting options for modify_selection_style operation",
     ),
 ) -> str:
-    """
-    Simplified range operation tool focused on user selection.
+    """范围选择操作工具，专注于用户选择内容的操作。
 
-    This tool provides interfaces for:
-    - get_current_selection: Get information about the current user selection
-      * Required parameters: None
-    - modify_selection_text: Modify the text content of the current selection
-      * Required parameters: text
-    - modify_selection_style: Apply formatting to the current selection
-      * Required parameters: formatting
+    支持的操作类型：
+    - get_current_selection: 获取当前用户选择的信息
+      * 必需参数：无
+      * 可选参数：无
+    - modify_selection_text: 修改当前选择的文本内容
+      * 必需参数：text
+      * 可选参数：无
+    - modify_selection_style: 对当前选择的内容应用格式设置
+      * 必需参数：formatting
+      * 可选参数：无
 
-    Returns:
-        Result of the operation in JSON format
+    返回：
+        操作结果的JSON字符串
     """
     # Get the active Word document
     active_doc = ctx.request_context.lifespan_context.get_active_document()

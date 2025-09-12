@@ -29,9 +29,9 @@ from ..operations.paragraphs_ops import (
     get_paragraphs_info,
     insert_paragraph_impl,
     delete_paragraph_impl,
-    format_paragraph_impl
+    format_paragraph_impl,
+    get_paragraphs_details
 )
-
 
 @mcp_server.tool()
 @require_active_document_validation
@@ -40,39 +40,45 @@ def paragraph_tools(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     operation_type: Optional[str] = Field(
         default=None,
-        description="段落操作类型: get_paragraphs_info(获取段落简略信息), get_all_paragraphs(获取所有段落), insert_paragraph(插入段落), get_paragraphs_in_range(获取范围内段落), delete_paragraph(删除段落), format_paragraph(格式化段落)",
+        description="段落操作类型: insert_paragraph(插入段落), delete_paragraph(删除段落), format_paragraph(格式化段落), get_paragraphs_details(获取段落详情)",
     ),
     locator: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Locator object for paragraph selection. Returns all paragraph when empty.\n\n    Required for: insert_paragraph, delete_paragraph"
-    ),
+        description="Locator object for paragraph selection. Returns all paragraph when empty.\n\n    Required for: insert_paragraph, delete_paragraph, format_paragraph\n    Optional for: get_paragraphs_details"),
     text: Optional[str] = Field(
         default=None,
-        description="Text content for insert operation\n\n    Required for: insert_paragraph\n",
-    ),
+        description="Text content for insert operation\n\n    Required for: insert_paragraph"),
     style: Optional[str] = Field(
         default=None,
-        description="Paragraph style name\n\n    Optional for: insert_paragraph\n",
-    ),
+        description="Paragraph style name\n\n Optional for: insert_paragraph"),
     is_independent_paragraph: bool = Field(
         default=True,
-        description="Whether to insert the paragraph as an independent paragraph\n\n    Optional for: insert_paragraph\n",
-    ),
+        description="Whether to insert the paragraph as an independent paragraph\n\n Optional for: insert_paragraph"),
     formatting: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Dictionary containing the paragraph_style to apply.\n\n    Required for: format_paragraph\n    Must contain 'paragraph_style' key\n",
-    ),
+        description="Dictionary containing the paragraph_style to apply.\n\n Required for: format_paragraph\n    Must contain 'paragraph_style' key"),
+    include_stats: bool = Field(
+        default=False,
+        description="Whether to include paragraph statistics in the result\n\n Optional for: get_paragraphs_details"),
 ) -> Any:
-    """Unified paragraph operation tool.
+    """段落操作工具，支持获取段落信息、插入段落、删除段落和格式化段落等操作。
 
-    This tool provides a single interface for all paragraph operations:
-    - get_paragraphs_info: 获取段落简略信息
+    支持的操作类型：
     - insert_paragraph: 在指定位置插入新段落
+      * 必需参数：text, locator
+      * 可选参数：style, is_independent_paragraph
     - delete_paragraph: 删除指定的段落
+      * 必需参数：locator
+      * 可选参数：无
     - format_paragraph: 格式化段落
+      * 必需参数：locator, formatting
+      * 可选参数：无
+    - get_paragraphs_details: 获取段落详情（合并版，可同时获取段落列表和统计信息）
+      * 必需参数：无
+      * 可选参数：locator, include_stats
 
-    Returns:
-        Operation result based on the operation type
+    返回：
+        操作结果的JSON字符串
     """
     # 检查locator参数类型和规范
     def check_locator_param(locator_value):
@@ -100,22 +106,7 @@ def paragraph_tools(
             )
 
         # 根据操作类型调用相应的处理函数
-        if operation_type == "get_all_paragraphs":
-            # 获取所有段落
-            from ..operations.paragraphs_ops import get_all_paragraphs
-            paragraphs = get_all_paragraphs(active_doc)
-            return json.dumps(
-                {"success": True, "paragraphs": paragraphs}, ensure_ascii=False
-            )
-
-        elif operation_type == "get_paragraphs_info":
-            # 获取段落简略信息
-            stats = get_paragraphs_info(active_doc)
-            return json.dumps(
-                {"success": True, "stats": stats}, ensure_ascii=False
-            )
-
-        elif operation_type == "insert_paragraph":
+        if operation_type == "insert_paragraph":
             if not text:
                 raise WordDocumentError(
                     ErrorCode.PARAMETER_ERROR,
@@ -168,10 +159,20 @@ def paragraph_tools(
             return json.dumps(
                 {"success": True, "result": result}, ensure_ascii=False
             )
-
+        elif operation_type == "get_paragraphs_details":
+            # 获取段落详情（合并版，可同时获取段落列表和统计信息）
+            # locator是可选参数
+            if locator:
+                # 检查locator参数
+                check_locator_param(locator)
+            
+            result = get_paragraphs_details(active_doc, locator, include_stats)
+            return json.dumps(
+                {"success": True, "result": result}, ensure_ascii=False
+            )
         else:
             raise WordDocumentError(
-                ErrorCode.OPERATION_ERROR,
+                ErrorCode.UNSUPPORTED_OPERATION,
                 f"Unsupported operation type: {operation_type}"
             )
 

@@ -193,6 +193,56 @@ def get_paragraphs_info(document: win32com.client.CDispatch) -> Dict[str, Any]:
     return stats
 
 
+@handle_com_error(ErrorCode.PARAGRAPH_SELECTION_FAILED, "get paragraphs details")
+def get_paragraphs_details(
+    document: win32com.client.CDispatch,
+    locator: Optional[Dict[str, Any]] = None,
+    include_stats: bool = False
+) -> Dict[str, Any]:
+    """
+    合并版段落信息获取函数，可同时获取段落列表和统计信息。
+
+    Args:
+        document: The Word document COM object.
+        locator: Optional. A locator dictionary defining the range to retrieve paragraphs from.
+        include_stats: Whether to include paragraph statistics in the result.
+
+    Returns:
+        A dictionary containing paragraphs list and optionally statistics.
+    """
+    if not document:
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+
+    result = {}
+    
+    # 获取段落列表
+    paragraphs = get_paragraphs(document, locator)
+    result["paragraphs"] = paragraphs
+    
+    # 如果需要统计信息
+    if include_stats:
+        # 计算统计信息
+        stats = {"total_paragraphs": len(paragraphs), "styles_used": {}}
+        
+        # 统计样式使用情况
+        for paragraph in paragraphs:
+            if "style_name" in paragraph:
+                style_name = paragraph["style_name"]
+                if style_name in stats["styles_used"]:
+                    stats["styles_used"][style_name] += 1
+                else:
+                    stats["styles_used"][style_name] = 1
+        
+        # 按使用次数排序样式
+        stats["styles_used"] = dict(
+            sorted(stats["styles_used"].items(), key=lambda item: item[1], reverse=True)
+        )
+        
+        result["stats"] = stats
+    
+    return result
+
+
 @handle_com_error(ErrorCode.PARAGRAPH_SELECTION_FAILED, "insert paragraph")
 def insert_paragraph_impl(
     document: win32com.client.CDispatch,

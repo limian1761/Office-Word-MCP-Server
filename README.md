@@ -12,6 +12,11 @@
 - Object operations
 - Style operations
 - Advanced selector engine for targeting document elements
+- Enhanced locator system with improved stability and predictability
+  - Locator normalization and validation
+  - Intelligent locator suggestion functionality
+  - Reduced randomness in object targeting
+  - Improved reliability for repeated document operations
 
 ## Installation
 

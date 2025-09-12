@@ -378,3 +378,37 @@ class SelectorEngine:
         if document is None:
             raise ValueError("Document parameter is required")
         return list(document.Tables)
+        
+    def suggest_locator(self, document: win32com.client.CDispatch, target_object: Any) -> Dict[str, Any]:
+        """Suggest the best possible locator for a given document object.
+
+        This method analyzes the target object and generates a locator that can be used
+        to consistently identify it in the document, reducing randomness in locator generation.
+
+        Args:
+            document: The Word document COM object containing the target.
+            target_object: The object to generate a locator for.
+
+        Returns:
+            A normalized and validated locator dictionary.
+        
+        Example:
+            >>> selector = SelectorEngine()
+            >>> paragraph = document.Paragraphs(1)
+            >>> locator = selector.suggest_locator(document, paragraph)
+            >>> # locator might look like: {"type": "paragraph", "value": 1, "treat_as_index": True}
+        """
+        # Create ObjectFinder instance
+        object_finder = ObjectFinder(document)
+        
+        # Use ObjectFinder's suggest_best_locator method
+        suggested_locator = object_finder.suggest_best_locator(target_object)
+        
+        # Validate the suggested locator to ensure it's correct
+        try:
+            self._validate_locator(suggested_locator)
+        except LocatorSyntaxError as e:
+            logger.warning(f"Suggested locator validation warning: {e}")
+            # Still return the locator, but log the warning
+        
+        return suggested_locator

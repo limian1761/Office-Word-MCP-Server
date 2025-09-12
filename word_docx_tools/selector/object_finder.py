@@ -9,8 +9,9 @@ from typing import Any, Dict, List, Optional, Set, TypeVar, Union, cast
 import win32com.client
 from win32com.client import CDispatch
 
-from .exceptions import AmbiguousLocatorError
+from .exceptions import AmbiguousLocatorError, LocatorError
 from .filter_handlers import FilterHandlers
+from .locator_parser import LocatorParser
 from ..com_backend.com_utils import iter_com_collection
 
 # Type variables for better type hinting
@@ -33,95 +34,50 @@ class ObjectFinder(FilterHandlers):
         object_type = locator.get("type", "paragraph")
         value = locator.get("value")
         filters = locator.get("filters", [])
-
-        # 根据元素类型选择不同的获取方法
-        if object_type == "paragraph":
-            objects = self.get_all_paragraphs()
-        elif object_type == "table":
-            objects = self.get_all_tables()
-        elif object_type == "comment":
-            objects = self.get_all_comments()
-        elif object_type == "image" or object_type == "inline_shape":
-            # 处理image和inline_shape类型，都是获取所有内嵌图片
-            objects = self.get_all_images()
-        else:
-            # 默认返回所有段落
-            objects = self.get_all_paragraphs()
-
+        treat_as_index = locator.get("treat_as_index", False)
+        
+        # 根据元素类型获取初始对象集
+        objects = self._get_objects_by_type(object_type)
+        
         # 应用过滤器
         if filters:
             objects = self.apply_filters(objects, filters)
-
-        # 调试日志
-        print(f"[DEBUG] 初始对象数量: {len(objects)}")
-        print(f"[DEBUG] 定位器: {locator}")
-
-        # 处理可能的不同参数名（value、index、id等），支持多种类型
-        # 定义可能的参数名列表，按优先级排序
-        possible_param_names = ["value", "index", "id"]
         
-        # 存储找到的对象
-        found_objects = None
-        
-        for param_name in possible_param_names:
-            param_value = locator.get(param_name)
-            if param_value is not None and param_value != "":
+        # 处理value参数（明确区分索引和文本内容查询）
+        if value is not None and value != "":
+            # 如果明确指定为索引或者value是纯数字
+            if treat_as_index or str(value).isdigit():
                 try:
-                    # 尝试作为索引处理（1-based）
-                    print(f"[DEBUG] 尝试将{param_name}={param_value}作为索引处理")
-                    index = int(param_value)
+                    index = int(value)
+                    # 统一使用1-based索引
                     if 0 < index <= len(objects):
-                        print(f"[DEBUG] 索引{index}有效，返回单个对象")
                         return [objects[index - 1]]
                     else:
-                        # 索引超出范围，设置found_objects为空列表
-                        print(f"[DEBUG] 索引{index}超出范围（对象数量: {len(objects)}），设置found_objects为空列表")
-                        found_objects = []
-                except (ValueError, TypeError):
-                    # 如果不能作为索引，将其作为文本内容处理
-                    # 添加contains_text过滤器并重新应用所有过滤器
-                    # 确保text_filters是一个新的列表
-                    text_filters = list(filters) if filters else []
-                    text_filters.append({"contains_text": param_value})
-                    
-                    # 重新从所有对象开始应用过滤，而不是在已过滤的对象上继续过滤
-                    # 根据object_type获取所有对象
-                    if object_type == "paragraph":
-                        all_objects = self.get_all_paragraphs()
-                    elif object_type == "table":
-                        all_objects = self.get_all_tables()
-                    elif object_type == "comment":
-                        all_objects = self.get_all_comments()
-                    elif object_type == "image" or object_type == "inline_shape":
-                        all_objects = self.get_all_images()
-                    else:
-                        all_objects = self.get_all_paragraphs()
-                    
-                    text_matched_objects = self.apply_filters(all_objects, text_filters)
-                    print(f"[DEBUG] 文本过滤后对象数量: {len(text_matched_objects)}")
-                    
-                    # 如果有匹配的对象，返回它们
-                    if text_matched_objects:
-                        print(f"[DEBUG] 文本过滤找到匹配对象，返回")
-                        return text_matched_objects
-                    else:
-                        # 没有匹配的对象，设置found_objects为空列表
-                        print(f"[DEBUG] 文本过滤没有找到匹配对象，设置found_objects为空列表")
-                        found_objects = []
-                    
-                    # 继续尝试下一个参数名
-                    continue
-
-        # 如果尝试了所有参数名都没有匹配，但设置了found_objects为空列表
-        # 则返回空列表，而不是所有对象
-        print(f"[DEBUG] 循环结束后，found_objects: {found_objects}")
-        if found_objects is not None:
-            print(f"[DEBUG] 返回found_objects: {len(found_objects)}个对象")
-            return found_objects
+                        return []
+                except ValueError:
+                    # 如果无法转换为整数，不做特殊处理
+                    pass
             
-        # 如果没有提供任何参数名，返回应用过滤器后的对象
-        print(f"[DEBUG] 返回应用过滤器后的对象: {len(objects)}个对象")
+            # 如果value不是索引，则作为额外的文本过滤器
+            # 但只有在元素类型支持文本内容时才这样做
+            if object_type in ["paragraph", "comment", "text"]:
+                text_filtered = self.apply_filters(objects, [{"contains_text": value}])
+                return text_filtered if text_filtered else []
+        
         return objects
+        
+    def _get_objects_by_type(self, object_type: str) -> List[CDispatch]:
+        """根据类型获取对象集的辅助方法"""
+        if object_type == "paragraph":
+            return self.get_all_paragraphs()
+        elif object_type == "table":
+            return self.get_all_tables()
+        elif object_type == "comment":
+            return self.get_all_comments()
+        elif object_type == "image" or object_type == "inline_shape":
+            return self.get_all_images()
+        else:
+            return self.get_all_paragraphs()
 
     def find_anchor(self, anchor_id: str) -> Optional[CDispatch]:
         """Find an anchor object in the document based on its identifier.
@@ -468,3 +424,90 @@ class ObjectFinder(FilterHandlers):
             if shape.Type == 1:  # wdInlineShapePicture
                 images.append(shape)
         return images
+        
+    def suggest_best_locator(self, target_object: Any) -> Dict[str, Any]:
+        """Suggest the best possible locator for a given object.
+
+        Args:
+            target_object: The object to generate a locator for.
+
+        Returns:
+            A normalized and validated locator dictionary.
+        """
+        parser = LocatorParser()
+        
+        # Determine object type
+        object_type = self._determine_object_type(target_object)
+        
+        # Create basic locator
+        locator = {
+            "type": object_type,
+            "value": "",
+            "filters": [],
+            "treat_as_index": False
+        }
+        
+        # Try to find a unique identifier based on content
+        if hasattr(target_object, 'Range') and hasattr(target_object.Range, 'Text'):
+            text = target_object.Range.Text.strip()
+            if text:
+                # Use a snippet of text as part of the locator
+                locator["value"] = text[:50]  # Limit to first 50 characters
+        
+        # Add style filter if applicable
+        if hasattr(target_object, 'Style') and hasattr(target_object.Style, 'NameLocal'):
+            style_name = target_object.Style.NameLocal
+            if style_name:
+                locator["filters"].append({"type": "has_style", "value": style_name})
+        
+        # Test if the current locator uniquely identifies the object
+        test_locator = {
+            "type": locator["type"],
+            "value": locator["value"],
+            "filters": locator["filters"],
+            "treat_as_index": False
+        }
+        
+        test_results = self.select_core(test_locator)
+        
+        # If not unique, use position-based locator
+        if len(test_results) != 1:
+            all_objects = self._get_objects_by_type(locator["type"])
+            try:
+                # Find the index of the target object
+                for i, obj in enumerate(all_objects):
+                    # Compare Range objects if available
+                    if hasattr(obj, 'Range') and hasattr(target_object, 'Range'):
+                        if (obj.Range.Start == target_object.Range.Start and 
+                            obj.Range.End == target_object.Range.End):
+                            locator["value"] = i + 1  # Use 1-based index
+                            locator["treat_as_index"] = True
+                            break
+            except Exception:
+                # Fallback to using basic locator
+                pass
+        
+        return locator
+        
+    def _determine_object_type(self, obj: Any) -> str:
+        """Determine the type of an object.
+
+        Args:
+            obj: The object to analyze.
+
+        Returns:
+            A string representing the object type.
+        """
+        try:
+            if hasattr(obj, 'Rows') and hasattr(obj, 'Columns'):
+                return 'table'
+            elif hasattr(obj, 'Type') and obj.Type == 1:  # wdInlineShapePicture
+                return 'image'
+            elif hasattr(obj, 'Author'):  # Comments have Author property
+                return 'comment'
+            elif hasattr(obj, 'Range') and hasattr(obj.Range, 'Text'):
+                return 'paragraph'
+        except Exception:
+            pass
+        
+        return 'paragraph'  # Default fallback

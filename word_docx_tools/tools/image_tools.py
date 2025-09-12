@@ -98,27 +98,27 @@ async def image_tools(
         description="Whether to exclude the caption label when adding a caption. Optional for: add_caption",
     ),
 ) -> str:
-    """
-    Unified image operation tool.
+    """图像操作工具
 
-    This tool provides a single interface for all image operations:
-    - get_info: Get information about all images in the document
-      * No required parameters
-    - insert: Insert an image
-      * Required parameters: image_path
-      * Optional parameters: locator, position
-    - add_caption: Add a caption to an image
-      * Required parameters: caption_text
-      * Optional parameters: locator, label
-    - resize: Resize an image
-      * Required parameters: width or height (at least one)
-      * Optional parameters: locator
-    - set_color_type: Set image color type
-      * Required parameters: color_type
-      * Optional parameters: locator
+    支持的操作类型：
+    - get_info: 获取文档中所有图像的信息
+      * 必需参数：无
+      * 可选参数：无
+    - insert: 插入图像
+      * 必需参数：image_path
+      * 可选参数：locator, position
+    - add_caption: 为图像添加说明文字
+      * 必需参数：caption_text
+      * 可选参数：locator, label
+    - resize: 调整图像大小
+      * 必需参数：width或height（至少提供一个）
+      * 可选参数：locator
+    - set_color_type: 设置图像颜色类型
+      * 必需参数：color_type
+      * 可选参数：locator
 
-    Returns:
-        Operation result based on the operation type
+    返回：
+        操作结果的JSON字符串
     """
     # 检查locator参数类型和规范
     def check_locator_param(locator_value):

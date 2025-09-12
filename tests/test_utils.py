@@ -169,37 +169,52 @@ class WordDocumentTestBase(unittest.TestCase):
             print(f"关闭Word应用程序过程中出现异常: {str(e)}")
 
     def verify_tool_result(self, result, expected_success=True):
-        """验证工具调用的结果
+        """验证工具结果
         
         Args:
-            result: 工具调用返回的结果
-            expected_success: 预期是否成功
+            result: 工具返回的结果
+            expected_success: 期望的成功状态
             
         Returns:
-            解析后的JSON数据
+            解析后的结果数据
         """
         try:
-            if isinstance(result, dict):
-                # 直接使用字典结果
-                if "success" in result:
-                    self.assertEqual(result["success"], expected_success)
-                return result
-            elif result is None:
+            if result is None:
                 print("Got None result")
-                self.fail("Expected JSON string or dict but got None")
-            elif result == '':
-                print("Got empty string result")
-                self.fail("Expected JSON string or dict but got empty string")
+                self.fail("Expected result but got None")
+            elif isinstance(result, dict):
+                # 如果已经是字典，直接验证
+                if "success" in result:
+                    if expected_success:
+                        self.assertTrue(result["success"])
+                    else:
+                        self.assertFalse(result["success"])
+                return result
+            elif isinstance(result, str):
+                if not result:
+                    print("Got empty string result")
+                    self.fail("Expected JSON string or dict but got empty string")
+                elif result.startswith("Error ["):
+                    # 处理格式化的错误响应
+                    print(f"Got error response: {result}")
+                    if expected_success:
+                        self.fail(f"Expected success but got error: {result}")
+                    return {"success": False, "error": result}
+                else:
+                    # 尝试解析为JSON
+                    try:
+                        result_data = json.loads(result)
+                        if "success" in result_data:
+                            if expected_success:
+                                self.assertTrue(result_data["success"])
+                            else:
+                                self.assertFalse(result_data["success"])
+                        return result_data
+                    except json.JSONDecodeError:
+                        # 如果不是有效的JSON字符串，则失败
+                        self.fail(f"Expected valid JSON string or dict but got: {result}")
             else:
-                # 尝试解析为JSON
-                try:
-                    result_data = json.loads(result)
-                    if "success" in result_data:
-                        self.assertEqual(result_data["success"], expected_success)
-                    return result_data
-                except json.JSONDecodeError:
-                    # 如果不是有效的JSON字符串，则失败
-                    self.fail(f"Expected valid JSON string or dict but got: {result}")
+                self.fail(f"Expected JSON string or dict but got: {type(result)}")
         except Exception as e:
             error_message = f"验证工具结果时出错: {repr(e)}"
             print(error_message)

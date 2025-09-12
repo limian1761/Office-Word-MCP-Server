@@ -99,35 +99,27 @@ def text_tools(
         description="Maximum length of text from start_index to extract,default is 10000,\n\n   Used for: get_text\n",
     ),
 ) -> Any:
-    """统一文本操作工具接口
+    """文本操作工具，支持获取文本内容、插入文本、替换文本、获取字符计数和应用文本格式等操作。
 
-    此工具为所有文本操作提供单一接口，将实际实现委托给操作层。
-    通过指定不同的操作类型，可以执行以下文本操作：
+    支持的操作类型：
     - get_text: 从文档或特定定位器获取文本内容
+      * 必需参数：无
+      * 可选参数：locator, start_index, max_length
     - insert_text: 在特定定位器位置插入文本
+      * 必需参数：text, locator
+      * 可选参数：position
     - replace_text: 替换特定定位器中的文本内容
+      * 必需参数：text, locator
+      * 可选参数：无
     - get_char_count: 获取文档或特定定位器的字符计数
+      * 必需参数：无
+      * 可选参数：locator
     - apply_formatting: 对特定定位器中的文本应用格式设置
+      * 必需参数：locator, formatting
+      * 可选参数：无
 
-    Args:
-        ctx (Context[ServerSession, Any]): 上下文对象，包含服务器会话信息
-        operation_type (Optional[str]): 文本操作类型，可选值：get_text, insert_text, replace_text, get_char_count, apply_formatting
-        locator (Optional[Dict[str, Any]]): 用于对象选择的定位器对象，具有特定的语法要求
-            可选用于：get_text
-            必需用于：insert_text, replace_text, apply_formatting
-        text (Optional[str]): 用于插入或替换操作的文本内容
-            必需用于：insert_text, replace_text
-        position (str): 插入操作的位置，可选值：before, after, replace
-            用于：insert_text
-        formatting (Optional[Dict[str, Any]]): 格式设置选项，包含：bold, italic, font_size, font_name, font_color, alignment
-            用于：apply_formatting
-        start_index (Optional[int]): 文本提取的起始索引，默认为0
-            用于：get_text
-        max_length (Optional[int]): 从起始索引开始提取的最大文本长度，默认为10000
-            用于：get_text
-
-    Returns:
-        Any: 根据操作类型返回相应的操作结果
+    返回：
+        操作结果的JSON字符串
     """
     try:
         log_info(f"Starting text operation: {operation_type}")

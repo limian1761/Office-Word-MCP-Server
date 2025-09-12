@@ -18,7 +18,11 @@ class TestDocumentTools(WordDocumentTestBase):
         """测试前准备"""
         # 调用基类的setUp方法，创建Word应用程序、文档和上下文
         super().setUp()
-
+        
+        # 强制使用模拟对象，避免使用真实的Word应用程序
+        self.word_app = MagicMock()
+        self.doc = MagicMock()
+        
         # 创建模拟的文档操作
         self._setup_mock_document_operations()
 

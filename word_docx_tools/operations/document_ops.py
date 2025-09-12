@@ -143,9 +143,12 @@ def close_document(document: CDispatch, save_changes: bool = True) -> bool:
 
 
 @handle_com_error(ErrorCode.DOCUMENT_ERROR, "save document")
-def save_document(document: CDispatch, file_path: Optional[str] = None) -> str:
+def save_document(
+    document: CDispatch,
+    file_path: Optional[str] = None,
+) -> str:
     """
-    Saves a Word document.
+    Save a Word document.
 
     Args:
         document: The document COM object to save.
@@ -159,23 +162,70 @@ def save_document(document: CDispatch, file_path: Optional[str] = None) -> str:
             raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No document to save")
 
         if file_path:
-            document.SaveAs2(FileName=file_path)
-            logger.info(f"Document saved to: {file_path}")
+            # 确保file_path是字符串类型
+            if not isinstance(file_path, (str, bytes, os.PathLike)):
+                file_path = str(file_path)
+                logger.warning(f"Converted file_path to string: {file_path}")
+            
+            # 检查文件路径是否为空
+            if not file_path:
+                raise WordDocumentError(ErrorCode.INVALID_INPUT, "File path cannot be empty")
+            
+            # 尝试使用SaveAs2方法，如果失败则回退到SaveAs方法
+            try:
+                # 确保路径使用正确的分隔符
+                file_path = os.path.normpath(file_path)
+                
+                # 确保目标目录存在
+                directory = os.path.dirname(file_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory)
+                    logger.info(f"Created directory: {directory}")
+                
+                # 对文件名进行额外的验证和处理，以确保符合Word的要求
+                file_name = os.path.basename(file_path)
+                
+                # 检查文件名是否包含Word不支持的字符
+                invalid_chars = '\\/:*?"<>|'
+                for char in invalid_chars:
+                    if char in file_name:
+                        # 替换不支持的字符
+                        file_name = file_name.replace(char, '_')
+                        logger.warning(f"Replaced invalid characters in filename: {file_name}")
+                
+                # 如果文件名被修改，更新完整路径
+                if file_name != os.path.basename(file_path):
+                    file_path = os.path.join(directory, file_name)
+                
+                # 确保文件扩展名为.docx或.doc
+                base_name, ext = os.path.splitext(file_name)
+                if not ext or ext.lower() not in ['.docx', '.doc']:
+                    file_path = os.path.join(directory, base_name + '.docx')
+                    logger.warning(f"Added .docx extension to file path: {file_path}")
+                
+                try:
+                    # 尝试使用SaveAs2（Word 2010及以上版本）
+                    document.SaveAs2(FileName=file_path)
+                except AttributeError:
+                    # 如果SaveAs2不可用，尝试使用SaveAs（旧版Word）
+                    logger.warning("SaveAs2 method not available, falling back to SaveAs")
+                    document.SaveAs(FileName=file_path)
+                
+                logger.info(f"Document saved to: {file_path}")
+            except Exception as e:
+                logger.error(f"Failed to save document with path: {file_path}")
+                raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, f"Failed to save document: {str(e)}")
         else:
             document.Save()
             file_path = document.FullName
             if file_path is None:
-                raise WordDocumentError(
-                    ErrorCode.SERVER_ERROR, "Could not determine file path after saving"
-                )
+                raise WordDocumentError(ErrorCode.SERVER_ERROR, "Could not determine file path after saving")
             logger.info(f"Document saved to: {file_path}")
 
         return file_path
     except Exception as e:
         logger.error(f"Failed to save document: {str(e)}")
-        raise WordDocumentError(
-            ErrorCode.DOCUMENT_ERROR, f"Failed to save document: {str(e)}"
-        )
+        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, f"Failed to save document: {str(e)}")
 
 
 # === Document Structure Operations ===

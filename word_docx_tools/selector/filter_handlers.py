@@ -35,7 +35,7 @@ class FilterHandlers:
     def apply_filters(
         self, objects: List[Any], filters: List[Dict[str, Any]]
     ) -> List[Any]:
-        """Applies a series of filters to a list of objects.
+        """Applies a series of filters to a list of objects with strict parameter validation.
 
         Args:
             objects: List of objects to filter.
@@ -45,23 +45,81 @@ class FilterHandlers:
             Filtered list of objects.
 
         Raises:
-            LocatorSyntaxError: If filter format is invalid.
-
-        For guidance on proper locator syntax, please refer to:
-        word_docx_tools/selector/LOCATOR_GUIDE.md
+            LocatorSyntaxError: If filter format or parameters are invalid.
         """
+        # Validate input types
+        if not isinstance(objects, list):
+            raise LocatorSyntaxError(f"Expected objects to be a list, got {type(objects).__name__}.")
+        
+        if not isinstance(filters, list):
+            raise LocatorSyntaxError(f"Expected filters to be a list, got {type(filters).__name__}.")
+
         filtered_list = list(objects)
-        for f in filters:
+        
+        # Define type constraints for each filter
+        filter_type_constraints = {
+            "index": (int,),
+            "contains_text": (str,),
+            "text_matches_regex": (str,),
+            "shape_type": (str,),
+            "style": (str,),
+            "is_bold": (bool,),
+            "row_index": (int,),
+            "column_index": (int,),
+            "table_index": (int,),
+            "is_list_item": (bool,),
+            "range_start": (int,),
+            "range_end": (int,),
+        }
+
+        for i, f in enumerate(filters):
+            # Validate filter format
             if not isinstance(f, dict) or len(f) != 1:
-                raise LocatorSyntaxError(f"Invalid filter format: {f}.")
+                raise LocatorSyntaxError(f"Filter at index {i} must be a single key-value pair dictionary.")
 
             filter_name, value = next(iter(f.items()))
 
+            # Validate filter name
             if filter_name not in self._filter_map:
-                raise LocatorSyntaxError(f"Unsupported filter: {filter_name}.")
+                valid_filters = ", ".join(sorted(self._filter_map.keys()))
+                raise LocatorSyntaxError(f"Unsupported filter '{filter_name}' at index {i}. Valid filters are: {valid_filters}")
 
+            # Validate filter value type
+            if filter_name in filter_type_constraints:
+                allowed_types = filter_type_constraints[filter_name]
+                if not isinstance(value, allowed_types):
+                    type_names = [t.__name__ for t in allowed_types]
+                    raise LocatorSyntaxError(
+                        f"Filter '{filter_name}' at index {i} requires {', '.join(type_names)}, got {type(value).__name__}."
+                    )
+
+            # Apply specific validation rules for certain filters
+            if filter_name == "index" and (not isinstance(value, int) or value < -len(filtered_list) or value >= len(filtered_list)):
+                raise LocatorSyntaxError(
+                    f"Filter 'index' at index {i} has value {value}, which is out of range for the current list size {len(filtered_list)}."
+                )
+            
+            elif filter_name in ["row_index", "column_index", "table_index"] and (not isinstance(value, int) or value < 0):
+                raise LocatorSyntaxError(
+                    f"Filter '{filter_name}' at index {i} must be a non-negative integer, got {value}."
+                )
+            
+            elif filter_name == "text_matches_regex":
+                try:
+                    re.compile(value)
+                except re.error as e:
+                    raise LocatorSyntaxError(f"Invalid regex pattern '{value}' at index {i}: {e}.")
+
+            # Execute filter with strict error handling
             filter_func = self._filter_map[filter_name]
-            filtered_list = filter_func(filtered_list, value)
+            try:
+                filtered_list = filter_func(filtered_list, value)
+            except Exception as e:
+                raise LocatorSyntaxError(f"Filter '{filter_name}' at index {i} failed with error: {str(e)}")
+
+            # Early exit if no objects left to filter
+            if not filtered_list:
+                break
 
         return filtered_list
 

@@ -80,30 +80,30 @@ def table_tools(
         description="Number of rows/columns to insert. Optional for: insert_row, insert_column",
     ),
 ) -> str:
-    """
-    Unified table operation tool.
+    """表格操作工具
 
-    This tool provides a single interface for all table operations:
-    - create: Create a new table
-      * Required parameters: rows, cols, locator
-      * Optional parameters: position
-    - get_cell: Get cell text
-      * Required parameters: table_index, row, col
-    - set_cell: Set cell text
-      * Required parameters: table_index, row, col, text
-      * Optional parameters: formatting
-    - get_info: Get table information
-      * Required parameters: None (不提供table_index则返回所有表格信息)
-      * Optional parameters: table_index
-    - insert_row: Insert rows
-      * Required parameters: table_index
-      * Optional parameters: position, count
-    - insert_column: Insert columns
-      * Required parameters: table_index
-      * Optional parameters: position, count
+    支持的操作类型：
+    - create: 创建新表格
+      * 必需参数：rows, cols, locator
+      * 可选参数：position
+    - get_cell: 获取单元格文本
+      * 必需参数：table_index, row, col
+      * 可选参数：无
+    - set_cell: 设置单元格文本
+      * 必需参数：table_index, row, col, text
+      * 可选参数：formatting
+    - get_info: 获取表格信息
+      * 必需参数：无（不提供table_index则返回所有表格信息）
+      * 可选参数：table_index
+    - insert_row: 插入行
+      * 必需参数：table_index
+      * 可选参数：position, count
+    - insert_column: 插入列
+      * 必需参数：table_index
+      * 可选参数：position, count
 
-    Returns:
-        Operation result based on the operation type
+    返回：
+        操作结果的JSON字符串
     """
     
     def check_locator_param(locator):

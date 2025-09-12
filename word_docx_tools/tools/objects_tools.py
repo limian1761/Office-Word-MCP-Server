@@ -78,28 +78,27 @@ def objects_tools(
         description="Name of the hyperlink. Optional for hyperlink_operations",
     ),
 ) -> Dict[str, Any]:
-    """
-    Document object operation tool
+    """文档对象操作工具
 
-    Supported operation types:
-    - bookmark_operations: Bookmark operations (create, get, delete)
-    - citation_operations: Citation operations (create)
-    - hyperlink_operations: Hyperlink operations (create)
+    支持的操作类型：
+    - bookmark_operations: 书签操作（创建、获取、删除）
+    - citation_operations: 引用操作（创建）
+    - hyperlink_operations: 超链接操作（创建）
 
-    Args for bookmark_operations:
-        Required parameters: bookmark_name, locator, sub_operation
-        Optional parameters: None
+    bookmark_operations 参数：
+        必需参数：bookmark_name, locator, sub_operation
+        可选参数：无
 
-    Args for citation_operations:
-        Required parameters: citation_text, locator, sub_operation
-        Optional parameters: citation_name
+    citation_operations 参数：
+        必需参数：citation_text, locator, sub_operation
+        可选参数：citation_name
 
-    Args for hyperlink_operations:
-        Required parameters: url, locator, sub_operation
-        Optional parameters: display_text, hyperlink_name
+    hyperlink_operations 参数：
+        必需参数：url, locator, sub_operation
+        可选参数：display_text, hyperlink_name
 
-    Returns:
-        Dictionary of operation results
+    返回：
+        操作结果的字典
     """
     # 导入通用的locator参数检查函数
     from .utils import check_locator_param

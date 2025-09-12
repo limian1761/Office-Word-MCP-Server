@@ -17,15 +17,18 @@ from pydantic import Field
 
 # Local imports
 from ..mcp_service.core import mcp_server
-from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
-                                      format_error_response,
-                                      get_active_document, handle_tool_errors,
-                                      log_error, log_info, log_warning,
-                                      require_active_document_validation)
-from ..operations.document_ops import (close_document, create_document,
-                                       get_document_outline, open_document,
-                                       save_document)
-from ..operations.others_ops import protect_document, unprotect_document
+from ..mcp_service.core_utils import (
+    ErrorCode, WordDocumentError,
+    format_error_response,
+    get_active_document, handle_tool_errors,
+    log_error, log_info, log_warning,
+    require_active_document_validation
+)
+from ..operations.document_ops import (
+    close_document, create_document,
+    get_document_outline, open_document,
+    save_document
+)
 from ..mcp_service.app_context import AppContext
 
 # 加载环境变量
@@ -41,7 +44,7 @@ def document_tools(
     ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     operation_type: Optional[str] = Field(
         default="open",
-        description="Type of document operation: create, open, save, save_as, close, get_outline, set_property, get_property, print, protect, unprotect",
+        description="Type of document operation: create, open, save, save_as, close, get_outline, set_property, get_property",
     ),
     file_path: Optional[str] = Field(
         default=None,
@@ -62,18 +65,6 @@ def document_tools(
     property_value: Optional[Union[str, int, float, bool]] = Field(
         default=None,
         description="Property value for set operation. Required for: set_property. Optional for: None",
-    ),
-    print_settings: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Print settings for print operation. Required for: print. Optional for: None",
-    ),
-    protection_type: Optional[str] = Field(
-        default=None,
-        description="Protection type for protect operation. Required for: protect. Optional for: None",
-    ),
-    protection_password: Optional[str] = Field(
-        default=None,
-        description="Password for protect/unprotect operations. Required for: protect, unprotect. Optional for: None",
     ),
     password: Optional[str] = Field(
         default=None,
@@ -107,15 +98,6 @@ def document_tools(
     - get_property: Get document property
       * Required parameters: property_name
       * Optional parameters: Nonecreate
-    - print: Print the document
-      * Required parameters: None
-      * Optional parameters: print_settings
-    - protect: Protect the document
-      * Required parameters: protection_type
-      * Optional parameters: protection_password
-    - unprotect: Unprotect the document
-      * Required parameters: None
-      * Optional parameters: protection_password
 
     Returns:
         Operation result based on the operation type
@@ -125,168 +107,199 @@ def document_tools(
         active_doc = ctx.request_context.lifespan_context.get_active_document()
 
         # 根据操作类型执行相应的操作
-        if operation_type and operation_type.lower() == "create":
-            log_info("Creating new document")
-            # 创建新文档的逻辑
-            word_app = ctx.request_context.lifespan_context.get_word_app(
-                create_if_needed=True
-            )
-            if word_app is None:
-                log_error("Failed to get or create Word application instance")
-                raise RuntimeError("Failed to get or create Word application instance")
-            doc = create_document(word_app, visible=True, template_path=template_path)
+        if operation_type:
+            # 确保operation_type是字符串类型
+            # 处理operation_type可能是字典的情况
+            if isinstance(operation_type, dict):
+                # 从字典中提取operation_type值
+                if 'operation_type' in operation_type:
+                    operation_type_str = str(operation_type['operation_type']).lower()
+                    # 如果params中包含其他参数，也提取出来
+                    if 'params' in operation_type:
+                        params = operation_type['params']
+                        if 'template_path' in params:
+                            template_path = params['template_path']
+                        if 'file_path' in params:
+                            file_path = params['file_path']
+                else:
+                    operation_type_str = str(operation_type).lower()
+            else:
+                operation_type_str = str(operation_type).lower()
+                
+            # 处理特殊的操作类型映射
+            if operation_type_str == "create_document":
+                operation_type_str = "create"
+            elif operation_type_str == "save_document":
+                operation_type_str = "save_as"
+            elif operation_type_str == "open_document":
+                operation_type_str = "open"
+                
+            if operation_type_str == "create":
+                log_info("Creating new document")
+                # 创建新文档的逻辑
+                word_app = ctx.request_context.lifespan_context.get_word_app(
+                    create_if_needed=True
+                )
+                if word_app is None:
+                    log_error("Failed to get or create Word application instance")
+                    raise RuntimeError("Failed to get or create Word application instance")
+                doc = create_document(word_app, visible=True, template_path=template_path)
 
-            # 更新上下文中的活动文档
-            ctx.request_context.lifespan_context.set_active_document(doc)
+                # 更新上下文中的活动文档
+                ctx.request_context.lifespan_context.set_active_document(doc)
 
-            # 检查文件是否已存在
-            if file_path and os.path.exists(file_path):
-                # 文件已存在，返回友好的错误信息
+                # 检查文件是否已存在
+                if file_path and isinstance(file_path, (str, bytes, os.PathLike)) and os.path.exists(file_path):
+                    # 文件已存在，返回友好的错误信息
+                    return json.dumps(
+                        {
+                            "success": False,
+                            "message": f"文件已存在: {file_path}",
+                            "error_code": "FILE_ALREADY_EXISTS",
+                        },
+                        ensure_ascii=False,
+                    )
+
+                # 保存新文档
+                # 确保file_path是字符串类型或None
+                save_path = str(file_path) if file_path and not isinstance(file_path, (str, bytes, os.PathLike)) else file_path
+                save_document(doc, save_path)
+
+                # 返回agent_guide.md文件内容
+                agent_guide_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                    "docs",
+                    "agent_guide.md",
+                )
+                agent_guide_content = ""
+                try:
+                    if os.path.exists(agent_guide_path):
+                        with open(agent_guide_path, "r", encoding="utf-8") as f:
+                            # 由于文件可能很大，只读取前10000个字符
+                            agent_guide_content = f.read(10000)
+                except Exception as e:
+                    log_error(f"Failed to read agent_guide.md: {e}")
+                    agent_guide_content = ""
+
                 return json.dumps(
                     {
-                        "success": False,
-                        "message": f"文件已存在: {file_path}",
-                        "error_code": "FILE_ALREADY_EXISTS",
+                        "success": True,
+                        "message": "New document created successfully",
+                        "document_name": doc.Name,
+                        "document_created": True,
+                        "agent_guide_content": agent_guide_content,
                     },
                     ensure_ascii=False,
                 )
 
-            # 保存新文档
-            save_document(doc, file_path)
+            elif operation_type_str == "open":
+                if file_path is None:
+                    raise ValueError(
+                        "file_path parameter must be provided for open operation"
+                    )
 
-            # 返回agent_guide.md文件内容
-            agent_guide_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                "docs",
-                "agent_guide.md",
-            )
-            agent_guide_content = ""
-            try:
-                if os.path.exists(agent_guide_path):
-                    with open(agent_guide_path, "r", encoding="utf-8") as f:
-                        # 由于文件可能很大，只读取前10000个字符
-                        agent_guide_content = f.read(10000)
-            except Exception as e:
-                log_error(f"Failed to read agent_guide.md: {e}")
-                agent_guide_content = ""
-
-            return json.dumps(
-                {
-                    "success": True,
-                    "message": "New document created successfully",
-                    "document_name": doc.Name,
-                    "agent_guide_content": agent_guide_content,
-                },
-                ensure_ascii=False,
-            )
-
-        elif operation_type and operation_type.lower() == "open":
-            if file_path is None:
-                raise ValueError(
-                    "file_path parameter must be provided for open operation"
+                log_info(f"Opening document: {file_path}")
+                # 获取Word应用实例
+                word_app = ctx.request_context.lifespan_context.get_word_app(
+                    create_if_needed=True
                 )
+                if word_app is None:
+                    raise RuntimeError("Failed to get or create Word application instance")
 
-            log_info(f"Opening document: {file_path}")
-            # 获取Word应用实例
-            word_app = ctx.request_context.lifespan_context.get_word_app(
-                create_if_needed=True
-            )
-            if word_app is None:
-                raise RuntimeError("Failed to get or create Word application instance")
+                # 使用document_ops中的open_document函数
+                doc = open_document(word_app, file_path, visible=True, password=password)
 
-            # 使用document_ops中的open_document函数
-            doc = open_document(word_app, file_path, visible=True, password=password)
+                # 更新上下文中的活动文档
+                ctx.request_context.lifespan_context.set_active_document(doc)
 
-            # 更新上下文中的活动文档
-            ctx.request_context.lifespan_context.set_active_document(doc)
-
-            # 返回文档对象的基本信息
-            return json.dumps(
-                {
-                    "success": True,
-                    "message": f"Document opened successfully: {file_path}",
-                    "document": {
-                        "name": doc.Name,
-                        "path": file_path,
-                        "full_name": doc.FullName,
-                        "saved": doc.Saved,
+                # 返回文档对象的基本信息
+                return json.dumps(
+                    {
+                        "success": True,
+                        "message": f"Document opened successfully: {file_path}",
+                        "document_opened": True,
+                        "document": {
+                            "name": doc.Name,
+                            "path": file_path,
+                            "full_name": doc.FullName,
+                            "saved": doc.Saved,
+                        },
                     },
-                },
-                ensure_ascii=False,
-            )
-
-        elif operation_type and operation_type.lower() == "save":
-            if not active_doc:
-                raise WordDocumentError(
-                    ErrorCode.DOCUMENT_ERROR, "No active document found"
+                    ensure_ascii=False,
                 )
 
-            log_info("Saving document")
-            result = save_document(active_doc)
+            elif operation_type_str == "save":
+                if not active_doc:
+                    raise WordDocumentError(
+                        ErrorCode.DOCUMENT_ERROR, "No active document found"
+                    )
 
-            return json.dumps(
-                {"success": result, "message": "Document saved successfully"},
-                ensure_ascii=False,
-            )
+                log_info("Saving document")
+                result = save_document(active_doc)
 
-        elif operation_type and operation_type.lower() == "save_as":
-            if not active_doc:
-                raise WordDocumentError(
-                    ErrorCode.DOCUMENT_ERROR, "No active document found"
-                )
-            if file_path is None:
-                raise ValueError(
-                    "file_path parameter must be provided for save_as operation"
+                return json.dumps(
+                    {"success": result, "message": "Document saved successfully", "document_saved": True},
+                    ensure_ascii=False,
                 )
 
-            log_info(f"Saving document as: {file_path}")
-            result = save_document(active_doc, file_path)
+            elif operation_type_str == "save_as":
+                if not active_doc:
+                    raise WordDocumentError(
+                        ErrorCode.DOCUMENT_ERROR, "No active document found"
+                    )
+                if file_path is None:
+                    raise ValueError(
+                        "file_path parameter must be provided for save_as operation"
+                    )
 
-            return json.dumps(
-                {"success": result, "message": f"Document saved as: {file_path}"},
-                ensure_ascii=False,
-            )
+                log_info(f"Saving document as: {file_path}")
+                result = save_document(active_doc, file_path)
 
-        elif operation_type and operation_type.lower() == "close":
-            if not active_doc:
-                raise WordDocumentError(
-                    ErrorCode.DOCUMENT_ERROR, "No active document found"
+                return json.dumps(
+                    {"success": result, "message": f"Document saved as: {file_path}", "document_saved": True},
+                    ensure_ascii=False,
                 )
 
-            log_info("Closing document")
-            result = close_document(active_doc)
+            elif operation_type_str == "close":
+                if not active_doc:
+                    raise WordDocumentError(
+                        ErrorCode.DOCUMENT_ERROR, "No active document found"
+                    )
 
-            # 清除上下文中的活动文档
-            ctx.request_context.lifespan_context.set_active_document(None)
+                log_info("Closing document")
+                result = close_document(active_doc)
 
-            return json.dumps(
-                {"success": result, "message": "Document closed successfully"},
-                ensure_ascii=False,
-            )
-        elif operation_type and operation_type.lower() == "get_outline":
-            if not active_doc:
-                raise WordDocumentError(
-                    ErrorCode.DOCUMENT_ERROR, "No active document found"
+                # 清除上下文中的活动文档
+                ctx.request_context.lifespan_context.set_active_document(None)
+
+                return json.dumps(
+                    {"success": result, "message": "Document closed successfully"},
+                    ensure_ascii=False,
                 )
+            elif operation_type_str == "get_outline":
+                if not active_doc:
+                    raise WordDocumentError(
+                        ErrorCode.DOCUMENT_ERROR, "No active document found"
+                    )
 
-            log_info("Getting document outline")
-            outline = get_document_outline(active_doc)
+                log_info("Getting document outline")
+                outline = get_document_outline(active_doc)
 
-            return outline
+                return outline
 
-        elif operation_type and operation_type.lower() == "set_property":
-            if not active_doc:
-                raise WordDocumentError(
-                    ErrorCode.DOCUMENT_ERROR, "No active document found"
-                )
+            elif operation_type_str == "set_property":
+                if not active_doc:
+                    raise WordDocumentError(
+                        ErrorCode.DOCUMENT_ERROR, "No active document found"
+                    )
 
-            if property_name is None or property_value is None:
-                raise ValueError(
-                    "property_name and property_value parameters must be provided for set_property operation"
-                )
+                if property_name is None or property_value is None:
+                    raise ValueError(
+                        "property_name and property_value parameters must be provided for set_property operation"
+                    )
 
-            log_info(f"Setting document property: {property_name}")
-            try:
+                log_info(f"Setting document property: {property_name}")
+                
                 # 属性名称映射字典，用于支持不同语言的属性名
                 property_name_map = {
                     # 英文到英文的映射
@@ -307,50 +320,6 @@ def document_tools(
                     "Number of Words": "Number of Words",
                     "Number of Characters": "Number of Characters",
                     "Security": "Security",
-                    "Category": "Category",
-                    "Format": "Format",
-                    "Manager": "Manager",
-                    "Company": "Company",
-                    "Number of Bytes": "Number of Bytes",
-                    "Number of Lines": "Number of Lines",
-                    "Number of Paragraphs": "Number of Paragraphs",
-                    "Number of Slides": "Number of Slides",
-                    "Number of Notes": "Number of Notes",
-                    "Number of Hidden Slides": "Number of Hidden Slides",
-                    "Number of Multimedia Clips": "Number of Multimedia Clips",
-                    "Hyperlink Base": "Hyperlink Base",
-                    "Number of Characters (with spaces)": "Number of Characters (with spaces)",
-                    # 中文到英文的映射
-                    "标题": "Title",
-                    "主题": "Subject",
-                    "作者": "Author",
-                    "关键词": "Keywords",
-                    "备注": "Comments",
-                    "模板": "Template",
-                    "上次作者": "Last Author",
-                    "修订号": "Revision Number",
-                    "应用程序名称": "Application Name",
-                    "上次打印日期": "Last Print Date",
-                    "创建日期": "Creation Date",
-                    "上次保存时间": "Last Save Time",
-                    "总编辑时间": "Total Editing Time",
-                    "页数": "Number of Pages",
-                    "字数": "Number of Words",
-                    "字符数": "Number of Characters",
-                    "安全性": "Security",
-                    "类别": "Category",
-                    "格式": "Format",
-                    "管理员": "Manager",
-                    "公司": "Company",
-                    "字节数": "Number of Bytes",
-                    "行数": "Number of Lines",
-                    "段落数": "Number of Paragraphs",
-                    "幻灯片数": "Number of Slides",
-                    "备注数": "Number of Notes",
-                    "隐藏幻灯片数": "Number of Hidden Slides",
-                    "多媒体剪辑数": "Number of Multimedia Clips",
-                    "超链接基础": "Hyperlink Base",
-                    "字符数(含空格)": "Number of Characters (with spaces)",
                 }
 
                 # 获取标准化的属性名称
@@ -380,8 +349,6 @@ def document_tools(
                 except Exception as e:
                     # 如果内置属性访问失败，尝试检查自定义属性
                     try:
-                        if active_doc is None:
-                            raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
                         custom_properties = active_doc.CustomDocumentProperties
                         # 检查属性是否已存在
                         prop_exists = False
@@ -423,141 +390,87 @@ def document_tools(
                             ErrorCode.SERVER_ERROR,
                             f"Failed to set property: {str(inner_e)}",
                         )
-            except Exception as e:
-                # 更友好的错误处理
-                error_message = str(e)
-                if "Property not found" in error_message:
-                    supported_properties = ", ".join(list(property_name_map.keys()))
-                    raise WordDocumentError(
-                        ErrorCode.NOT_FOUND,
-                        f"Property not found: {property_name}. Supported built-in properties: {supported_properties}",
-                    )
-                else:
-                    raise WordDocumentError(
-                        ErrorCode.SERVER_ERROR, f"Failed to set property: {str(e)}"
-                    )
-
-        elif operation_type and operation_type.lower() == "get_property":
-            if property_name is None:
-                raise ValueError(
-                    "property_name parameter must be provided for get_property operation"
-                )
-
-            log_info(f"Getting document property: {property_name}")
-            try:
-                if active_doc is None:
-                    raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
-                # 尝试获取文档内置属性
-                try:
-                    # Word文档属性需要通过名称访问，而不是作为对象的属性
-                    property_obj = active_doc.BuiltInDocumentProperties(property_name)
-                    value = property_obj.Value
-                    return json.dumps(
-                        {
-                            "success": True,
-                            "property_name": property_name,
-                            "value": value,
-                            "is_built_in": True,
-                        },
-                        ensure_ascii=False,
-                    )
                 except Exception as e:
-                    # 如果内置属性访问失败，尝试检查自定义属性
-                    try:
-                        if active_doc is None:
-                            raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
-                        custom_properties = active_doc.CustomDocumentProperties
-                        # 遍历自定义属性查找指定名称的属性
-                        value = None
-                        for i in range(1, custom_properties.Count + 1):
-                            if custom_properties(i).Name == property_name:
-                                value = custom_properties(i).Value
-                                return json.dumps(
-                                    {
-                                        "success": True,
-                                        "property_name": property_name,
-                                        "value": value,
-                                        "is_custom_property": True,
-                                    },
-                                    ensure_ascii=False,
-                                )
+                    # 更友好的错误处理
+                    error_message = str(e)
+                    if "Property not found" in error_message:
+                        supported_properties = ", ".join(list(property_name_map.keys()))
+                        raise WordDocumentError(
+                            ErrorCode.NOT_FOUND,
+                            f"Property not found: {property_name}. Supported built-in properties: {supported_properties}",
+                        )
+                    else:
+                        raise WordDocumentError(
+                            ErrorCode.SERVER_ERROR, f"Failed to set property: {str(e)}"
+                        )
 
-                        # 如果未找到属性，返回None值
+            elif operation_type_str == "get_property":
+                if property_name is None:
+                    raise ValueError(
+                        "property_name parameter must be provided for get_property operation"
+                    )
+
+                log_info(f"Getting document property: {property_name}")
+                try:
+                    if active_doc is None:
+                        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+                    # 尝试获取文档内置属性
+                    try:
+                        # Word文档属性需要通过名称访问，而不是作为对象的属性
+                        property_obj = active_doc.BuiltInDocumentProperties(property_name)
+                        value = property_obj.Value
                         return json.dumps(
                             {
                                 "success": True,
                                 "property_name": property_name,
-                                "value": None,
-                                "message": "Property not found",
+                                "value": value,
+                                "is_built_in": True,
                             },
                             ensure_ascii=False,
                         )
-                    except Exception as inner_e:
-                        raise WordDocumentError(
-                            ErrorCode.SERVER_ERROR,
-                            f"Failed to get property: {str(inner_e)}",
-                        )
-            except Exception as e:
-                raise WordDocumentError(
-                    ErrorCode.SERVER_ERROR, f"Failed to get property: {str(e)}"
-                )
+                    except Exception as e:
+                        # 如果内置属性访问失败，尝试检查自定义属性
+                        try:
+                            custom_properties = active_doc.CustomDocumentProperties
+                            # 遍历自定义属性查找指定名称的属性
+                            value = None
+                            for i in range(1, custom_properties.Count + 1):
+                                if custom_properties(i).Name == property_name:
+                                    value = custom_properties(i).Value
+                                    return json.dumps(
+                                        {
+                                            "success": True,
+                                            "property_name": property_name,
+                                            "value": value,
+                                            "is_custom_property": True,
+                                        },
+                                        ensure_ascii=False,
+                                    )
 
-        elif operation_type and operation_type.lower() == "print":
-            raise NotImplementedError("print operation not implemented")
+                            # 如果未找到属性，返回None值
+                            return json.dumps(
+                                {
+                                    "success": True,
+                                    "property_name": property_name,
+                                    "value": None,
+                                    "message": "Property not found",
+                                },
+                                ensure_ascii=False,
+                            )
+                        except Exception as inner_e:
+                            raise WordDocumentError(
+                                ErrorCode.SERVER_ERROR,
+                                f"Failed to get property: {str(inner_e)}",
+                            )
+                except Exception as e:
+                    raise WordDocumentError(
+                        ErrorCode.SERVER_ERROR, f"Failed to get property: {str(e)}"
+                    )
 
-        elif operation_type and operation_type.lower() == "protect":
-            if not active_doc:
-                raise WordDocumentError(
-                    ErrorCode.DOCUMENT_ERROR, "No active document found"
-                )
-
-            if protection_type is None:
-                raise WordDocumentError(
-                    ErrorCode.INVALID_INPUT,
-                    "Protection type is required for 'protect' operation",
-                )
-
-            # Map protection types to match Word's constants
-            protection_type_map = {
-                "readonly": "readonly",
-                "read_only": "readonly",
-                "comments": "comments",
-                "tracked_changes": "tracked_changes",
-                "tracking": "tracked_changes",
-                "forms": "forms",
-            }
-
-            mapped_protection_type = protection_type_map.get(protection_type.lower())
-            if mapped_protection_type is None:
-                raise WordDocumentError(
-                    ErrorCode.INVALID_INPUT,
-                    f"Invalid protection type: {protection_type}. Valid types are: readonly, comments, tracked_changes, forms",
-                )
-
-            result = protect_document(
-                active_doc, protection_password or "", mapped_protection_type
-            )
-
-            return json.dumps(
-                {"success": True, "message": "Document protected successfully"},
-                ensure_ascii=False,
-            )
-
-        elif operation_type and operation_type.lower() == "unprotect":
-            if not active_doc:
-                raise WordDocumentError(
-                    ErrorCode.DOCUMENT_ERROR, "No active document found"
-                )
-
-            result = unprotect_document(active_doc, protection_password or "")
-
-            return json.dumps(
-                {"success": True, "message": "Document unprotected successfully"},
-                ensure_ascii=False,
-            )
-
+            else:
+                raise ValueError(f"Unsupported operation type: {operation_type}")
         else:
-            raise ValueError(f"Unsupported operation type: {operation_type}")
+            raise ValueError("operation_type parameter is required")
 
     except Exception as e:
         log_error(f"Error in document_tools: {e}", exc_info=True)
