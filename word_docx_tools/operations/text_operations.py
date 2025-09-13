@@ -411,24 +411,18 @@ def validate_required_params(params: Dict[str, Any], required_fields: list) -> D
             return {"success": False, "message": f"Missing required parameter: {field}"}
     return {"success": True, "message": "All required parameters are present"}
 
-
-
 def get_text_from_document(
     active_doc: Any, 
-    locator: Optional[Dict[str, Any]] = None,
-    start_index: Optional[int] = 0,
-    max_length: Optional[int] = 10000
+    locator: Optional[Dict[str, Any]] = None
 ) -> str:
     """从文档中获取文本
 
     Args:
         active_doc: 活动文档对象
         locator: 定位器对象，用于选择特定元素
-        start_index: 开始索引
-        max_length: 最大长度
 
     Returns:
-        包含获取文本结果和总长度的JSON字符串
+        包含获取文本结果的JSON字符串
     """
     log_info("Getting text from document")
 
@@ -440,9 +434,7 @@ def get_text_from_document(
 
             if not selection or not selection.get_object_types():
                 # 如果找不到元素，返回空文本
-                return json.dumps(
-                    {"success": True, "text": "", "total_length": 0}, ensure_ascii=False
-                )
+                return json.dumps({"success": True, "text": ""}, ensure_ascii=False)
 
             # 获取选择区域的文本
             range_obj = selection._com_ranges[0]
@@ -450,26 +442,18 @@ def get_text_from_document(
         except Exception as e:
             # 如果选择过程出错，返回空文本
             log_error(f"Error selecting object: {e}")
-            return json.dumps({"success": True, "text": "", "total_length": 0}, ensure_ascii=False)
+            return json.dumps({"success": True, "text": ""}, ensure_ascii=False)
     else:
         # 如果没有提供定位器，获取整个文档的文本
         result = active_doc.Content.Text
-
-    # 保存原始文本的总长度
-    total_length = len(result)
-
-    # 处理start_index和max_length参数
-    if start_index is not None and start_index >= 0:
-        if start_index < len(result):
-            result = result[start_index:]
-        else:
-            result = ""
     
-    if max_length is not None and max_length > 0:
-        result = result[:max_length]
+    # 检查文本长度，如果超长则添加警告信息
+    TEXT_LENGTH_WARNING_THRESHOLD = 10000
+    if len(result) > TEXT_LENGTH_WARNING_THRESHOLD:
+        warning_message = f"注意：获取的文本长度超过{TEXT_LENGTH_WARNING_THRESHOLD}字符。为了提高性能和避免内存问题，建议使用Locator结合range_start和range_end参数进行多次读取。"
+        return json.dumps({"success": True, "text": result, "warning": warning_message}, ensure_ascii=False)
 
-    return json.dumps({"success": True, "text": result, "total_length": total_length}, ensure_ascii=False)
-
+    return json.dumps({"success": True, "text": result}, ensure_ascii=False)
 def insert_text_into_document(
     active_doc: Any,
     text: str,

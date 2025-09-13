@@ -90,21 +90,14 @@ def text_tools(
         default=None,
         description="Formatting options: bold, italic, font_size, font_name, font_color, alignment, Used for: apply_formatting",
     ),
-    start_index: Optional[int] = Field(
-        default=0,
-        description="Start index for text extraction\n\n    Used for: get_text\n",
-    ),
-    max_length: Optional[int] = Field(
-        default=10000,
-        description="Maximum length of text from start_index to extract,default is 10000,\n\n   Used for: get_text\n",
-    ),
+
 ) -> Any:
     """文本操作工具，支持获取文本内容、插入文本、替换文本、获取字符计数和应用文本格式等操作。
 
     支持的操作类型：
     - get_text: 从文档或特定定位器获取文本内容
       * 必需参数：无
-      * 可选参数：locator, start_index, max_length
+      * 可选参数：locator
     - insert_text: 在特定定位器位置插入文本
       * 必需参数：text, locator
       * 可选参数：position
@@ -133,7 +126,7 @@ def text_tools(
         # 根据操作类型调用相应的处理函数
         if operation_type == "get_text":
             check_locator_param(locator)
-            return get_text_from_document(active_doc, locator, start_index, max_length)
+            return get_text_from_document(active_doc, locator)
 
         elif operation_type == "insert_text":
             check_locator_param(locator)

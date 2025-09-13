@@ -122,10 +122,12 @@ Locator支持两种主要格式：
   - 示例: `[column_index=3]`
 - **table_index**: 元素所属表格的索引
   - 示例: `[table_index=0]`
-- **range_start**: 范围元素的起始位置
-  - 示例: `[range_start=100]`
-- **range_end**: 范围元素的结束位置
-  - 示例: `[range_end=200]`
+- **range_start**: 范围元素的起始位置，用于指定文本读取的起始字符位置
+  - 示例: `[range_start=100]`（从第100个字符开始读取）
+  - 用途：与range_end配合使用，实现大文本的分块读取
+- **range_end**: 范围元素的结束位置，用于指定文本读取的结束字符位置
+  - 示例: `[range_end=200]`（读取到第200个字符结束）
+  - 用途：与range_start配合使用，实现大文本的分块读取
 
 ### 样式相关过滤器
 - **style**: 元素具有指定的样式
@@ -149,13 +151,124 @@ Locator支持两种主要格式：
 
 ## 定位器稳定性策略
 
-为确保定位器在文档修改后仍然有效，建议采用以下策略：
+## 定位器稳定性策略
 
-1. **使用相对位置**：优先使用相对位置而非绝对索引或位置
-2. **使用内容特征**：基于元素的文本内容、样式等不易受修改影响的特征进行定位
-3. **使用书签或自定义标记**：在关键点位置插入书签或自定义标记作为定位锚点
-4. **先查找后操作模式**：在执行修改操作前，先使用定位器查找元素并获取其实时位置信息
-5. **批量执行策略**：将相关操作分组执行，以减少定位器失效的影响
+定位器的稳定性是指在文档结构或内容发生变化后，定位器仍然能够准确找到目标元素的能力。为确保定位器在文档修改后仍然有效，建议采用以下策略：
+
+### 1. 优先使用基于内容的定位器
+
+基于内容的定位器通过元素的文本内容、样式等特征进行定位，比基于位置的定位器更加稳定：
+
+```python
+# 推荐：使用内容特征定位
+locator = "paragraph[contains_text=2023年第三季度财务报告摘要][style=标题1]"
+
+# 不推荐：仅使用位置索引（文档修改后容易失效）
+locator = "paragraph:5"
+```
+
+### 2. 组合多种过滤器提高精度
+
+组合使用文本内容、样式、格式等多种过滤器可以显著提高定位的准确性和稳定性：
+
+```python
+# 组合多种特征的定位器
+locator = "paragraph[contains_text=销售额][style=正文][is_bold=true]"
+```
+
+### 3. 使用锚点进行相对定位
+
+使用锚点进行相对定位是一种强大的稳定性策略，通过在文档中寻找稳定的参考点来定位目标元素：
+
+```python
+# 使用锚点定位
+locator = {
+    "anchor": {
+        "type": "paragraph",
+        "identifier": {
+            "text": "研究方法"
+        }
+    },
+    "relation": {
+        "type": "immediately_following"
+    },
+    "target": {
+        "type": "table"
+    }
+}
+```
+
+### 4. 使用正则表达式匹配结构化内容
+
+对于具有固定格式的结构化内容，可以使用正则表达式进行定位：
+
+```python
+# 使用正则表达式定位标题
+locator = "paragraph[text_matches_regex=^第[0-9]+章]"
+
+# 使用正则表达式定位表格标题
+locator = "paragraph[text_matches_regex=^表\s+\d+\s+-\s+.+]"
+```
+
+### 5. 使用书签或自定义标记
+
+在关键位置预先插入书签作为定位锚点，是最稳定的定位策略之一：
+
+```python
+# 使用书签定位
+locator = "paragraph:@{书签名称}"
+```
+
+### 6. 先查找后操作模式
+
+在执行修改操作前，先使用定位器查找元素并获取其实时位置信息，避免使用缓存的位置信息：
+
+```python
+# 先查找后操作的模式
+def update_document_content(document, target_text, new_content):
+    # 查找目标元素
+    locator = {"type": "paragraph", "filters": [{"contains_text": target_text}]}
+    selection = selector_engine.select(document, locator)
+    
+    # 执行操作
+    if selection and selection._com_ranges:
+        range_obj = selection._com_ranges[0]
+        range_obj.Text = new_content
+        return True
+    return False
+```
+
+### 7. 批量执行策略
+
+将相关操作分组执行，减少定位器多次定位的需求，从而降低定位器失效的风险：
+
+```python
+# 批量处理策略
+def batch_update_paragraphs(document, paragraphs_data):
+    # 一次性获取所有需要操作的元素
+    selections = []
+    for data in paragraphs_data:
+        locator = {"type": "paragraph", "filters": [{"contains_text": data["search_text"]}]}
+        selection = selector_engine.select(document, locator)
+        selections.append((selection, data["new_text"]))
+    
+    # 批量执行更新操作
+    for selection, new_text in selections:
+        if selection and selection._com_ranges:
+            selection._com_ranges[0].Text = new_text
+```
+
+### 8. 使用LocatorRecommender生成最佳定位器
+
+系统提供了LocatorRecommender类，可以根据目标元素和稳定性偏好，自动生成最佳的定位器：
+
+```python
+# 使用LocatorRecommender生成定位器
+recommender = LocatorRecommender(document)
+locator = recommender.recommend_locator(target_object, preference="stability")
+```
+
+通过遵循以上稳定性策略，可以显著提高定位器在文档修改后的适应能力，确保操作的准确性和可靠性。
 
 ## 使用示例
 
@@ -248,7 +361,7 @@ selection = selector_engine.select(document, parsed_locator)
 选择并操作特定范围的文本：
 
 ```python
-locator_str = "range[range_start=100][range_end=200]"
+locator_str = "range[range_start=0][range_end=200]"
 parsed_locator = selector_engine.parse_locator(locator_str)
 selection = selector_engine.select(document, parsed_locator)
 ```
@@ -414,4 +527,207 @@ selection = selector_engine.select(document, parsed_locator)
 - 验证过滤器参数是否在有效范围内
 - 确认锚点和关系类型的组合是否有效
 
+## suggest_locator方法详解
+
+系统提供了`suggest_locator`方法，用于根据文档中的特定元素自动生成最佳的定位器。这个方法可以帮助用户快速获取准确的定位器，提高文档操作的效率和稳定性。
+
+### 功能概述
+
+`suggest_locator`方法基于元素的特征（如文本内容、样式、位置等）自动生成最适合的定位器，优先考虑稳定性和唯一性。
+
+### 参数说明
+
+```python
+def suggest_locator(element, preference=None):
+    """
+    根据文档元素生成定位器
+    
+    Args:
+        element: 文档元素对象（如段落、表格、图片等）
+        preference: 定位器生成偏好，可以是'stability'（优先稳定性）或'precision'（优先精确性）
+        
+    Returns:
+        生成的定位器（字符串或字典形式）
+    """
+```
+
+### 返回值
+
+方法返回一个定位器，可以是字符串形式或字典形式，具体取决于元素的类型和特征。
+
+### 使用示例
+
+#### 生成段落的定位器
+
+```python
+from word_docx_tools.selector import selector_engine
+
+# 获取文档中的第一个段落
+paragraph = active_doc.Paragraphs(0)
+
+# 生成定位器（优先稳定性）
+locator = selector_engine.suggest_locator(paragraph, preference='stability')
+print(f"生成的段落定位器: {locator}")
+# 输出示例: paragraph[contains_text=这是文档的第一段内容][style=正文]
+
+# 使用生成的定位器选择元素
+selection = selector_engine.select(active_doc, locator)
+```
+
+#### 生成表格的定位器
+
+```python
+from word_docx_tools.selector import selector_engine
+
+# 获取文档中的第一个表格
+first_table = active_doc.Tables(0)
+
+# 生成定位器（优先精确性）
+locator = selector_engine.suggest_locator(first_table, preference='precision')
+print(f"生成的表格定位器: {locator}")
+# 输出示例: table[index=0][rows=5][columns=3]
+
+# 使用生成的定位器选择元素
+selection = selector_engine.select(active_doc, locator)
+```
+
+#### 生成图片的定位器
+
+```python
+from word_docx_tools.selector import selector_engine
+
+# 获取文档中的第一个图片
+first_image = active_doc.InlineShapes(0)
+
+# 生成定位器
+locator = selector_engine.suggest_locator(first_image)
+print(f"生成的图片定位器: {locator}")
+# 输出示例: inline_shape[shape_type=3][width=100][height=100]
+
+# 使用生成的定位器选择元素
+selection = selector_engine.select(active_doc, locator)
+```
+
+### 生成策略
+
+`suggest_locator`方法使用以下策略来生成最佳定位器：
+
+1. **识别元素类型**：首先确定元素的类型（段落、表格、图片等）
+
+2. **收集元素特征**：提取元素的关键特征，包括：
+   - 文本内容（对于文本元素）
+   - 样式信息（如样式名称、字体、加粗斜体等）
+   - 结构特征（如表的行数和列数）
+   - 位置信息（如页面位置、文档中的相对位置）
+
+3. **选择最佳定位策略**：根据preference参数选择不同的定位策略：
+   - `stability`（稳定性优先）：优先使用基于内容和样式的特征，以确保在文档修改后仍然有效
+   - `precision`（精确性优先）：优先使用位置和索引信息，以确保精确定位到特定元素
+
+4. **构建定位器**：根据选择的策略，构建最终的定位器表达式
+
+### 最佳实践
+
+1. **优先使用稳定性策略**：在大多数情况下，优先选择`preference='stability'`，以确保定位器在文档修改后仍然有效
+
+2. **验证生成的定位器**：生成定位器后，建议先验证其是否能正确定位到目标元素
+
+3. **自定义和优化**：根据实际需求，可以对生成的定位器进行进一步的自定义和优化
+
+4. **与LocatorRecommender结合使用**：对于复杂场景，可以与`LocatorRecommender`类结合使用，获取更多定位建议
+
 通过正确理解和使用定位器，您可以在 Word 文档中精确定位和操作各种元素，实现复杂的文档处理任务。遵循本指南中的约束规范，可以显著提高AI生成定位器的准确性和稳定性。
+
+## 常见问题与解决方案
+
+### 1. 大文本分块读取
+
+当处理大型文档时，一次性读取所有文本可能会导致性能问题和内存占用过高。系统的`get_text`方法会在文本长度超过10,000字符时自动返回警告信息，建议使用Locator结合`range_start`和`range_end`参数进行多次读取。
+
+**解决方案：** 使用分块读取策略，将大文本分成多个较小的部分进行读取。
+
+#### 分块读取示例代码
+
+```python
+import json
+
+# 假设我们有一个处理Word文档的函数
+def read_large_document_in_chunks(active_doc, chunk_size=5000):
+    """
+    分块读取大型Word文档的内容
+    
+    Args:
+        active_doc: 活动的Word文档对象
+        chunk_size: 每块读取的字符数
+        
+    Returns:
+        文档的完整文本内容
+    """
+    # 首先获取文档总字符数
+    total_chars = active_doc.Content.End - 1  # 减去1是因为Word的Range对象是1-based索引
+    
+    # 初始化结果文本
+    full_text = ""
+    
+    # 分块读取文档
+    for start_pos in range(0, total_chars, chunk_size):
+        # 计算当前块的结束位置
+        end_pos = min(start_pos + chunk_size, total_chars)
+        
+        # 创建带range_start和range_end过滤器的定位器
+        locator = {
+            "type": "range",
+            "filters": [
+                {"range_start": start_pos},
+                {"range_end": end_pos}
+            ]
+        }
+        
+        # 调用get_text方法读取当前块
+        result = get_text_from_document(active_doc, locator)
+        
+        # 处理返回结果
+        if isinstance(result, str):
+            result_data = json.loads(result)
+        else:
+            result_data = result
+        
+        # 如果操作成功，添加当前块的文本到结果中
+        if result_data.get("status") == "success" or result_data.get("success"):
+            full_text += result_data["text"]
+        
+        # 检查是否有警告信息
+        if result_data.get("warning"):
+            print(f"警告: {result_data['warning']}")
+    
+    return full_text
+
+# 使用示例
+# document = 获取Word文档对象
+# full_content = read_large_document_in_chunks(document)
+```
+
+### 2. 处理get_text方法的警告信息
+
+当`get_text`方法返回警告信息时，应该如何处理？
+
+**解决方案：** 检查返回结果中是否包含`warning`字段，并根据需要调整读取策略。
+
+```python
+# 处理get_text方法的返回结果
+result = get_text_from_document(active_doc, locator)
+result_data = json.loads(result) if isinstance(result, str) else result
+
+# 检查是否有警告信息
+if result_data.get("warning"):
+    print(f"警告: {result_data['warning']}")
+    # 根据警告信息调整策略，例如切换到分块读取
+    if "超过" in result_data["warning"] and "range_start" in result_data["warning"]:
+        # 切换到分块读取模式
+        full_text = read_large_document_in_chunks(active_doc)
+else:
+    # 直接使用返回的文本
+    text = result_data["text"]
+```
+
+通过采用分块读取策略和正确处理警告信息，您可以高效地处理大型Word文档，避免性能问题和内存占用过高的风险。
