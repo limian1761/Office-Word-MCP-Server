@@ -103,6 +103,24 @@ For HTTP transport:
 }
 ```
 
+## System Requirements
+
+### Minimum Requirements
+
+- Windows 10/11
+- Microsoft Word 2016 or later
+- Python 3.11+
+- 4 GB RAM
+- 1 GHz processor
+
+### Recommended Requirements
+
+- Windows 10/11 (64-bit)
+- Microsoft Word 2019 or Microsoft 365
+- Python 3.11+
+- 8 GB RAM
+- Multi-core processor
+
 ## Limitations
 
 ### Docker & Container Limitations
@@ -119,6 +137,8 @@ For HTTP transport:
 
 2. **Memory Usage**: Word instances consume significant memory. Monitor resource usage in production.
 
+3. **Concurrency**: The system is designed for single-user scenarios. Concurrent access requires additional orchestration.
+
 ## Best Practices
 
 ### For Development
@@ -134,6 +154,7 @@ For HTTP transport:
 3. Implement proper error handling and logging
 4. Consider using process isolation for multiple concurrent users
 5. Implement authentication and authorization if exposing over network
+6. Regularly restart the service to prevent memory leaks
 
 ### For Containerized Environments
 
@@ -167,3 +188,28 @@ word_docx_tools
 2. **Network Exposure**: When using HTTP/SSE transport, ensure proper network security
 3. **Input Validation**: Validate all inputs to prevent injection attacks
 4. **Process Isolation**: Consider running in isolated environments for untrusted inputs
+
+## Maintenance
+
+### Regular Maintenance Tasks
+
+1. **Memory Management**: Restart the service periodically to prevent memory leaks
+2. **Log Rotation**: Implement log rotation to prevent disk space issues
+3. **Updates**: Regularly update the system to get the latest features and security fixes
+4. **Backup**: Implement backup procedures for important documents
+
+### Monitoring
+
+Monitor these key metrics:
+- Memory usage
+- Response times
+- Error rates
+- Word application stability
+
+## Scaling
+
+For multi-user scenarios, consider:
+1. Running multiple instances behind a load balancer
+2. Implementing a queuing system for document operations
+3. Using process isolation for each user session
+4. Implementing resource limits per user

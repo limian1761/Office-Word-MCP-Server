@@ -27,6 +27,12 @@ from .range_ops import (batch_apply_formatting, batch_select_objects,
                         select_objects)
 # 样式操作
 from .styles_ops import apply_formatting, set_font
+# 导航工具操作
+# 专注于上下文管理和活动对象设置
+from .navigate_tools import (
+    set_active_context,
+    set_active_object
+)
 # 表格操作
 from .table_ops import (create_table, get_cell_text, get_table_info,
                         insert_column, insert_row, set_cell_text)
@@ -102,6 +108,9 @@ __all__ = [
     "apply_formatting",
     "set_font",
     "set_paragraph_style",
+    # navigate_tools
+    "set_active_context",
+    "set_active_object",
     # others_ops
     "get_document_statistics",
     "compare_documents",

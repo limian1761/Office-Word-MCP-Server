@@ -25,10 +25,8 @@ from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
                                       require_active_document_validation)
 from ..operations.objects_ops import (create_bookmark, create_citation,
                                       create_hyperlink)
-from ..selector.selector import SelectorEngine
-from ..selector.locator_parser import LocatorParser
-from ..selector.exceptions import LocatorSyntaxError
 from ..mcp_service.app_context import AppContext
+from ..operations.navigate_tools import set_active_context, set_active_object
 
 # 加载环境变量
 try:
@@ -58,12 +56,24 @@ def objects_tools(
         default=None,
         description="URL for the hyperlink. Required for hyperlink_operations",
     ),
-    locator: Optional[Dict[str, Any]] = Field(
+    context_type: Optional[str] = Field(
         default=None,
-        description="Object locator for specifying position. Required for bookmark_operations, citation_operations, hyperlink_operations",
+        description="Context type for specifying active context (e.g., 'document', 'section', 'paragraph')",
+    ),
+    context_id: Optional[str] = Field(
+        default=None,
+        description="Context ID for specifying active context",
+    ),
+    object_type: Optional[str] = Field(
+        default=None,
+        description="Object type for specifying active object within context",
+    ),
+    object_id: Optional[str] = Field(
+        default=None,
+        description="Object ID for specifying active object within context",
     ),
     sub_operation: Optional[str] = Field(
-        default=None, description="Sub-operation type. Required for all operations"
+        default=None, description="Sub-operation type. Required for all operations" 
     ),
     display_text: Optional[str] = Field(
         default=None,
@@ -86,22 +96,20 @@ def objects_tools(
     - hyperlink_operations: 超链接操作（创建）
 
     bookmark_operations 参数：
-        必需参数：bookmark_name, locator, sub_operation
-        可选参数：无
+        必需参数：bookmark_name, sub_operation
+        可选参数：context_type, context_id, object_type, object_id
 
     citation_operations 参数：
-        必需参数：citation_text, locator, sub_operation
-        可选参数：citation_name
+        必需参数：citation_text, sub_operation
+        可选参数：citation_name, context_type, context_id, object_type, object_id
 
     hyperlink_operations 参数：
-        必需参数：url, locator, sub_operation
-        可选参数：display_text, hyperlink_name
+        必需参数：url, sub_operation
+        可选参数：display_text, hyperlink_name, context_type, context_id, object_type, object_id
 
     返回：
         操作结果的字典
     """
-    # 导入通用的locator参数检查函数
-    from .utils import check_locator_param
     
     try:
         # 验证是否有活动文档
@@ -109,6 +117,10 @@ def objects_tools(
 
         # 获取活动文档
         document = get_active_document(ctx)
+
+        # 设置活动上下文和对象
+        set_active_context(ctx, context_type, context_id)
+        set_active_object(ctx, object_type, object_id)
 
         # 处理不同类型的操作
         result: Dict[str, Any] = {}
@@ -118,7 +130,6 @@ def objects_tools(
                 document,
                 sub_operation,
                 bookmark_name=bookmark_name,
-                locator=locator,
             )
         elif operation_type == "citation_operations":
             result = handle_citation_operations(
@@ -126,7 +137,6 @@ def objects_tools(
                 document,
                 sub_operation,
                 citation_text=citation_text,
-                locator=locator,
                 citation_name=citation_name,
             )
         elif operation_type == "hyperlink_operations":
@@ -135,12 +145,14 @@ def objects_tools(
                 document,
                 sub_operation,
                 url=url,
-                locator=locator,
                 display_text=display_text,
                 hyperlink_name=hyperlink_name,
             )
         else:
-            raise ValueError(f"不支持的操作类型: {operation_type}")
+            raise WordDocumentError(
+                ErrorCode.UNSUPPORTED_OPERATION,
+                f"不支持的操作类型: {operation_type}"
+            )
 
         return result
     except Exception as e:
@@ -171,56 +183,24 @@ def handle_bookmark_operations(
 
     if sub_operation == "create":
         bookmark_name = kwargs.get("bookmark_name")
-        locator = kwargs.get("locator")
-        if bookmark_name and locator:
+        if bookmark_name:
             try:
-                # 检查locator参数
-                check_locator_param(locator)
-                # 改进书签创建，正确处理Range对象
                 # 确保书签名称不包含非法字符
                 clean_bookmark_name = bookmark_name
                 for char in ["/", "\\", ":", "*", "?", '"', "<", ">", "|"]:
                     clean_bookmark_name = clean_bookmark_name.replace(char, "_")
 
-                engine = SelectorEngine()
-                selection = engine.select(document, locator)
-                if not selection:
-                    raise WordDocumentError(
-                        ErrorCode.SELECTOR_ERROR,
-                        "Failed to locate position for bookmark",
-                    )
-
-                # 正确处理selection对象
-                if hasattr(selection, "_com_ranges") and selection._com_ranges:
-                    ranges = selection._com_ranges
-                else:
-                    # 如果是段落对象，使用其Range
-                    try:
-                        ranges = [selection.Range]
-                    except AttributeError:
-                        # 如果没有Range属性，尝试直接使用selection
-                        ranges = [selection]
-
                 # 创建书签
-                range_obj = ranges[0]
-                # 如果Range为空，可以插入一个空字符作为书签位置
-                if range_obj.Start == range_obj.End:
-                    # 如果Range为空，插入一个空字符
-                    range_obj.InsertAfter(" ")
-                    range_obj.Collapse(True)  # 折叠到开始位置
-
-                bookmark = document.Bookmarks.Add(
-                    Name=clean_bookmark_name, Range=range_obj
-                )
-                result = {"success": True, "bookmark_name": bookmark.Name}
+                result = create_bookmark(document, clean_bookmark_name)
             except Exception as e:
                 log_error(f"Failed to create bookmark: {str(e)}")
                 raise WordDocumentError(
                     ErrorCode.OBJECT_TYPE_ERROR, f"Failed to create bookmark: {str(e)}"
                 )
         else:
-            raise ValueError(
-                "bookmark_name and locator are required for create operation"
+            raise WordDocumentError(
+                ErrorCode.INVALID_INPUT,
+                "bookmark_name is required for create operation"
             )
 
     elif sub_operation == "get":
@@ -228,17 +208,22 @@ def handle_bookmark_operations(
         if bookmark_name:
             result = get_bookmark(document, bookmark_name)
         else:
-            raise ValueError("bookmark_name is required for get operation")
+            raise WordDocumentError(
+                ErrorCode.INVALID_INPUT, "bookmark_name is required for get operation"
+            )
 
     elif sub_operation == "delete":
         bookmark_name = kwargs.get("bookmark_name")
         if bookmark_name:
             result = delete_bookmark(document, bookmark_name)
         else:
-            raise ValueError("bookmark_name is required for delete operation")
+            raise WordDocumentError(
+                ErrorCode.INVALID_INPUT, "bookmark_name is required for delete operation"
+            )
 
     else:
-        raise ValueError(f"不支持的书签操作: {sub_operation}")
+        raise WordDocumentError(
+            ErrorCode.INVALID_INPUT, f"不支持的书签操作: {sub_operation}")
 
     return result
 
@@ -266,13 +251,17 @@ def handle_citation_operations(
 
     if sub_operation == "create":
         citation_text = kwargs.get("citation_text")
-        locator = kwargs.get("locator")
         citation_name = kwargs.get("citation_name", "Citation")
-        if citation_text and locator:
+        if citation_text:
             # 修复引用创建问题，改进source_data格式以解决XML数据处理错误
             try:
-                # 检查locator参数
-                check_locator_param(locator)
+                # 确保文档支持引用功能
+                if not hasattr(document, "Bibliography"):
+                    raise WordDocumentError(
+                        ErrorCode.DOCUMENT_ERROR,
+                        "Current document does not support bibliography/citation features",
+                    )
+                
                 # 创建符合Word引用XML格式的source_data字典
                 source_data = {
                     "Tag": citation_name,
@@ -284,17 +273,15 @@ def handle_citation_operations(
                     "Volume": "1",  # 添加必要的卷号字段
                     "Pages": "1-10",  # 添加必要的页码字段
                 }
-                result = create_citation(document, source_data, locator)
+                # 从AppContext获取已设置的定位信息，不再需要locator参数
+                result = create_citation(document, source_data)
             except Exception as e:
                 log_error(f"Failed to create citation: {str(e)}")
                 # 如果完整的引用创建失败，尝试使用更简单的方法在文档中插入引用文本
                 try:
                     from ..operations.text_operations import insert_text
-
-                    # 确保locator是字典类型
-                    if locator is not None and not isinstance(locator, dict):
-                        locator = {"type": "document", "position": "end"}
-                    insert_text(document, locator, f"[{citation_text}]")
+                    # 从AppContext获取定位信息插入文本
+                    insert_text(document, f"[{citation_text}]")
                     result = {
                         "warning": "Failed to create proper citation, inserted plain text instead"
                     }
@@ -304,8 +291,9 @@ def handle_citation_operations(
                         f"Failed to create citation: {str(e2)}",
                     )
         else:
-            raise ValueError(
-                "citation_text and locator are required for create operation"
+            raise WordDocumentError(
+                ErrorCode.INVALID_INPUT,
+                "citation_text is required for create operation"
             )
 
     elif sub_operation == "get":
@@ -316,7 +304,9 @@ def handle_citation_operations(
                 ErrorCode.SERVER_ERROR, "Get citation operation is not implemented"
             )
         else:
-            raise ValueError("citation_name is required for get operation")
+            raise WordDocumentError(
+                ErrorCode.INVALID_INPUT, "citation_name is required for get operation"
+            )
 
     elif sub_operation == "delete":
         citation_name = kwargs.get("citation_name")
@@ -326,10 +316,13 @@ def handle_citation_operations(
                 ErrorCode.SERVER_ERROR, "Delete citation operation is not implemented"
             )
         else:
-            raise ValueError("citation_name is required for delete operation")
+            raise WordDocumentError(
+                ErrorCode.INVALID_INPUT, "citation_name is required for delete operation"
+            )
 
     else:
-        raise ValueError(f"不支持的引用操作: {sub_operation}")
+        raise WordDocumentError(
+            ErrorCode.INVALID_INPUT, f"不支持的引用操作: {sub_operation}")
 
     return result
 
@@ -357,28 +350,20 @@ def handle_hyperlink_operations(
 
     if sub_operation == "create":
         url = kwargs.get("url")
-        locator = kwargs.get("locator")
-        display_text = kwargs.get("display_text")
-        if url and locator:
+        display_text = kwargs.get("display_text", "")
+        hyperlink_name = kwargs.get("hyperlink_name", "")
+        if url:
             try:
-                # 检查locator参数
-                check_locator_param(locator)
-                # 改进超链接创建，确保使用正确的Range对象
-                # 移除URL中可能存在的反引号和其他特殊字符
+                # 确保URL有效
                 clean_url = url.strip("`").strip()
-                # 确保URL有协议前缀
-                if not clean_url.startswith(
-                    ("http://", "https://", "file://", "mailto:")
-                ):
+                if not clean_url.startswith(("http://", "https://", "mailto:", "file://")):
                     clean_url = "https://" + clean_url
 
-                from ..operations.objects_ops import create_hyperlink
-
+                # 从AppContext获取已设置的定位信息
                 result = create_hyperlink(
                     document,
                     address=clean_url,
-                    locator=locator,
-                    text_to_display=display_text,
+                    text_to_display=display_text
                 )
             except Exception as e:
                 log_error(f"Failed to create hyperlink: {str(e)}")
@@ -387,10 +372,7 @@ def handle_hyperlink_operations(
                     from ..operations.text_operations import insert_text
 
                     link_text = display_text if display_text else clean_url
-                    # 确保locator是字典类型
-                    if locator is not None and not isinstance(locator, dict):
-                        locator = {"type": "document", "position": "end"}
-                    insert_text(document, locator, f"{link_text}")
+                    insert_text(document, f"{link_text}")
                     result = {
                         "warning": "Failed to create proper hyperlink, inserted plain text instead"
                     }
@@ -400,7 +382,10 @@ def handle_hyperlink_operations(
                         f"Failed to create hyperlink: {str(e2)}",
                     )
         else:
-            raise ValueError("url and locator are required for create operation")
+            raise WordDocumentError(
+                ErrorCode.INVALID_INPUT,
+                "url is required for create operation"
+            )
 
     elif sub_operation == "get":
         hyperlink_name = kwargs.get("hyperlink_name")
@@ -410,7 +395,9 @@ def handle_hyperlink_operations(
                 ErrorCode.SERVER_ERROR, "Get hyperlink operation is not implemented"
             )
         else:
-            raise ValueError("hyperlink_name is required for get operation")
+            raise WordDocumentError(
+                ErrorCode.INVALID_INPUT, "hyperlink_name is required for get operation"
+            )
 
     elif sub_operation == "delete":
         hyperlink_name = kwargs.get("hyperlink_name")
@@ -420,9 +407,12 @@ def handle_hyperlink_operations(
                 ErrorCode.SERVER_ERROR, "Delete hyperlink operation is not implemented"
             )
         else:
-            raise ValueError("hyperlink_name is required for delete operation")
+            raise WordDocumentError(
+                ErrorCode.INVALID_INPUT, "hyperlink_name is required for delete operation"
+            )
 
     else:
-        raise ValueError(f"不支持的超链接操作: {sub_operation}")
+        raise WordDocumentError(
+            ErrorCode.INVALID_INPUT, f"不支持的超链接操作: {sub_operation}")
 
     return result

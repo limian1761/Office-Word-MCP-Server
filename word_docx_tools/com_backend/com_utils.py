@@ -10,7 +10,7 @@ from typing import Any, Callable, List, TypeVar
 
 import win32com.client
 
-from ..mcp_service.core_utils import ErrorCode, WordDocumentError
+from ..mcp_service.errors import ErrorCode, WordDocumentError
 
 T = TypeVar("T")
 

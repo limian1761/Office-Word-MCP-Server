@@ -9,7 +9,7 @@ description = "MCP server for manipulating Microsoft Word documents with enhance
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-    {name = "lichao", email = "252429238@qq.com"}
+    {name = "Li Chao", email = "252429238@qq.com"}
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -23,13 +23,12 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://example.com/word_docx_tools"
-"Bug Tracker" = "https://example.com/word_docx_tools/issues"
+"Homepage" = "https://github.com/GongRzhe/Office-Word-MCP-Server"
+"Bug Tracker" = "https://github.com/GongRzhe/Office-Word-MCP-Server/issues"
 
 [tool.hatch.build.targets.wheel]
 only-include = [
-    "word_docx_tools",
-    "tdd_service"
+    "word_docx_tools"
 ]
 sources = ["."]
 
@@ -40,6 +39,7 @@ allow-direct-references = true
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
     "black>=23.0",
     "isort>=5.0",
     "mypy>=1.0",
@@ -48,6 +48,7 @@ dev = [
 test = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
 ]
 
 [tool.uv]
@@ -55,6 +56,7 @@ package = true
 dev-dependencies = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
     "black>=23.0",
     "isort>=5.0",
     "mypy>=1.0",
@@ -67,6 +69,7 @@ installer = "uv"
 dependencies = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
     "black>=23.0",
     "isort>=5.0",
     "mypy>=1.0",
@@ -84,4 +87,3 @@ dependencies = [
 word_docx_tools = "word_docx_tools.main:run_server"
 word_docx_tools_dev = "word_docx_tools.main:run_server"
 word_docx_tools_http = "word_docx_tools.main:run_server --transport http --host 0.0.0.0 --port 8000"
-word_docx_tools_tdd = "tdd_service.main:run_tdd_server"

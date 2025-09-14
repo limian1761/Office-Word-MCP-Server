@@ -23,8 +23,6 @@ from ..mcp_service.core_utils import (
     log_info,
     require_active_document_validation
 )
-from ..selector.locator_parser import LocatorParser
-from ..selector.exceptions import LocatorSyntaxError
 from ..operations.paragraphs_ops import (
     get_paragraphs_info,
     insert_paragraph_impl,
@@ -32,150 +30,129 @@ from ..operations.paragraphs_ops import (
     format_paragraph_impl,
     get_paragraphs_details
 )
+from ..operations.navigate_tools import set_active_context, set_active_object
 
 @mcp_server.tool()
 @require_active_document_validation
 @handle_tool_errors
 def paragraph_tools(
-    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
-    operation_type: Optional[str] = Field(
-        default=None,
-        description="段落操作类型: insert_paragraph(插入段落), delete_paragraph(删除段落), format_paragraph(格式化段落), get_paragraphs_details(获取段落详情)",
+    context: Context,
+    session: ServerSession,
+    operation_type: str = Field(
+        ...,
+        description="段落操作类型: insert_paragraph(插入段落), delete_paragraph(删除段落), format_paragraph(格式化段落), get_paragraphs_details(获取段落详情)"
     ),
-    locator: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Locator object for paragraph selection. Returns all paragraph when empty.\n\n    Required for: insert_paragraph, delete_paragraph, format_paragraph\n    Optional for: get_paragraphs_details"),
     text: Optional[str] = Field(
-        default=None,
-        description="Text content for insert operation\n\n    Required for: insert_paragraph"),
+        None,
+        description="插入段落的文本内容\n\n        Required for: insert_paragraph"
+    ),
     style: Optional[str] = Field(
-        default=None,
-        description="Paragraph style name\n\n Optional for: insert_paragraph"),
+        None,
+        description="段落样式名称\n\n         Optional for: insert_paragraph"
+    ),
     is_independent_paragraph: bool = Field(
-        default=True,
-        description="Whether to insert the paragraph as an independent paragraph\n\n Optional for: insert_paragraph"),
+        True,
+        description="是否将插入的段落作为独立段落\n\n         Optional for: insert_paragraph"
+    ),
     formatting: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Dictionary containing the paragraph_style to apply.\n\n Required for: format_paragraph\n    Must contain 'paragraph_style' key"),
-    include_stats: bool = Field(
-        default=False,
-        description="Whether to include paragraph statistics in the result\n\n Optional for: get_paragraphs_details"),
-) -> Any:
+        None,
+        description="包含要应用的段落样式的字典\n\n         Required for: format_paragraph"
+    ),
+    context_type: Optional[str] = Field(
+        None,
+        description="上下文类型，例如：document, section, paragraph, table"
+    ),
+    context_id: Optional[int] = Field(
+        None,
+        description="上下文ID，对应于特定类型的对象ID"
+    ),
+    object_type: Optional[str] = Field(
+        None,
+        description="对象类型，例如：paragraph, run, cell"
+    ),
+    object_id: Optional[int] = Field(
+        None,
+        description="对象ID，对应于特定类型的对象ID"
+    )
+) -> str:
     """段落操作工具，支持获取段落信息、插入段落、删除段落和格式化段落等操作。
 
     支持的操作类型：
     - insert_paragraph: 在指定位置插入新段落
-      * 必需参数：text, locator
-      * 可选参数：style, is_independent_paragraph
+      * 必需参数：text
+      * 可选参数：style, is_independent_paragraph, context_type, context_id, object_type, object_id
     - delete_paragraph: 删除指定的段落
-      * 必需参数：locator
+      * 必需参数：context_type, context_id, object_type, object_id（至少提供足够的上下文来定位段落）
       * 可选参数：无
     - format_paragraph: 格式化段落
-      * 必需参数：locator, formatting
+      * 必需参数：formatting, context_type, context_id, object_type, object_id（至少提供足够的上下文来定位段落）
       * 可选参数：无
     - get_paragraphs_details: 获取段落详情（合并版，可同时获取段落列表和统计信息）
       * 必需参数：无
-      * 可选参数：locator, include_stats
+      * 可选参数：context_type, context_id, object_type, object_id
 
     返回：
         操作结果的JSON字符串
     """
-    # 检查locator参数类型和规范
-    def check_locator_param(locator_value):
-        if locator_value is not None:
-            # 检查是否为字典类型
-            if not isinstance(locator_value, dict):
-                raise TypeError("locator parameter must be a dictionary")
-            
-            # 使用LocatorParser验证locator结构
-            parser = LocatorParser()
-            try:
-                parser.validate_locator(locator_value)
-            except LocatorSyntaxError:
-                # 提示用户参考定位器指南
-                raise ValueError("Invalid locator format. Please refer to the locator guide for proper syntax.")
-    
     try:
         log_info(f"Starting paragraph operation: {operation_type}")
-
+        
         # 获取活动文档
-        active_doc = ctx.request_context.lifespan_context.get_active_document()
+        active_doc = AppContext.get_instance().get_active_document()
         if not active_doc:
             raise WordDocumentError(
-                ErrorCode.NO_ACTIVE_DOCUMENT, "No active document found"
+                ErrorCode.NO_ACTIVE_DOCUMENT,
+                "No active document found"
             )
-
-        # 根据操作类型调用相应的处理函数
-        if operation_type == "insert_paragraph":
+        
+        # 设置上下文
+        if context_type or context_id:
+            set_active_context(context_type, context_id)
+        
+        if object_type or object_id:
+            set_active_object(object_type, object_id)
+        
+        # 创建新的定位器或使用None
+        locator = None
+        
+        # 执行相应的操作
+        if operation_type == "get_paragraphs_details":
+            # 获取段落详情
+            result = get_paragraphs_details(active_doc, locator)
+        elif operation_type == "insert_paragraph":
+            # 插入段落
             if not text:
                 raise WordDocumentError(
-                    ErrorCode.PARAMETER_ERROR,
-                    "text parameter must be provided for insert_paragraph operation"
+                    ErrorCode.INVALID_INPUT,
+                    "参数 'text' 是插入段落操作所必需的"
                 )
-            if not locator:
-                raise WordDocumentError(
-                    ErrorCode.PARAMETER_ERROR,
-                    "locator parameter must be provided for insert_paragraph operation"
-                )
-            
-            # 检查locator参数
-            check_locator_param(locator)
-            
             result = insert_paragraph_impl(active_doc, text, locator, style, is_independent_paragraph)
-            return json.dumps(
-                {"success": True, "result": result}, ensure_ascii=False
-            )
-
         elif operation_type == "delete_paragraph":
-            if not locator:
-                raise WordDocumentError(
-                    ErrorCode.PARAMETER_ERROR,
-                    "locator parameter must be provided for delete_paragraph operation"
-                )
-            
-            # 检查locator参数
-            check_locator_param(locator)
-            
+            # 删除段落
             result = delete_paragraph_impl(active_doc, locator)
-            return result
-
         elif operation_type == "format_paragraph":
-            if not locator:
+            # 格式化段落
+            if not formatting:
                 raise WordDocumentError(
-                    ErrorCode.PARAMETER_ERROR,
-                    "locator parameter must be provided for format_paragraph operation"
+                    ErrorCode.INVALID_INPUT,
+                    "参数 'formatting' 是格式化段落操作所必需的"
                 )
-            
-            # 检查locator参数
-            check_locator_param(locator)
-            
-            if not formatting or not isinstance(formatting, dict):
+            if "paragraph_style" not in formatting:
                 raise WordDocumentError(
-                    ErrorCode.PARAMETER_ERROR,
-                    "formatting parameter must be a non-empty dictionary"
+                    ErrorCode.INVALID_INPUT,
+                    "参数 'formatting' 必须包含 'paragraph_style' 键"
                 )
-            
             result = format_paragraph_impl(active_doc, locator, formatting)
-            return json.dumps(
-                {"success": True, "result": result}, ensure_ascii=False
-            )
-        elif operation_type == "get_paragraphs_details":
-            # 获取段落详情（合并版，可同时获取段落列表和统计信息）
-            # locator是可选参数
-            if locator:
-                # 检查locator参数
-                check_locator_param(locator)
-            
-            result = get_paragraphs_details(active_doc, locator, include_stats)
-            return json.dumps(
-                {"success": True, "result": result}, ensure_ascii=False
-            )
         else:
             raise WordDocumentError(
                 ErrorCode.UNSUPPORTED_OPERATION,
-                f"Unsupported operation type: {operation_type}"
+                f"不支持的段落操作类型: {operation_type}"
             )
-
+        
+        log_info(f"Paragraph operation {operation_type} completed successfully")
+        return json.dumps({
+            "success": True,
+            "result": result
+        })
     except Exception as e:
-        log_error(f"Error in paragraph_tools: {e}", exc_info=True)
-        return format_error_response(e)
+        return handle_tool_errors(e)

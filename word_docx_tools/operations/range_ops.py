@@ -10,12 +10,17 @@ from typing import Any, Dict, List, Optional
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error, iter_com_collection
-from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
-                                      log_info)
-from ..selector.selector import SelectorEngine
+from ..com_backend.selector_utils import get_selection_range
+from ..mcp_service.core_utils import (
+    ErrorCode, WordDocumentError, log_error,
+    log_info
+)
 from .text_operations import apply_formatting_to_object
 
 logger = logging.getLogger(__name__)
+
+
+
 
 
 @handle_com_error(ErrorCode.OBJECT_NOT_FOUND, "select objects")
@@ -33,46 +38,41 @@ def select_objects(document: win32com.client.CDispatch, locator: Dict[str, Any])
         if not document:
             raise RuntimeError("No document open.")
 
-        # 使用选择器引擎选择元素
-        selector = SelectorEngine()
-        selection = selector.select(document, locator)
+        # 获取选择范围
+        range_obj = get_selection_range(document, locator, "select objects")
 
         # 构建元素信息
         objects_info = []
-        # Selection._com_ranges中只包含Range对象
-        for i, range_obj in enumerate(selection._com_ranges):
+        try:
+            info = {
+                "index": 0,
+                "type": "Range",
+            }
+
+            # 添加文本内容（如果可用）
             try:
-                info = {
-                    "index": i,
-                    "type": "Range",
-                }
+                info["text"] = (
+                    range_obj.Text[:200] + "..."
+                    if len(range_obj.Text) > 200
+                    else range_obj.Text
+                )
+            except Exception as text_e:
+                logger.warning(f"Failed to get text for object: {text_e}")
 
-                # 添加文本内容（如果可用）
-                try:
-                    # 所有对象都是Range对象，可以直接访问Text属性
-                    info["text"] = (
-                        range_obj.Text[:200] + "..."
-                        if len(range_obj.Text) > 200
-                        else range_obj.Text
-                    )
-                except Exception as text_e:
-                    logger.warning(f"Failed to get text for object: {text_e}")
+            # 添加样式信息（如果可用）
+            if hasattr(range_obj, "Style") and hasattr(
+                range_obj.Style, "NameLocal"
+            ):
+                info["style"] = range_obj.Style.NameLocal
 
-                # 添加样式信息（如果可用）
-                if hasattr(range_obj, "Style") and hasattr(
-                    range_obj.Style, "NameLocal"
-                ):
-                    info["style"] = range_obj.Style.NameLocal
+            # 添加位置信息（如果可用）
+            if hasattr(range_obj, "Start") and hasattr(range_obj, "End"):
+                info["start_position"] = range_obj.Start
+                info["end_position"] = range_obj.End
 
-                # 添加位置信息（如果可用）
-                if hasattr(range_obj, "Start") and hasattr(range_obj, "End"):
-                    info["start_position"] = range_obj.Start
-                    info["end_position"] = range_obj.End
-
-                objects_info.append(info)
-            except Exception as e:
-                logger.warning(f"Failed to get info for object {i}: {e}")
-                continue
+            objects_info.append(info)
+        except Exception as e:
+            logger.warning(f"Failed to get info for object: {e}")
 
         return json.dumps(objects_info, ensure_ascii=False, indent=2)
 
@@ -168,55 +168,46 @@ def batch_select_objects(
         # 依次处理每个定位器
         for i, locator in enumerate(locators):
             try:
-                # 使用选择器引擎选择元素
-                selector = SelectorEngine()
-                selection = selector.select(document, locator)
+                # 获取选择范围
+        range_obj = get_selection_range(document, locator, "select text")
 
                 # 获取元素信息
                 objects_info = []
-                # Selection._com_ranges中只包含Range对象
-                for j, range_obj in enumerate(selection._com_ranges):
+                try:
+                    info = {
+                        "batch_index": i,
+                        "object_index": 0,
+                        "type": "Range",
+                    }
+
+                    # 添加文本内容（如果可用）
                     try:
-                        info = {
-                            "batch_index": i,
-                            "object_index": j,
-                            "type": type(range_obj).__name__,
-                        }
-
-                        # 添加文本内容（如果可用）
-                        try:
-                            # 所有对象都是Range对象，可以直接访问Text属性
-                            try:
-                                info["text"] = (
-                                    range_obj.Text[:100] + "..."
-                                    if len(range_obj.Text) > 100
-                                    else range_obj.Text
-                                )
-                            except Exception as text_e:
-                                logger.warning(
-                                    f"Failed to get text for object: {text_e}"
-                                )
-                        except Exception as text_e:
-                            logger.warning(f"Failed to get text for object: {text_e}")
-
-                        # 添加其他属性（如果可用）
-                        if hasattr(range_obj, "Style") and hasattr(
-                            range_obj.Style, "NameLocal"
-                        ):
-                            info["style"] = range_obj.Style.NameLocal
-
-                        objects_info.append(info)
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to get info for object at batch {i}, index {j}: {e}"
+                        info["text"] = (
+                            range_obj.Text[:100] + "..."
+                            if len(range_obj.Text) > 100
+                            else range_obj.Text
                         )
-                        continue
+                    except Exception as text_e:
+                        logger.warning(
+                            f"Failed to get text for object: {text_e}"
+                        )
+
+                    # 添加其他属性（如果可用）
+                    if hasattr(range_obj, "Style") and hasattr(
+                        range_obj.Style, "NameLocal"
+                    ):
+                        info["style"] = range_obj.Style.NameLocal
+
+                    objects_info.append(info)
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to get info for object at batch {i}: {e}"
+                    )
 
                 all_objects_info.extend(objects_info)
 
             except Exception as e:
                 logger.warning(f"Failed to select objects for locator {i}: {e}")
-                continue
 
         return json.dumps(all_objects_info, ensure_ascii=False, indent=2)
 
@@ -257,45 +248,41 @@ def batch_apply_formatting(
                 locator = operation["locator"]
                 formatting = operation["formatting"]
 
+                # 获取选择范围
+        range_obj = get_selection_range(document, locator, "move selection")
+                
+                # 初始化成功标志
+                all_success = True
+                
                 # 应用格式
-                selector = SelectorEngine()
-                selection = selector.select(document, locator)
-                if (
-                    selection
-                    and hasattr(selection, "_com_ranges")
-                    and selection._com_ranges
-                ):
-                    # 遍历所有Range对象并应用格式
-                    all_success = True
-                    for range_obj in selection._com_ranges:
-                        try:
-                            result = apply_formatting_to_object(range_obj, formatting)
-                            # 解析结果以检查是否成功
-                            try:
-                                result_dict = json.loads(result)
-                                if not result_dict.get("success", False):
-                                    all_success = False
-                                    logger.warning(
-                                        f"Formatting failed for range object: {result_dict.get('message', 'Unknown error')}"
-                                    )
-                            except json.JSONDecodeError:
-                                # 如果结果不是有效的JSON，尝试检查字符串内容
-                                if (
-                                    "error" in result.lower()
-                                    or "failed" in result.lower()
-                                ):
-                                    all_success = False
-                                    logger.warning(
-                                        f"Formatting may have failed (invalid JSON response): {result}"
-                                    )
-                        except Exception as inner_e:
+                try:
+                    result = apply_formatting_to_object(range_obj, formatting)
+                    # 解析结果以检查是否成功
+                    try:
+                        result_dict = json.loads(result)
+                        if not result_dict.get("success", False):
                             all_success = False
                             logger.warning(
-                                f"Error applying formatting to range object: {inner_e}"
+                                f"Formatting failed for range object: {result_dict.get('message', 'Unknown error')}"
                             )
+                    except json.JSONDecodeError:
+                        # 如果结果不是有效的JSON，尝试检查字符串内容
+                        if (
+                            "error" in result.lower()
+                            or "failed" in result.lower()
+                        ):
+                            all_success = False
+                            logger.warning(
+                                f"Formatting may have failed (invalid JSON response): {result}"
+                            )
+                except Exception as inner_e:
+                    all_success = False
+                    logger.warning(
+                        f"Error applying formatting to range object: {inner_e}"
+                    )
 
-                    if not all_success:
-                        raise Exception("Some formatting operations failed")
+                if not all_success:
+                    raise Exception("Some formatting operations failed")
 
                 results.append({"operation_index": i, "status": "success"})
 
@@ -304,7 +291,6 @@ def batch_apply_formatting(
                 results.append(
                     {"operation_index": i, "status": "failed", "error": str(e)}
                 )
-                continue
 
         return json.dumps(results, ensure_ascii=False, indent=2)
 
@@ -332,18 +318,11 @@ def delete_object_by_locator(
         if not document:
             raise RuntimeError("No document open.")
 
-        # 使用选择器引擎选择元素
-        # 对于段落类型的定位器，无论使用什么参数名（value、index、id等），都强制要求单个对象
-        is_paragraph = locator.get('type') == 'paragraph'
-        has_position_param = any(param in locator for param in ['value', 'index', 'id'])
-        expect_single = is_paragraph and has_position_param
-        
-        selector = SelectorEngine()
-        selection = selector.select(document, locator, expect_single=expect_single)
+        # 获取选择范围
+        range_obj = get_selection_range(document, locator, "select and navigate")
 
-        # 删除元素 - 所有对象都是Range对象，可以直接调用Delete方法
-        for range_obj in selection._com_ranges:
-            range_obj.Delete()
+        # 删除元素
+        range_obj.Delete()
 
         return True
 

@@ -2,6 +2,16 @@
 
 本指南提供AI客户端使用Office Word MCP Server的核心操作指导，帮助高效处理Word文档。
 
+## 注意：架构更新说明
+
+自版本1.2.0起，系统已完成从传统定位器(Locator)机制到AppContext上下文管理的全面迁移。核心变更包括：
+1. 重构了`text_operations.py`等核心操作文件
+2. 完全移除了对`SelectorEngine`的依赖
+3. 统一使用`AppContext`和`_get_selection_range`进行文档元素定位
+4. 操作函数不再需要直接处理`locator`参数
+
+本指南已更新以反映这些变更。
+
 ## 1. 快速入门
 
 ### 1.1 基本调用格式
@@ -683,6 +693,295 @@
   }
 }
 ```
+
+### 2.6 视图控制 (view_control_tools)
+
+用于控制Word文档的视图显示方式。
+
+#### 2.6.1 切换视图
+
+**切换到阅读视图：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "view_control_tools",
+  "args": {
+    "operation_type": "switch_view",
+    "view_type": "read"
+  }
+}
+```
+
+**切换到打印预览视图：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "view_control_tools",
+  "args": {
+    "operation_type": "switch_view",
+    "view_type": "print"
+  }
+}
+```
+
+#### 2.6.2 设置缩放比例
+
+**设置固定缩放比例：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "view_control_tools",
+  "args": {
+    "operation_type": "set_zoom",
+    "percentage": 150
+  }
+}
+```
+
+**设置为页面宽度：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "view_control_tools",
+  "args": {
+    "operation_type": "set_zoom",
+    "view_type": "page_width"
+  }
+}
+```
+
+#### 2.6.3 显示元素
+
+**显示段落标记：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "view_control_tools",
+  "args": {
+    "operation_type": "show_element",
+    "element_type": "paragraph_marks"
+  }
+}
+```
+
+#### 2.6.4 隐藏元素
+
+**隐藏网格线：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "view_control_tools",
+  "args": {
+    "operation_type": "hide_element",
+    "element_type": "gridlines"
+  }
+}
+```
+
+#### 2.6.5 切换元素显示状态
+
+**切换标尺显示状态：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "view_control_tools",
+  "args": {
+    "operation_type": "toggle_element",
+    "element_type": "rulers"
+  }
+}
+```
+
+#### 2.6.6 获取视图信息
+
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "view_control_tools",
+  "args": {
+    "operation_type": "get_view_info"
+  }
+}
+```
+
+#### 2.6.7 导航到指定位置
+
+**导航到下一页：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "view_control_tools",
+  "args": {
+    "operation_type": "navigate",
+    "navigation_type": "page",
+    "direction": "next"
+  }
+}
+```
+
+**导航到指定章节：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "view_control_tools",
+  "args": {
+    "operation_type": "navigate",
+    "navigation_type": "heading",
+    "heading_level": 1
+  }
+}
+```
+
+### 2.7 导航与上下文管理 (navigate_tools)
+
+用于设置活动文档、活动上下文和活动对象，使其他工具可以在不需要指定locator参数的情况下进行操作。
+
+#### 2.7.1 设置活动上下文
+
+**设置活动上下文为特定章节：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "navigate_tools",
+  "args": {
+    "operation_type": "set_active_context",
+    "context_type": "section",
+    "context_value": 2
+  }
+}
+```
+
+**设置活动上下文为特定标题：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "navigate_tools",
+  "args": {
+    "operation_type": "set_active_context",
+    "context_type": "heading",
+    "context_value": "第一章 概述"
+  }
+}
+```
+
+**设置活动上下文为特定书签：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "navigate_tools",
+  "args": {
+    "operation_type": "set_active_context",
+    "context_type": "bookmark",
+    "context_value": "section_summary"
+  }
+}
+```
+
+#### 2.7.2 设置活动对象
+
+**设置活动对象为特定段落：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "navigate_tools",
+  "args": {
+    "operation_type": "set_active_object",
+    "object_type": "paragraph",
+    "object_value": 5
+  }
+}
+```
+
+**设置活动对象为特定表格：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "navigate_tools",
+  "args": {
+    "operation_type": "set_active_object",
+    "object_type": "table",
+    "object_value": 2
+  }
+}
+```
+
+**设置活动对象为特定图片：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "navigate_tools",
+  "args": {
+    "operation_type": "set_active_object",
+    "object_type": "image",
+    "object_value": 3
+  }
+}
+```
+
+#### 2.7.3 获取当前上下文信息
+
+**获取当前活动上下文：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "navigate_tools",
+  "args": {
+    "operation_type": "get_active_context"
+  }
+}
+```
+
+**获取当前活动对象：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "navigate_tools",
+  "args": {
+    "operation_type": "get_active_object"
+  }
+}
+```
+
+#### 2.7.4 上下文感知的工具调用示例
+
+设置好活动上下文和活动对象后，其他工具可以在不指定locator参数的情况下工作：
+
+**传统方式（需要指定locator）：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "text_tools",
+  "args": {
+    "operation_type": "insert_text",
+    "locator": {
+      "type": "paragraph",
+      "value": 5
+    },
+    "text": "新的段落内容"
+  }
+}
+```
+
+**上下文感知方式（无需指定locator）：**
+```json
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "navigate_tools",
+  "args": {
+    "operation_type": "set_active_object",
+    "object_type": "paragraph",
+    "object_value": 5
+  }
+}
+
+{
+  "server_name": "mcp.config.usrlocalmcp.word-docx-tools",
+  "tool_name": "text_tools",
+  "args": {
+    "operation_type": "insert_text",
+    "text": "新的段落内容"
+  }
+}
 
 ## 3. Locator精确定位机制
 

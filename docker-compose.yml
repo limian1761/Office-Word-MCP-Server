@@ -1,35 +1,32 @@
 version: '3.8'
 
 services:
-  # Local development setup with volume mounting
   word-mcp-dev:
     build:
       context: .
       dockerfile: Dockerfile
+      target: linux-base
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
     environment:
       - MCP_TRANSPORT=http
       - HOST=0.0.0.0
       - PORT=8000
-    # Note: COM integration with Word is limited in containers
-    # This is suitable for development and testing only
+    command: ["word_docx_tools", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
 
-  # Production-like setup
   word-mcp-prod:
     build:
       context: .
       dockerfile: Dockerfile
+      target: linux-base
     ports:
       - "8000:8000"
     environment:
       - MCP_TRANSPORT=http
       - HOST=0.0.0.0
       - PORT=8000
-    # For production use, consider using host networking
-    # network_mode: "host"
+    command: ["word_docx_tools", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
 
   # Windows container variant (requires Windows host)
   # Uncomment this section if deploying on Windows with Docker Desktop

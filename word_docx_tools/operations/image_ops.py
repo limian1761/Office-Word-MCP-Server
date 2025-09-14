@@ -11,11 +11,83 @@ from typing import Any, Dict, List, Optional
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error, iter_com_collection
-from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
-                                      log_info)
-from ..selector.selector import SelectorEngine
+from ..com_backend.selector_utils import get_selection_range
+from ..mcp_service.core_utils import (
+    ErrorCode,
+    WordDocumentError,
+    log_error,
+    log_info,
+    AppContext,
+    DocumentContext
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _update_document_context_for_image(image, operation_type="modify"):
+    """更新图片相关的DocumentContext
+    
+    Args:
+        image: 图片对象
+        operation_type: 操作类型，可选值："create", "modify", "delete"
+    """
+    try:
+        # 通过AppContext获取当前活动文档的DocumentContext
+        document_context = AppContext.get_active_document_context()
+        if not document_context:
+            log_error("No active document context found")
+            return
+        
+        # 获取图片的Range信息用于定位
+        if hasattr(image, "Range"):
+            range_start = image.Range.Start
+            range_end = image.Range.End
+            
+            # 查找图片对应的上下文节点
+            image_node = document_context.find_node_by_range(range_start, range_end)
+            
+            if operation_type in ["create", "modify"]:
+                # 如果是创建或修改操作，更新图片上下文
+                if image_node:
+                    # 更新现有节点
+                    document_context.update_node(image_node, {
+                        "type": "image",
+                        "index": getattr(image, "Index", None),
+                        "name": getattr(image, "Name", "Image"),
+                        "width": getattr(image, "Width", None),
+                        "height": getattr(image, "Height", None),
+                        "range_start": range_start,
+                        "range_end": range_end
+                    })
+                else:
+                    # 创建新节点
+                    document_context.add_node({
+                        "type": "image",
+                        "index": getattr(image, "Index", None),
+                        "name": getattr(image, "Name", "Image"),
+                        "width": getattr(image, "Width", None),
+                        "height": getattr(image, "Height", None),
+                        "range_start": range_start,
+                        "range_end": range_end
+                    }, range_start, range_end)
+                
+                # 通知处理器
+                document_context.notify_processors()
+            elif operation_type == "delete":
+                # 如果是删除操作，从树中移除节点
+                if image_node:
+                    document_context.remove_node(image_node)
+                    document_context.notify_processors()
+        else:
+            log_error("Image object does not have Range property")
+    except Exception as e:
+        log_error(f"Error updating document context for image: {str(e)}")
+
+
+
+
+
+
 
 
 def get_image_info(document: win32com.client.CDispatch) -> List[Dict[str, Any]]:
@@ -212,57 +284,8 @@ def insert_image(
             ErrorCode.NOT_FOUND, f"Image file not found: {image_path}"
         )
 
-    selector = SelectorEngine()
-    range_obj = None
-
-    if locator:
-        # 使用定位器获取范围
-        try:
-            selection = selector.select(document, locator)
-            if hasattr(selection, "_com_ranges") and selection._com_ranges:
-                # 获取第一个对象
-                selected_object = selection._com_ranges[0]
-
-                # 确保我们有一个有效的Range对象
-                if hasattr(selected_object, "Range"):
-                    range_obj = selected_object.Range
-                else:
-                    # 如果对象本身就是Range对象，直接使用
-                    range_obj = selected_object
-
-                # 根据位置参数调整范围
-                # 检查范围是否已经是折叠状态 (Start == End)
-                if hasattr(range_obj, "Start") and hasattr(range_obj, "End") and range_obj.Start == range_obj.End:
-                    # 如果范围已经是折叠状态，不再调用Collapse方法
-                    pass
-                else:
-                    # 范围不是折叠状态，根据position参数调用Collapse方法
-                    if position == "before":
-                        range_obj.Collapse(True)  # wdCollapseStart
-                    elif position == "after":
-                        range_obj.Collapse(False)  # wdCollapseEnd
-                # 如果是"replace"，则不折叠范围，直接替换
-            else:
-                raise WordDocumentError(
-                    ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
-                )
-        except Exception as e:
-            raise WordDocumentError(
-                ErrorCode.SERVER_ERROR, f"Failed to locate position for image: {str(e)}"
-            )
-    else:
-        # 如果没有提供定位器，在文档末尾插入图片
-        if not hasattr(document, "Range"):
-            raise WordDocumentError(
-                ErrorCode.DOCUMENT_ERROR,
-                "Document object missing required 'Range' method",
-            )
-        range_obj = document.Range()
-        if not range_obj:
-            raise WordDocumentError(
-                ErrorCode.OBJECT_TYPE_ERROR, "Failed to create valid Range object"
-            )
-        range_obj.Collapse(False)  # wdCollapseEnd
+    # 使用通用选择器函数获取范围对象
+    range_obj = get_selection_range(document, locator, position)
 
     try:
         # 增强Range对象验证
@@ -323,6 +346,12 @@ def insert_image(
                 )
 
         # 添加成功日志
+        # 更新DocumentContext
+        try:
+            _update_document_context_for_image(picture, "create")
+        except Exception as e:
+            log_error(f"Failed to update context after inserting image: {str(e)}")
+        
         log_info(f"Successfully inserted image: {image_path}")
 
         return json.dumps(
@@ -378,16 +407,8 @@ def add_caption(
 
     try:
         if locator:
-            # 使用定位器获取范围
-            selector = SelectorEngine()
-            selection = selector.select(document, locator)
-            if hasattr(selection, "_com_ranges") and selection._com_ranges:
-                range_obj = selection._com_ranges[0]  # _com_ranges 已包含 Range 对象
-                range_obj.Collapse(False)  # wdCollapseEnd
-            else:
-                raise WordDocumentError(
-                    ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
-                )
+            # 使用通用选择器函数获取范围对象
+            range_obj = get_selection_range(document, locator, "after")
         else:
             # 如果没有提供定位器，在文档末尾添加题注
             if not hasattr(document, "Range"):
@@ -610,6 +631,12 @@ def resize_image(
             ErrorCode.DOCUMENT_ERROR, f"Failed to resize image: {str(e)}"
         )
 
+    # 更新DocumentContext
+    try:
+        _update_document_context_for_image(image, "modify")
+    except Exception as e:
+        log_error(f"Failed to update context after resizing image: {str(e)}")
+    
     log_info(f"Successfully resized image {image_index}")
     return json.dumps(
         {
@@ -696,6 +723,12 @@ def set_image_color_type(
             ErrorCode.DOCUMENT_ERROR, f"Failed to set image color type: {str(e)}"
         )
 
+    # 更新DocumentContext
+    try:
+        _update_document_context_for_image(image, "modify")
+    except Exception as e:
+        log_error(f"Failed to update context after setting image color type: {str(e)}")
+    
     log_info(f"Successfully set color type for image {image_index} to {color_type}")
     return json.dumps(
         {
@@ -813,16 +846,8 @@ def add_image_caption(
 
     try:
         if locator:
-            # 使用定位器获取范围
-            selector = SelectorEngine()
-            selection = selector.select(document, locator)
-            if hasattr(selection, "_com_ranges") and selection._com_ranges:
-                range_obj = selection._com_ranges[0]  # _com_ranges 已包含 Range 对象
-                range_obj.Collapse(False)  # wdCollapseEnd
-            else:
-                raise WordDocumentError(
-                    ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
-                )
+            # 使用通用选择器函数获取范围对象
+            range_obj = get_selection_range(document, locator, "after")
         else:
             # 如果没有提供定位器，在文档末尾添加题注
             if not hasattr(document, "Range"):

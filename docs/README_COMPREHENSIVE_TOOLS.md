@@ -2,7 +2,7 @@
 
 ## 1. 工具优化背景
 
-为了响应"暴露给大模型的tool函数数量应充分精简，且充分说明，宁肯重复的注释和说明，也不要增加tool的数量。单工具应该足够强大"的要求，我们对原有的20多个独立工具函数进行了优化，合并为5个功能强大的综合工具函数。
+为了响应"暴露给大模型的tool函数数量应充分精简，且充分说明，宁肯重复的注释和说明，也不要增加tool的数量。单工具应该足够强大"的要求，我们对原有的20多个独立工具函数进行了优化，合并为6个功能强大的综合工具函数。
 
 **优化目标：**
 - **减少工具数量**：从原来的20多个工具减少到5个综合工具
@@ -20,6 +20,8 @@
 | `table_operation` | 处理所有表格相关操作 | 3个表格工具 |
 | `image_operation` | 处理所有图片相关操作 | 3个图片工具 |
 | `comment_operation` | 处理所有注释相关操作 | 6个注释工具 |
+| `navigate_tools` | 综合导航工具 | 新增工具 |
+| `view_control_tools` | 处理所有视图控制相关操作 | 7个视图控制工具 |
 
 ## 3. 综合工具详细说明
 
@@ -214,41 +216,117 @@ comment_operation(operation_type="delete")
 # 获取注释线程
 comment_operation(operation_type="get_thread", 
                  comment_index=0)
-```
 
-## 4. 定位器(Locator)使用指南
+### 3.6 navigate_tools - 综合导航工具
 
-大多数操作都需要使用**定位器(Locator)**来指定操作的目标元素。定位器是一个字典对象，格式如下：
+管理文档上下文和对象的选择，用于设置活动文档、活动上下文和活动对象，这是当前推荐的定位方式，替代了传统的定位器(Locator)机制，使得其他工具可以在不需要指定定位参数的情况下进行操作。
 
-```python
-locator = {"type": "object_type", "value": "object_identifier", "filters": {"filter_name": "filter_value"}}
-```
+**支持的操作类型：**
 
-### 支持的元素类型
+| 操作类型 | 描述 | 必填参数 | 可选参数 | 返回值 |
+|---------|------|---------|---------|-------|
+| `set_active_context` | 设置活动上下文 | `context_type`, `context_value` | - | 上下文设置成功信息 |
+| `set_active_object` | 设置活动对象 | `object_type`, `object_value` | - | 对象设置成功信息 |
+| `get_active_context` | 获取当前活动上下文信息 | - | - | 当前活动上下文信息JSON字符串 |
+| `get_active_object` | 获取当前活动对象信息 | - | - | 当前活动对象信息JSON字符串 |
 
-| 元素类型 | 描述 | 值的格式 | 示例 |
-|---------|------|---------|------|
-| `document` | 整个文档 | 不需要值 | `{"type": "document"}` |
-| `paragraph` | 段落 | 段落索引(从1开始) | `{"type": "paragraph", "value": 3}` |
-| `table` | 表格 | 表格索引(从1开始) | `{"type": "table", "value": 2}` |
-| `cell` | 表格单元格 | "行号,列号"(从1开始) | `{"type": "cell", "value": "1,2"}` |
-| `image` | 图片 | 图片索引(从1开始) | `{"type": "image", "value": 1}` |
-| `comment` | 注释 | 注释索引(从0开始) | `{"type": "comment", "value": 0}` |
-| `text` | 文本范围 | 文本内容 | `{"type": "text", "value": "关键词"}` |
-
-### 过滤器的使用
-
-过滤器可以帮助更精确地定位元素，例如：
+**使用示例：**
 
 ```python
-# 查找包含特定文本的段落
-locator = {"type": "paragraph", "filters": {"contains_text": "重要信息"}}
+# 设置活动上下文为特定章节
+navigate_tools(operation_type="set_active_context", context_type="section", context_value=2)
 
-# 查找特定标题样式的段落
-locator = {"type": "paragraph", "filters": {"style_name": "Heading 1"}}
+# 设置活动对象为特定段落
+navigate_tools(operation_type="set_active_object", object_type="paragraph", object_value=5)
+
+# 获取当前活动上下文
+current_context = navigate_tools(operation_type="get_active_context")
+
+# 获取当前活动对象
+current_object = navigate_tools(operation_type="get_active_object")
 ```
 
-## 5. 综合工具使用流程示例
+**支持的上下文类型：**
+- `document`: 整个文档
+- `section`: 文档章节
+- `heading`: 标题
+- `bookmark`: 书签
+- `table`: 表格
+- `selection`: 当前选择
+
+**支持的对象类型：**
+- `paragraph`: 段落
+- `table`: 表格
+- `cell`: 表格单元格
+- `image`: 图片
+- `comment`: 注释
+
+### 3.7 view_control_tools - 综合视图控制工具
+
+处理所有视图控制相关操作，如切换视图、调整缩放比例、显示/隐藏元素等。
+
+**支持的操作类型：**
+
+| 操作类型 | 描述 | 必填参数 | 可选参数 | 返回值 |
+|---------|------|---------|---------|-------|
+| `switch_view` | 切换文档视图 | `view_type` | - | 视图切换成功信息 |
+| `set_zoom` | 设置文档缩放比例 | `zoom_level` | - | 缩放设置成功信息 |
+| `show_element` | 显示特定元素 | `element_type` | - | 元素显示成功信息 |
+| `hide_element` | 隐藏特定元素 | `element_type` | - | 元素隐藏成功信息 |
+| `toggle_element` | 切换特定元素的显示状态 | `element_type` | - | 元素状态切换成功信息 |
+| `get_view_info` | 获取当前视图信息 | - | - | 包含当前视图信息的JSON字符串 |
+| `navigate` | 导航到文档特定位置 | `navigation_type`, `value` | - | 导航成功信息 |
+
+**使用示例：**
+
+```python
+# 切换到阅读视图
+view_control_tools(operation_type="switch_view", view_type="read")
+
+# 设置缩放比例为150%
+view_control_tools(operation_type="set_zoom", zoom_level=150)
+
+# 显示网格线
+view_control_tools(operation_type="show_element", element_type="gridlines")
+
+# 隐藏标尺
+view_control_tools(operation_type="hide_element", element_type="rulers")
+
+# 切换导航窗格显示状态
+view_control_tools(operation_type="toggle_element", element_type="navigation_pane")
+
+# 获取当前视图信息
+current_view = view_control_tools(operation_type="get_view_info")
+
+# 导航到特定页码
+view_control_tools(operation_type="navigate", navigation_type="page", value=5)
+```
+
+**支持的视图类型：**
+- `print`: 打印视图
+- `web`: Web视图
+- `read`: 阅读视图
+- `outline`: 大纲视图
+- `draft`: 草稿视图
+
+**支持的元素类型：**
+- `rulers`: 标尺
+- `gridlines`: 网格线
+- `navigation_pane`: 导航窗格
+- `status_bar`: 状态栏
+- `task_pane`: 任务窗格
+- `comments_pane`: 评论窗格
+- `formatting_marks`: 格式标记
+
+**支持的导航类型：**
+- `page`: 按页码导航
+- `heading`: 按标题导航
+- `bookmark`: 按书签导航
+- `section`: 按节导航
+- `table`: 按表格导航
+```
+
+## 4. 综合工具使用流程示例
 
 下面是一个完整的文档操作流程示例，展示如何使用综合工具完成从打开文档到保存关闭的整个过程：
 
@@ -259,27 +337,26 @@ import json
 doc_info = document_operation(operation_type="open", file_path="C:\path\to\document.docx")
 print(f"文档已打开: {json.dumps(doc_info, ensure_ascii=False)}")
 
-# 2. 插入标题
+# 2. 插入标题（使用文档作为默认上下文）
 text_operation(operation_type="insert", 
-              locator={"type": "document"}, 
               text="综合工具使用示例", 
               position="after",
               style="Heading 1")
 
-# 3. 插入正文段落
+# 3. 设置活动对象为第1段落后，插入正文段落
+navigate_tools(operation_type="set_active_object", object_type="paragraph", object_value=1)
 text_operation(operation_type="insert", 
-              locator={"type": "paragraph", "value": 1}, 
               text="这是使用综合工具创建的第一个段落。", 
               position="after")
 
-# 4. 应用格式化
+# 4. 设置活动对象为第2段落后，应用格式化
+navigate_tools(operation_type="set_active_object", object_type="paragraph", object_value=2)
 text_operation(operation_type="apply_formatting", 
-              locator={"type": "paragraph", "value": 2}, 
               formatting={"font_size": 12, "font_name": "Arial", "alignment": "justify"})
 
-# 5. 创建表格
+# 5. 设置活动对象为第2段落后，创建表格
+navigate_tools(operation_type="set_active_object", object_type="paragraph", object_value=2)
 table_operation(operation_type="create", 
-               locator={"type": "paragraph", "value": 2}, 
                rows=2, 
                cols=3, 
                position="after")
@@ -287,26 +364,25 @@ table_operation(operation_type="create",
 # 6. 填写表格
 for i in range(1, 3):
     for j in range(1, 4):
-        table_operation(operation_type="set_cell_text", 
-                       locator={"type": "cell", "value": f"{i},{j}"}, 
-                       text=f"单元格{i}-{j}")
+        # 设置活动对象为目标单元格，然后设置内容
+        navigate_tools(operation_type="set_active_object", object_type="cell", object_value=f"{i},{j}")
+        table_operation(operation_type="set_cell_text", text=f"单元格{i}-{j}")
 
-# 7. 插入图片
+# 7. 设置活动对象为第1个表格后，插入图片
+navigate_tools(operation_type="set_active_object", object_type="table", object_value=1)
 image_operation(operation_type="insert", 
-               locator={"type": "table", "value": 1}, 
                object_path="C:\path\to\image.jpg", 
                position="after")
 
-# 8. 为图片添加题注
+# 8. 设置活动对象为第1个图片后，添加题注
+navigate_tools(operation_type="set_active_object", object_type="image", object_value=1)
 image_operation(operation_type="add_caption", 
-               locator={"type": "image", "value": 1}, 
                caption_text="示例图片", 
                label="Figure")
 
-# 9. 添加注释
-comment_operation(operation_type="add", 
-                 locator={"type": "paragraph", "value": 2}, 
-                 text="这是一个示例注释")
+# 9. 设置活动对象为第2段落后，添加注释
+navigate_tools(operation_type="set_active_object", object_type="paragraph", object_value=2)
+comment_operation(operation_type="add", text="这是一个示例注释")
 
 # 10. 查找文本
 results = text_operation(operation_type="find", text="示例")
@@ -319,7 +395,7 @@ document_operation(operation_type="close")
 document_operation(operation_type="shutdown")
 ```
 
-## 6. 错误处理和故障排除
+## 5. 错误处理和故障排除
 
 ### 常见错误及解决方案
 
@@ -327,7 +403,7 @@ document_operation(operation_type="shutdown")
 |---------|------------|---------|
 | 文档未找到 | File not found: C:\path\to\document.docx | 检查文件路径是否正确 |
 | 没有活动文档 | No active document found | 先使用 `document_operation("open", file_path="...")` 打开文档 |
-| 元素未找到 | No object found matching the locator | 检查定位器参数是否正确，可能文档结构与预期不符 |
+| 元素未找到 | No object found matching the specified object_type and object_value | 检查指定的对象类型和值是否正确，可能文档结构与预期不符 |
 | 参数无效 | Invalid parameter: text is required | 确保提供了所有必需的参数 |
 | COM错误 | Failed to open document: ... | 检查Word应用程序是否正常运行，可能需要重启Word |
 
@@ -335,11 +411,14 @@ document_operation(operation_type="shutdown")
 
 1. 使用`log_info`和`log_error`函数记录操作过程
 2. 检查`word_doc_server.log`文件获取详细的错误日志
-3. 对于定位问题，可以先使用`document_operation("get_objects")`查看文档结构
-4. 确保所有路径使用双反斜杠(`\\`)或正斜杠(`/`)，避免使用单反斜杠
+3. 对于导航问题，可以先使用`document_operation("get_objects")`查看文档结构
+4. 使用`navigate_tools("get_active_context")`和`navigate_tools("get_active_object")`检查当前活动上下文和对象
+5. 确保所有路径使用双反斜杠(`\\`)或正斜杠(`/`)，避免使用单反斜杠
 
-## 7. 总结
+## 6. 总结
 
-综合工具函数是Office Word MCP Server的推荐API，它们提供了精简而强大的接口，使文档操作更加简单和一致。通过掌握这些工具的使用，您可以更高效地开发基于Word的应用程序和自动化工作流程。
+综合工具函数是Office Word MCP Server的推荐API，它们提供了精简而强大的接口，使文档操作更加简单和一致。特别是navigate_tools工具，作为当前推荐的定位方式，替代了传统的定位器(Locator)机制，通过设置活动文档、活动上下文和活动对象，使得其他工具可以在不需要指定定位参数的情况下进行操作。
+
+通过掌握这些工具的使用，特别是利用navigate_tools来管理文档上下文和对象，您可以更高效地开发基于Word的应用程序和自动化工作流程。
 
 如果您有任何问题或建议，请随时联系开发团队。

@@ -22,10 +22,13 @@ from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
                                       get_active_document, handle_tool_errors,
                                       log_error, log_info,
                                       require_active_document_validation)
-from ..selector.selector import SelectorEngine
-from ..selector.locator_parser import LocatorParser
-from ..selector.exceptions import LocatorSyntaxError
+
 from ..mcp_service.app_context import AppContext
+
+# Custom exception class to replace the one from selector.exceptions
+class LocatorSyntaxError(Exception):
+    """Exception raised for invalid locator syntax."""
+    pass
 
 
 # 延迟导入以避免循环导入
@@ -127,13 +130,23 @@ async def image_tools(
             if not isinstance(locator_value, dict):
                 raise TypeError("locator parameter must be a dictionary")
             
-            # 使用LocatorParser验证locator结构
-            parser = LocatorParser()
-            try:
-                parser.validate_locator(locator_value)
-            except LocatorSyntaxError:
-                # 提示用户参考定位器指南
-                raise ValueError("Invalid locator format. Please refer to the locator guide for proper syntax.")
+            # 简单验证locator结构
+            if 'type' not in locator_value:
+                raise LocatorSyntaxError("Locator must contain 'type' field")
+            
+            # 验证定位器类型是否有效
+            valid_types = ['paragraph', 'table', 'image', 'selection']
+            if locator_value['type'] not in valid_types:
+                raise LocatorSyntaxError(f"Invalid locator type. Must be one of: {', '.join(valid_types)}")
+            
+            # 验证position参数（如果提供）
+            if 'position' in locator_value and locator_value['position'] not in ['before', 'after', 'inside']:
+                raise LocatorSyntaxError("Invalid position. Must be 'before', 'after', or 'inside'")
+            
+            # 验证index参数（如果提供）
+            if 'index' in locator_value:
+                if not isinstance(locator_value['index'], int) or locator_value['index'] < 1:
+                    raise LocatorSyntaxError("Index must be a positive integer")
     
     # Get the active Word document from the context
     document = ctx.request_context.lifespan_context.get_active_document()
@@ -239,9 +252,25 @@ async def image_tools(
             # 获取图片索引（如果有定位器，则需要先获取图片索引）
             image_index = 1  # 默认调整第一个图片
             if locator:
-                # 在实际实现中，这里应该使用定位器来查找图片并获取其索引
-                # 为了简化，我们暂时使用默认值
-                pass
+                # 使用AppContext获取Word应用程序对象
+                word_app = ctx.request_context.lifespan_context.get_word_app()
+                # 尝试根据定位器获取目标图片
+                try:
+                    # 简单的定位器实现，实际应用中可能需要更复杂的逻辑
+                    if locator.get('type') == 'image' and 'index' in locator:
+                        image_index = locator['index']
+                    elif locator.get('type') == 'selection':
+                        # 尝试获取选中的图片
+                        selection = word_app.Selection
+                        if selection.InlineShapes.Count > 0:
+                            # 获取选中的内联形状（通常是图片）
+                            for i, shape in enumerate(document.InlineShapes, 1):
+                                if shape.Range.Start == selection.Range.Start:
+                                    image_index = i
+                                    break
+                except Exception as e:
+                    log_error(f"Failed to get image index from locator: {str(e)}")
+                    # 如果获取失败，继续使用默认值
 
             log_info(f"Resizing image with width: {width}, height: {height}")
             # 调用resize_image函数，注意参数顺序
@@ -269,9 +298,25 @@ async def image_tools(
             # 获取图片索引（如果有定位器，则需要先获取图片索引）
             image_index = 1  # 默认调整第一个图片
             if locator:
-                # 在实际实现中，这里应该使用定位器来查找图片并获取其索引
-                # 为了简化，我们暂时使用默认值
-                pass
+                # 使用AppContext获取Word应用程序对象
+                word_app = ctx.request_context.lifespan_context.get_word_app()
+                # 尝试根据定位器获取目标图片
+                try:
+                    # 简单的定位器实现，实际应用中可能需要更复杂的逻辑
+                    if locator.get('type') == 'image' and 'index' in locator:
+                        image_index = locator['index']
+                    elif locator.get('type') == 'selection':
+                        # 尝试获取选中的图片
+                        selection = word_app.Selection
+                        if selection.InlineShapes.Count > 0:
+                            # 获取选中的内联形状（通常是图片）
+                            for i, shape in enumerate(document.InlineShapes, 1):
+                                if shape.Range.Start == selection.Range.Start:
+                                    image_index = i
+                                    break
+                except Exception as e:
+                    log_error(f"Failed to get image index from locator: {str(e)}")
+                    # 如果获取失败，继续使用默认值
 
             log_info(f"Setting image color type to: {color_type}")
             # 调用set_image_color_type函数，注意参数顺序

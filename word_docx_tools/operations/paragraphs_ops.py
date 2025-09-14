@@ -11,8 +11,7 @@ import win32com.client
 
 from ..com_backend.com_utils import handle_com_error, iter_com_collection
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
-                                      log_info) 
-from ..selector.selector import SelectorEngine
+                                      log_info, AppContext, DocumentContext) 
 from ..operations.text_operations import insert_text_after_range
 from ..operations.text_format_ops import set_paragraph_style
 
@@ -43,29 +42,45 @@ def get_paragraphs(
     paragraphs: List[Dict[str, Any]] = []
     
     if locator:
-        # Use selector engine to find the range based on locator
-        selector = SelectorEngine()
-        selection = selector.select(document, locator)
-
-        # Get the range object from the first object in selection
-        if not selection._com_ranges:
-            raise WordDocumentError(
-                ErrorCode.OBJECT_NOT_FOUND, "No objects found for the given locator"
-            )
-
-        # Get the range from the selection
-        range_obj = selection._com_ranges[0]
+        # 使用AppContext获取当前选择范围
+        context = AppContext.get_instance()
         
-        # Process paragraphs in the range
-        for i, paragraph in enumerate(iter_com_collection(range_obj.Paragraphs)):
-            try:
-                _add_paragraph_info(paragraphs, paragraph, i)
-            except Exception as e:
-                log_error(
-                    f"Failed to retrieve paragraph in range at index {i}: {e}",
-                    exc_info=True,
+        # 处理不同类型的locator
+        if 'type' in locator:
+            if locator['type'] == 'paragraph':
+                # 获取指定段落
+                if 'index' in locator:
+                    index = locator['index']
+                    if index < 0:
+                        # 负索引表示从末尾开始计数
+                        paragraph_count = document.Paragraphs.Count
+                        if paragraph_count + index >= 0:
+                            index = paragraph_count + index + 1
+                        else:
+                            raise WordDocumentError(
+                                ErrorCode.OBJECT_NOT_FOUND,
+                                f"Paragraph index out of range: {index}"
+                            )
+                    if 1 <= index <= document.Paragraphs.Count:
+                        paragraph = document.Paragraphs(index)
+                        _add_paragraph_info(paragraphs, paragraph, 0)
+                        return paragraphs
+                    else:
+                        raise WordDocumentError(
+                            ErrorCode.OBJECT_NOT_FOUND,
+                            f"Paragraph index out of range: {index}"
+                        )
+            else:
+                # 处理其他类型的locator
+                raise WordDocumentError(
+                    ErrorCode.OBJECT_TYPE_ERROR,
+                    f"Unsupported locator type: {locator['type']}"
                 )
-                continue
+        else:
+            raise WordDocumentError(
+                ErrorCode.OBJECT_TYPE_ERROR,
+                "Locator must specify an object type"
+            )
     else:
         # Process all paragraphs in the document
         paragraphs_count = document.Paragraphs.Count
@@ -78,6 +93,39 @@ def get_paragraphs(
                 continue
 
     return paragraphs
+
+
+def _update_document_context_for_paragraph(paragraph: Any, operation: str = "modify") -> None:
+    """
+    更新段落对应的DocumentContext
+    
+    Args:
+        paragraph: 段落COM对象
+        operation: 操作类型（"modify", "create", "delete"等）
+    """
+    try:
+        app_context = AppContext.get_instance()
+        document = paragraph.Document
+        
+        # 查找段落对应的DocumentContext
+        # 基于段落的Range.Start和Range.End查找对应的上下文
+        context = app_context.find_context_by_range(
+            document=document,
+            start=paragraph.Range.Start,
+            end=paragraph.Range.End,
+            object_type="paragraph"
+        )
+        
+        if context:
+            # 更新上下文信息
+            if operation == "delete":
+                app_context.remove_context_from_tree(context)
+            else:
+                app_context.update_paragraph_context(context, paragraph)
+                # 通知上下文更新处理器
+                app_context.notify_context_update(context, operation)
+    except Exception as e:
+        log_error(f"Failed to update DocumentContext for paragraph operation {operation}: {str(e)}")
 
 
 def _add_paragraph_info(
@@ -275,23 +323,57 @@ def insert_paragraph_impl(
 
     log_info(f"Inserting paragraph: {text}")
 
-    # Get selection range
-    selector_engine = SelectorEngine()
-    selection = selector_engine.select(document, locator)
-
-    if not selection or not selection.get_object_types():
+    # 使用AppContext获取当前选择范围
+    context = AppContext.get_instance()
+    range_obj = None
+    
+    # 处理不同类型的locator
+    if 'type' in locator:
+        if locator['type'] == 'paragraph':
+            # 获取指定段落
+            if 'index' in locator:
+                index = locator['index']
+                if index < 0:
+                    # 负索引表示从末尾开始计数
+                    paragraph_count = document.Paragraphs.Count
+                    if paragraph_count + index >= 0:
+                        index = paragraph_count + index + 1
+                    else:
+                        raise WordDocumentError(
+                            ErrorCode.OBJECT_NOT_FOUND,
+                            f"Paragraph index out of range: {index}"
+                        )
+                if 1 <= index <= document.Paragraphs.Count:
+                    range_obj = document.Paragraphs(index).Range
+                else:
+                    raise WordDocumentError(
+                        ErrorCode.OBJECT_NOT_FOUND,
+                        f"Paragraph index out of range: {index}"
+                    )
+        elif locator['type'] == 'document_start':
+            # 获取文档开头
+            range_obj = document.Content
+            range_obj.Collapse(True)  # wdCollapseStart
+        elif locator['type'] == 'document_end':
+            # 获取文档结尾
+            range_obj = document.Content
+            range_obj.Collapse(False)  # wdCollapseEnd
+        else:
+            raise WordDocumentError(
+                ErrorCode.OBJECT_TYPE_ERROR,
+                f"Unsupported locator type: {locator['type']}"
+            )
+    else:
         raise WordDocumentError(
             ErrorCode.OBJECT_TYPE_ERROR,
-            "Failed to locate object for paragraph insertion"
+            "Locator must specify an object type"
         )
-
-    if not hasattr(selection, "_com_ranges") or not selection._com_ranges:
+    
+    if not range_obj:
         raise WordDocumentError(
-            ErrorCode.OBJECT_TYPE_ERROR,
-            "Failed to get objects from selection for paragraph insertion"
+            ErrorCode.OBJECT_NOT_FOUND,
+            "Failed to locate range for paragraph insertion"
         )
-
-    range_obj = selection._com_ranges[0]
 
     # If needed as independent paragraph
     if is_independent_paragraph:
@@ -316,17 +398,25 @@ def insert_paragraph_impl(
     result = insert_text_after_range(com_range=range_obj, text=f"\n{text}")
 
     if style:
-        # Apply paragraph style
-        selector_engine = SelectorEngine()
-        selection = selector_engine.select(
-            document, {"type": "paragraph", "index": -1}  # Last paragraph
-        )
-        if (
-            selection
-            and hasattr(selection, "_com_ranges")
-            and selection._com_ranges
-        ):
-            set_paragraph_style(selection._com_ranges[0], style)
+        # Apply paragraph style to the newly inserted paragraph
+        try:
+            # 获取最后一个段落（新插入的段落）
+            last_paragraph_index = document.Paragraphs.Count
+            if last_paragraph_index > 0:
+                new_paragraph = document.Paragraphs(last_paragraph_index)
+                set_paragraph_style(new_paragraph.Range, style)
+        except Exception as e:
+            log_error(f"Failed to apply paragraph style: {str(e)}")
+            # 继续执行，因为这不是致命错误
+
+    # 获取新插入的段落并更新DocumentContext
+    try:
+        last_paragraph_index = document.Paragraphs.Count
+        if last_paragraph_index > 0:
+            new_paragraph = document.Paragraphs(last_paragraph_index)
+            _update_document_context_for_paragraph(new_paragraph, "create")
+    except Exception as e:
+        log_error(f"Failed to update context after inserting paragraph: {str(e)}")
 
     return result
 
@@ -357,28 +447,66 @@ def delete_paragraph_impl(
 
     log_info(f"Deleting paragraph with locator: {locator}")
 
-    # Get selection range
-    selector_engine = SelectorEngine()
-    selection = selector_engine.select(document, locator)
-
-    if not selection or not selection.get_object_types():
+    # 使用AppContext获取当前选择范围
+    context = AppContext.get_instance()
+    range_obj = None
+    
+    # 处理不同类型的locator
+    if 'type' in locator:
+        if locator['type'] == 'paragraph':
+            # 获取指定段落
+            if 'index' in locator:
+                index = locator['index']
+                if index < 0:
+                    # 负索引表示从末尾开始计数
+                    paragraph_count = document.Paragraphs.Count
+                    if paragraph_count + index >= 0:
+                        index = paragraph_count + index + 1
+                    else:
+                        raise WordDocumentError(
+                            ErrorCode.OBJECT_NOT_FOUND,
+                            f"Paragraph index out of range: {index}"
+                        )
+                if 1 <= index <= document.Paragraphs.Count:
+                    range_obj = document.Paragraphs(index).Range
+                else:
+                    raise WordDocumentError(
+                        ErrorCode.OBJECT_NOT_FOUND,
+                        f"Paragraph index out of range: {index}"
+                    )
+        else:
+            raise WordDocumentError(
+                ErrorCode.OBJECT_TYPE_ERROR,
+                f"Unsupported locator type: {locator['type']}"
+            )
+    else:
         raise WordDocumentError(
             ErrorCode.OBJECT_TYPE_ERROR,
-            "Failed to locate object for paragraph deletion"
+            "Locator must specify an object type"
         )
-
-    if not hasattr(selection, "_com_ranges") or not selection._com_ranges:
+    
+    if not range_obj:
         raise WordDocumentError(
-            ErrorCode.OBJECT_TYPE_ERROR,
-            "Failed to get objects from selection for paragraph deletion"
+            ErrorCode.OBJECT_NOT_FOUND,
+            "Failed to locate range for paragraph deletion"
         )
 
-    range_obj = selection._com_ranges[0]
+    # 在删除前获取段落对象并通知删除操作
+    try:
+        paragraph = range_obj.Paragraphs(1) if range_obj.Paragraphs.Count > 0 else None
+    except Exception as e:
+        paragraph = None
+        log_error(f"Failed to get paragraph before deletion: {str(e)}")
 
     # Delete the paragraph
     try:
         range_obj.Delete()
         log_info("Paragraph deleted successfully")
+        
+        # 通知段落删除，更新DocumentContext
+        if paragraph:
+            _update_document_context_for_paragraph(paragraph, "delete")
+        
         return json.dumps(
             {"success": True, "message": "Paragraph deleted successfully"},
             ensure_ascii=False
@@ -391,19 +519,19 @@ def delete_paragraph_impl(
         )
 
 
-@handle_com_error(ErrorCode.FORMATTING_ERROR, "format paragraph")
+@handle_com_error(ErrorCode.PARAGRAPH_SELECTION_FAILED, "format paragraph")
 def format_paragraph_impl(
     document: win32com.client.CDispatch,
     locator: Dict[str, Any],
     formatting: Dict[str, Any]
 ) -> str:
     """
-    Applies a preset paragraph style to paragraphs in the document.
+    Formats a paragraph in the document based on the locator and formatting options.
 
     Args:
         document: The Word document COM object.
-        locator: A locator dictionary defining which paragraphs to format.
-        formatting: A dictionary containing the paragraph_style to apply.
+        locator: A locator dictionary defining which paragraph to format.
+        formatting: A dictionary of formatting options.
 
     Returns:
         A JSON string indicating success and additional information.
@@ -412,44 +540,91 @@ def format_paragraph_impl(
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
     if not locator:
-        raise ValueError("locator parameter must be provided for format_paragraph operation")
+        raise WordDocumentError(
+            ErrorCode.PARAMETER_ERROR,
+            "locator parameter must be provided for format_paragraph operation"
+        )
 
-    if not formatting or not isinstance(formatting, dict):
-        raise ValueError("formatting parameter must be a non-empty dictionary")
+    if not formatting:
+        raise WordDocumentError(
+            ErrorCode.PARAMETER_ERROR,
+            "formatting parameter must be provided for format_paragraph operation"
+        )
 
     if "paragraph_style" not in formatting:
         raise ValueError("formatting parameter must contain 'paragraph_style' key")
 
-    log_info(f"Applying paragraph style: {formatting['paragraph_style']}")
+    log_info(f"Formatting paragraph with locator: {locator}, formatting: {formatting}")
 
-    # Use selector engine to find the range based on locator
-    selector = SelectorEngine()
-    selection = selector.select(document, locator)
-
-    if not selection or not hasattr(selection, "_com_ranges") or not selection._com_ranges:
+    # 使用AppContext获取当前选择范围
+    context = AppContext.get_instance()
+    range_obj = None
+    
+    # 处理不同类型的locator
+    if 'type' in locator:
+        if locator['type'] == 'paragraph':
+            # 获取指定段落
+            if 'index' in locator:
+                index = locator['index']
+                if index < 0:
+                    # 负索引表示从末尾开始计数
+                    paragraph_count = document.Paragraphs.Count
+                    if paragraph_count + index >= 0:
+                        index = paragraph_count + index + 1
+                    else:
+                        raise WordDocumentError(
+                            ErrorCode.OBJECT_NOT_FOUND,
+                            f"Paragraph index out of range: {index}"
+                        )
+                if 1 <= index <= document.Paragraphs.Count:
+                    range_obj = document.Paragraphs(index).Range
+                else:
+                    raise WordDocumentError(
+                        ErrorCode.OBJECT_NOT_FOUND,
+                        f"Paragraph index out of range: {index}"
+                    )
+        else:
+            raise WordDocumentError(
+                ErrorCode.OBJECT_TYPE_ERROR,
+                f"Unsupported locator type: {locator['type']}"
+            )
+    else:
         raise WordDocumentError(
-            ErrorCode.OBJECT_NOT_FOUND, "No objects found for the given locator"
+            ErrorCode.OBJECT_TYPE_ERROR,
+            "Locator must specify an object type"
+        )
+    
+    if not range_obj:
+        raise WordDocumentError(
+            ErrorCode.OBJECT_NOT_FOUND,
+            "Failed to locate range for paragraph formatting"
         )
 
-    # Apply paragraph style to each selected range
-    formatted_count = 0
-    applied_style = formatting["paragraph_style"]
-    for range_obj in selection._com_ranges:
+    # Apply paragraph style
+    try:
+        set_paragraph_style(range_obj, formatting["paragraph_style"])
+        log_info(f"Successfully applied paragraph style '{formatting['paragraph_style']}'")
+        
+        # 获取格式化的段落并更新DocumentContext
         try:
-            # Apply paragraph style
-            text_format_ops.set_paragraph_style(range_obj, applied_style)
-            formatted_count += 1
+            paragraph = range_obj.Paragraphs(1) if range_obj.Paragraphs.Count > 0 else None
+            if paragraph:
+                _update_document_context_for_paragraph(paragraph, "modify")
         except Exception as e:
-            log_error(f"Failed to apply paragraph style: {str(e)}")
-            continue
-
-    log_info(f"Successfully applied paragraph style '{applied_style}' to {formatted_count} paragraph(s)")
-    return json.dumps(
-        {
-            "success": True,
-            "message": f"Successfully applied paragraph style '{applied_style}' to {formatted_count} paragraph(s)",
-            "formatted_count": formatted_count,
-            "paragraph_style_applied": applied_style
-        },
-        ensure_ascii=False,
-    )
+            log_error(f"Failed to update context after formatting paragraph: {str(e)}")
+        
+        return json.dumps(
+            {
+                "success": True,
+                "message": f"Successfully applied paragraph style '{formatting['paragraph_style']}'",
+                "formatted_count": 1,
+                "paragraph_style_applied": formatting["paragraph_style"]
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log_error(f"Failed to apply paragraph style: {str(e)}")
+        raise WordDocumentError(
+            ErrorCode.FORMATTING_ERROR,
+            f"Failed to apply paragraph style: {str(e)}"
+        )

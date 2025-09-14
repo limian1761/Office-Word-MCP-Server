@@ -31,52 +31,37 @@ from ..operations.text_operations import (
     apply_formatting_to_document_text,
     validate_required_params
 )
-from ..selector.locator_parser import LocatorParser
-from ..selector.exceptions import LocatorSyntaxError
+from ..operations.navigate_tools import set_active_context, set_active_object
+from ..mcp_service.app_context import AppContext
 
 
-@mcp_server.tool()
-def get_locator_guid(
-    ctx: Context[ServerSession, Any] = Field(description="Context object"),
-) -> Dict[str, str]:
-    """获取定位器指南内容
-    
-    此工具提供关于定位器（Locator）格式的完整指南，包括语法、元素类型、过滤器和使用示例。
-    
-    Returns:
-        Dict[str, str]: 包含定位器指南内容的字典
-    """
-    try:
-        # 读取LOCATOR_GUIDE.md文件内容
-        guide_path = os.path.join(
-            os.path.dirname(__file__), 
-            "..", "selector", "LOCATOR_GUIDE.md"
-        )
-        
-        try:
-            with open(guide_path, 'r', encoding='utf-8') as f:
-                guide_content = f.read()
-            return {"guide_content": guide_content}
-        except Exception as e:
-            log_error(f"无法读取定位器指南文件: {e}")
-            return {"error": f"无法读取定位器指南文件: {str(e)}"}
-    except Exception as e:
-        log_error(f"获取定位器指南时发生错误: {e}")
-        return {"error": str(e)}
+# 定位器指南功能已移除，系统现在使用基于AppContext的上下文管理
 
 
 @mcp_server.tool()
 @require_active_document_validation
 @handle_tool_errors
 def text_tools(
-    ctx: Context[ServerSession, Any] = Field(description="Context object"),
+    ctx: Context[ServerSession, AppContext] = Field(description="Context object"),
     operation_type: Optional[str] = Field(
         default=None,
         description="Type of text operation: get_text, insert_text, replace_text, get_char_count, apply_formatting",
     ),
-    locator: Optional[Dict[str, Any]] = Field(
+    context_type: Optional[str] = Field(
         default=None,
-        description="Locator object for object selection. This is a specially defined format with specific syntax requirements. Optional for get_text, Required for:  insert_text, replace_text, apply_formatting\n",
+        description="Context type: section, paragraph, table, text, etc.",
+    ),
+    context_id: Optional[int] = Field(
+        default=None,
+        description="Context ID for the specific context type",
+    ),
+    object_type: Optional[str] = Field(
+        default=None,
+        description="Object type: paragraph, table, text, etc.",
+    ),
+    object_id: Optional[int] = Field(
+        default=None,
+        description="Object ID for the specific object type",
     ),
     text: Optional[str] = Field(
         default=None,
@@ -95,21 +80,21 @@ def text_tools(
     """文本操作工具，支持获取文本内容、插入文本、替换文本、获取字符计数和应用文本格式等操作。
 
     支持的操作类型：
-    - get_text: 从文档或特定定位器获取文本内容
+    - get_text: 从文档或特定上下文获取文本内容
       * 必需参数：无
-      * 可选参数：locator
-    - insert_text: 在特定定位器位置插入文本
-      * 必需参数：text, locator
-      * 可选参数：position
-    - replace_text: 替换特定定位器中的文本内容
-      * 必需参数：text, locator
-      * 可选参数：无
-    - get_char_count: 获取文档或特定定位器的字符计数
+      * 可选参数：context_type, context_id, object_type, object_id
+    - insert_text: 在特定上下文位置插入文本
+      * 必需参数：text
+      * 可选参数：context_type, context_id, object_type, object_id, position
+    - replace_text: 替换特定上下文中的文本内容
+      * 必需参数：text
+      * 可选参数：context_type, context_id, object_type, object_id
+    - get_char_count: 获取文档或特定上下文的字符计数
       * 必需参数：无
-      * 可选参数：locator
-    - apply_formatting: 对特定定位器中的文本应用格式设置
-      * 必需参数：locator, formatting
-      * 可选参数：无
+      * 可选参数：context_type, context_id, object_type, object_id
+    - apply_formatting: 对特定上下文中的文本应用格式设置
+      * 必需参数：formatting
+      * 可选参数：context_type, context_id, object_type, object_id
 
     返回：
         操作结果的JSON字符串
@@ -120,32 +105,36 @@ def text_tools(
         # 获取活动文档
         active_doc = ctx.request_context.lifespan_context.get_active_document()
         
-        # 导入并使用通用的locator参数检查函数
-        from .utils import check_locator_param
+        # 设置活动上下文和对象（如果提供了参数）
+        if context_type and context_id is not None:
+            set_active_context(active_doc, context_type, context_id)
+        if object_type and object_id is not None:
+            set_active_object(active_doc, object_type, object_id)
+        
+        # 对于不需要定位的操作（整个文档操作），locator为None
+        locator = None
         
         # 根据操作类型调用相应的处理函数
         if operation_type == "get_text":
-            check_locator_param(locator)
+            # 对于get_text，如果没有指定上下文，则获取整个文档的文本
             return get_text_from_document(active_doc, locator)
 
         elif operation_type == "insert_text":
-            check_locator_param(locator)
-            validate_required_params({"text": text, "locator": locator}, "insert_text")
+            # 验证必需参数
+            validate_required_params({"text": text}, "insert_text")
             return insert_text_into_document(active_doc, text, locator, position)
 
         elif operation_type == "replace_text":
-            check_locator_param(locator)
-            validate_required_params({"text": text, "locator": locator}, "replace_text")
+            # 验证必需参数
+            validate_required_params({"text": text}, "replace_text")
             return replace_text_in_document(active_doc, text, locator)
 
         elif operation_type == "get_char_count":
-            check_locator_param(locator)
             return get_character_count_from_document(active_doc, locator)
 
         elif operation_type == "apply_formatting":
-            check_locator_param(locator)
             # 验证必需参数
-            validate_required_params({"locator": locator, "formatting": formatting}, "apply_formatting")
+            validate_required_params({"formatting": formatting}, "apply_formatting")
             
             # 只使用formatting参数
             return apply_formatting_to_document_text(active_doc, formatting, locator)

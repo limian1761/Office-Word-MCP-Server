@@ -8,16 +8,52 @@ in the tools layer. These functions handle the actual text manipulation logic.
 import json
 from typing import Any, Dict, Optional
 
-from ..selector.selector import SelectorEngine
 from ..mcp_service.core_utils import (
     ErrorCode,
     WordDocumentError,
     log_info,
-    log_error
+    log_error,
+    AppContext,
+    DocumentContext
 )
 
 # Import text_format_ops for formatting functions
+from ..com_backend.selector_utils import get_selection_range
 from . import text_format_ops
+
+def _update_document_context_for_text(range_obj: Any, operation_type: str) -> None:
+    """更新文本操作后的DocumentContext
+    
+    Args:
+        range_obj: Range对象
+        operation_type: 操作类型（create, modify, delete）
+    """
+    try:
+        # 获取活动文档的上下文
+        context = AppContext.get_instance()
+        doc_context = context.get_document_context(range_obj.Document)
+        
+        if not doc_context:
+            log_error("Document context not found")
+            return
+        
+        # 获取文本位置信息
+        start_pos = range_obj.Start
+        end_pos = range_obj.End
+        
+        # 查找对应的节点并更新
+        if operation_type == "create":
+            doc_context.add_or_update_node(start_pos, end_pos, "text", "insert")
+        elif operation_type == "modify":
+            doc_context.add_or_update_node(start_pos, end_pos, "text", "update")
+        elif operation_type == "delete":
+            doc_context.remove_node(start_pos, end_pos, "text")
+        
+        # 通知处理器
+        doc_context.notify_update()
+        
+    except Exception as e:
+        log_error(f"Failed to update document context for text operation: {str(e)}")
 
 # -------------------------- Low-Level Text Operations --------------------------
 
@@ -33,17 +69,15 @@ def get_character_count(document: Any, locator: Optional[Dict[str, Any]] = None)
     """
     try:
         if locator:
-            selector_engine = SelectorEngine()
-            selection = selector_engine.select(document, locator)
-
-            if not selection or not selection.get_object_types():
+            # 使用get_selection_range获取选择范围
+            try:
+                range_obj = get_selection_range(document, locator)
+                char_count = len(range_obj.Text)
+                return json.dumps({"success": True, "character_count": char_count})
+            except WordDocumentError as e:
                 return json.dumps(
-                    {"success": False, "message": "Failed to locate object for character count"}
+                    {"success": False, "message": str(e)}
                 )
-
-            range_obj = selection._com_ranges[0]
-            char_count = len(range_obj.Text)
-            return json.dumps({"success": True, "character_count": char_count})
         else:
             # 获取整个文档的字符数
             doc_content = document.Content
@@ -65,17 +99,15 @@ def get_object_text(document: Any, locator: Dict[str, Any]) -> str:
         包含文本内容的JSON字符串
     """
     try:
-        selector_engine = SelectorEngine()
-        selection = selector_engine.select(document, locator)
-
-        if not selection or not selection.get_object_types():
+        # 使用get_selection_range获取选择范围
+        try:
+            range_obj = get_selection_range(document, locator)
+            text = range_obj.Text
+            return json.dumps({"success": True, "text": text})
+        except WordDocumentError as e:
             return json.dumps(
-                {"success": False, "message": "Failed to locate object for text extraction"}
+                {"success": False, "message": str(e)}
             )
-
-        range_obj = selection._com_ranges[0]
-        text = range_obj.Text
-        return json.dumps({"success": True, "text": text})
     except Exception as e:
         return json.dumps(
             {"success": False, "message": f"Failed to get object text: {str(e)}"}
@@ -93,17 +125,22 @@ def insert_text(document: Any, locator: Dict[str, Any], text: str) -> str:
         操作结果的JSON字符串
     """
     try:
-        selector_engine = SelectorEngine()
-        selection = selector_engine.select(document, locator)
-
-        if not selection or not selection.get_object_types():
+        # 使用get_selection_range获取选择范围
+        try:
+            range_obj = get_selection_range(document, locator)
+            range_obj.InsertAfter(text)
+            
+            # 更新DocumentContext
+            try:
+                _update_document_context_for_text(range_obj, "create")
+            except Exception as e:
+                log_error(f"Failed to update context after inserting text: {str(e)}")
+                
+            return json.dumps({"success": True, "message": "Text inserted successfully"})
+        except WordDocumentError as e:
             return json.dumps(
-                {"success": False, "message": "Failed to locate object for text insertion"}
+                {"success": False, "message": str(e)}
             )
-
-        range_obj = selection._com_ranges[0]
-        range_obj.InsertAfter(text)
-        return json.dumps({"success": True, "message": "Text inserted successfully"})
     except Exception as e:
         return json.dumps(
             {"success": False, "message": f"Failed to insert text: {str(e)}"}
@@ -121,6 +158,13 @@ def insert_text_before_range(com_range: Any, text: str) -> str:
     """
     try:
         com_range.InsertBefore(text)
+        
+        # 更新DocumentContext
+        try:
+            _update_document_context_for_text(com_range, "create")
+        except Exception as e:
+            log_error(f"Failed to update context after inserting text: {str(e)}")
+            
         return json.dumps({"success": True, "message": "Text inserted successfully"})
     except Exception as e:
         return json.dumps(
@@ -139,6 +183,13 @@ def insert_text_after_range(com_range: Any, text: str) -> str:
     """
     try:
         com_range.InsertAfter(text)
+        
+        # 更新DocumentContext
+        try:
+            _update_document_context_for_text(com_range, "create")
+        except Exception as e:
+            log_error(f"Failed to update context after inserting text: {str(e)}")
+            
         return json.dumps({"success": True, "message": "Text inserted successfully"})
     except Exception as e:
         return json.dumps(
@@ -248,6 +299,13 @@ def replace_object_text(range_obj: Any, new_text: str) -> str:
     try:
         # 由于我们已经确保所有对象都是Range对象，直接访问Text属性
         range_obj.Text = new_text
+        
+        # 更新DocumentContext
+        try:
+            _update_document_context_for_text(range_obj, "modify")
+        except Exception as e:
+            log_error(f"Failed to update context after replacing text: {str(e)}")
+            
         return json.dumps({"success": True, "message": "Text replaced successfully"})
     except Exception as e:
         return json.dumps(
@@ -294,25 +352,23 @@ def insert_text_into_document(document: Any, locator: Dict[str, Any], text: str,
         操作结果的JSON字符串
     """
     try:
-        selector_engine = SelectorEngine()
-        selection = selector_engine.select(document, locator)
+        # 使用get_selection_range获取选择范围
+        try:
+            range_obj = get_selection_range(document, locator)
 
-        if not selection or not selection.get_object_types():
+            if position.lower() == "before":
+                result = insert_text_before_range(range_obj, text)
+            elif position.lower() == "replace":
+                range_obj.Text = text
+                result = json.dumps({"success": True, "message": "Text replaced successfully"})
+            else:  # 默认"after"
+                result = insert_text_after_range(range_obj, text)
+
+            return result
+        except WordDocumentError as e:
             return json.dumps(
-                {"success": False, "message": "Failed to locate object for text insertion"}
+                {"success": False, "message": str(e)}
             )
-
-        range_obj = selection._com_ranges[0]
-
-        if position.lower() == "before":
-            result = insert_text_before_range(range_obj, text)
-        elif position.lower() == "replace":
-            range_obj.Text = text
-            result = json.dumps({"success": True, "message": "Text replaced successfully"})
-        else:  # 默认"after"
-            result = insert_text_after_range(range_obj, text)
-
-        return result
     except Exception as e:
         return json.dumps(
             {"success": False, "message": f"Failed to insert text into document: {str(e)}"}
@@ -330,17 +386,14 @@ def replace_text_in_document(document: Any, locator: Dict[str, Any], new_text: s
         操作结果的JSON字符串
     """
     try:
-        selector_engine = SelectorEngine()
-        selection = selector_engine.select(document, locator)
-
-        if not selection or not selection.get_object_types():
-            return json.dumps(
-                {"success": False, "message": "Failed to locate object for text replacement"}
-            )
-
-        range_obj = selection._com_ranges[0]
+        # 使用get_selection_range获取选择范围
+        range_obj = get_selection_range(document, locator)
         result = replace_object_text(range_obj, new_text)
         return result
+    except WordDocumentError as e:
+        return json.dumps(
+            {"success": False, "message": str(e)}
+        )
     except Exception as e:
         return json.dumps(
             {"success": False, "message": f"Failed to replace text in document: {str(e)}"}
@@ -358,43 +411,20 @@ def format_document_text(document: Any, locator: Dict[str, Any], formatting: Dic
         操作结果的JSON字符串
     """
     try:
-        selector_engine = SelectorEngine()
-        selection = selector_engine.select(document, locator)
-
-        if not selection or not selection.get_object_types():
-            return json.dumps(
-                {"success": False, "message": "Failed to locate object for text formatting"}
-            )
-
-        range_obj = selection._com_ranges[0]
+        # 使用get_selection_range获取选择范围
+        range_obj = get_selection_range(document, locator)
         result = apply_formatting_to_object(range_obj, formatting)
         return result
+    except WordDocumentError as e:
+        return json.dumps(
+            {"success": False, "message": str(e)}
+        )
     except Exception as e:
         return json.dumps(
             {"success": False, "message": f"Failed to format document text: {str(e)}"}
         )
 
 # -------------------------- Helper Functions --------------------------
-
-def _get_selection_range(document: Any, locator: Dict[str, Any]) -> Optional[Any]:
-    """获取选择范围
-
-    Args:
-        document: Word文档对象
-        locator: 定位器对象
-
-    Returns:
-        Range对象或None
-    """
-    try:
-        selector_engine = SelectorEngine()
-        selection = selector_engine.select(document, locator)
-
-        if selection and selection.get_object_types():
-            return selection._com_ranges[0]
-        return None
-    except:
-        return None
 
 def validate_required_params(params: Dict[str, Any], required_fields: list) -> Dict[str, Any]:
     """验证必需的参数
@@ -419,41 +449,33 @@ def get_text_from_document(
 
     Args:
         active_doc: 活动文档对象
-        locator: 定位器对象，用于选择特定元素
+        locator: 定位器对象，用于选择特定元素（可选）
 
     Returns:
         包含获取文本结果的JSON字符串
     """
     log_info("Getting text from document")
 
-    if locator:
-        # 如果提供了定位器，获取特定元素的文本
-        selector_engine = SelectorEngine()
-        try:
-            selection = selector_engine.select(active_doc, locator)
-
-            if not selection or not selection.get_object_types():
-                # 如果找不到元素，返回空文本
-                return json.dumps({"success": True, "text": ""}, ensure_ascii=False)
-
-            # 获取选择区域的文本
-            range_obj = selection._com_ranges[0]
+    try:
+        if locator:
+            # 如果提供了定位器，获取特定元素的文本
+            range_obj = get_selection_range(active_doc, locator)
             result = range_obj.Text
-        except Exception as e:
-            # 如果选择过程出错，返回空文本
-            log_error(f"Error selecting object: {e}")
-            return json.dumps({"success": True, "text": ""}, ensure_ascii=False)
-    else:
-        # 如果没有提供定位器，获取整个文档的文本
-        result = active_doc.Content.Text
-    
-    # 检查文本长度，如果超长则添加警告信息
-    TEXT_LENGTH_WARNING_THRESHOLD = 10000
-    if len(result) > TEXT_LENGTH_WARNING_THRESHOLD:
-        warning_message = f"注意：获取的文本长度超过{TEXT_LENGTH_WARNING_THRESHOLD}字符。为了提高性能和避免内存问题，建议使用Locator结合range_start和range_end参数进行多次读取。"
-        return json.dumps({"success": True, "text": result, "warning": warning_message}, ensure_ascii=False)
+        else:
+            # 如果没有提供定位器，获取整个文档的文本
+            result = active_doc.Content.Text
+        
+        # 检查文本长度，如果超长则添加警告信息
+        TEXT_LENGTH_WARNING_THRESHOLD = 10000
+        if len(result) > TEXT_LENGTH_WARNING_THRESHOLD:
+            warning_message = f"注意：获取的文本长度超过{TEXT_LENGTH_WARNING_THRESHOLD}字符。为了提高性能和避免内存问题，建议使用定位参数进行多次读取。"
+            return json.dumps({"success": True, "text": result, "warning": warning_message}, ensure_ascii=False)
 
-    return json.dumps({"success": True, "text": result}, ensure_ascii=False)
+        return json.dumps({"success": True, "text": result}, ensure_ascii=False)
+    except Exception as e:
+        # 如果操作过程出错，返回错误信息
+        log_error(f"Error retrieving text: {e}")
+        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
 def insert_text_into_document(
     active_doc: Any,
     text: str,
@@ -473,7 +495,7 @@ def insert_text_into_document(
     """
     log_info(f"Inserting text: {text}")
 
-    range_obj = _get_selection_range(active_doc, locator, "text insertion")
+    range_obj = get_selection_range(active_doc, locator)
 
     # 插入文本
     if position.lower() == "before":
@@ -514,7 +536,7 @@ def replace_text_in_document(
     """
     log_info(f"Replacing text with: {text}")
 
-    range_obj = _get_selection_range(active_doc, locator, "text replacement")
+    range_obj = get_selection_range(active_doc, locator)
 
     # 替换文本
     result = replace_object_text(range_obj=range_obj, new_text=text)
@@ -538,7 +560,7 @@ def get_character_count_from_document(
         包含字符数结果的JSON字符串
     """
     if locator:
-        range_obj = _get_selection_range(active_doc, locator, "character count")
+        range_obj = get_selection_range(active_doc, locator)
         text_content = range_obj.Text
     else:
         text_content = active_doc.Content.Text
@@ -565,7 +587,7 @@ def apply_formatting_to_document_text(
     """
     log_info("Applying formatting")
 
-    range_obj = _get_selection_range(active_doc, locator, "formatting")
+    range_obj = get_selection_range(active_doc, locator)
 
     # 应用格式
     result = apply_formatting_to_object(range_obj=range_obj, formatting=formatting)
@@ -597,7 +619,7 @@ def format_document_text(
     # 构建只包含一种格式的字典，然后调用apply_formatting_to_object
     formatting = {format_type.lower(): format_value}
     
-    range_obj = _get_selection_range(active_doc, locator, "text formatting")
+    range_obj = get_selection_range(active_doc, locator)
     
     # 应用格式
     result = apply_formatting_to_object(range_obj=range_obj, formatting=formatting)
@@ -619,42 +641,6 @@ def format_document_text(
         )
 
 # 辅助函数
-def _get_selection_range(active_doc: Any, locator: Dict[str, Any], operation_name: str) -> Any:
-    """获取选择范围，处理错误
-
-    Args:
-        active_doc: 活动文档对象
-        locator: 定位器对象
-        operation_name: 操作名称，用于错误消息
-
-    Returns:
-        获取的Range对象
-
-    Raises:
-        ValueError: 当locator为None时
-        WordDocumentError: 当无法定位对象或获取对象时
-    """
-    if locator is None:
-        raise ValueError(
-            f"locator parameter must be provided for {operation_name} operation"
-        )
-
-    selector_engine = SelectorEngine()
-    selection = selector_engine.select(active_doc, locator)
-
-    if not selection or not selection.get_object_types():
-        raise WordDocumentError(
-            ErrorCode.OBJECT_TYPE_ERROR,
-            f"Failed to locate object for {operation_name}"
-        )
-
-    if not hasattr(selection, "_com_ranges") or not selection._com_ranges:
-        raise WordDocumentError(
-            ErrorCode.OBJECT_TYPE_ERROR,
-            f"Failed to get objects from selection for {operation_name}"
-        )
-
-    return selection._com_ranges[0]
 
 def validate_required_params(params: Dict[str, Any], operation_name: str) -> None:
     """验证必需参数

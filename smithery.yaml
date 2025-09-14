@@ -5,9 +5,9 @@ name: '@LiChao/Direct-Office-Word-MCP-Server'
 description: MCP server for direct manipulating Microsoft Word documents with COM 
 icon: https://raw.githubusercontent.com/GongRzhe/Office-Word-MCP-Server/master/assets/logo.png
 author:
-  name: GongRzhe
-  email: gongrzhe@gmail.com
-  url: https://github.com/GongRzhe
+  name: Li Chao
+  email: 252429238@qq.com
+  url: https://github.com/GongRzhe/Office-Word-MCP-Server
 license: MIT
 tags:
   - mcp

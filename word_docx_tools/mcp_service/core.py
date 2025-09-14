@@ -10,7 +10,6 @@ from contextlib import asynccontextmanager
 
 from mcp.server.fastmcp import FastMCP
 
-from ..selector.selector import SelectorEngine
 from ..mcp_service.app_context import AppContext
 
 
@@ -31,6 +30,6 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 # This is the central server instance that tools will be registered against.
 mcp_server = FastMCP("word-docx-tools", lifespan=app_lifespan)
 
-# --- Selector Engine Initialization ---
-# This is the central selector engine instance used by tools to find objects.
-selector = SelectorEngine()
+# --- AppContext Initialization ---
+# This is the central AppContext instance used by tools to manage Word application and document operations.
+app_context = AppContext()

@@ -1,107 +1,89 @@
-# Word Document Server Test Suite
+# Tests
 
-This directory contains the test suite for the Word Document Server project. Tests are organized into logical categories to facilitate maintenance and execution.
+This directory contains tests for the Word Document MCP Server.
 
-## Test Organization
+## Test Structure
 
-Tests are grouped into the following categories:
-
-### Unit Tests
-- `test_selector.py` - Tests for the document selector engine
-- `test_text_tools.py` - Tests for text manipulation tools
-
-### Integration Tests
-- `test_com_cache_clearing.py` - Tests for COM object cache management
-- `test_precise_operations.py` - Tests for precise document operations
-
-### End-to-End Tests
-- `test_e2e_integration.py` - End-to-end integration tests
-- `test_e2e_scenarios.py` - End-to-end scenario tests
-- `test_real_e2e.py` - Real end-to-end tests with actual Word documents
-
-### Functional Tests
-- `test_complex_document_operations.py` - Tests for complex document operations
-- `test_image_tools.py` - Tests for image manipulation tools
+```
+tests/
+├── conftest.py              # pytest configuration and fixtures
+├── test_main.py             # Tests for main module
+├── test_mcp_service.py      # Tests for MCP service components
+├── test_app_context.py      # Tests for AppContext class
+├── test_document_ops.py     # Tests for document operations
+├── test_document_tools.py   # Tests for document tools
+├── test_text_operations.py  # Tests for text operations
+└── ...
+```
 
 ## Running Tests
 
-### Prerequisites
-- Windows operating system
-- Microsoft Word installed
-- Python 3.11+
-- Required dependencies installed
-
-### Using the Test Runner Script
-The project includes a custom test runner script that provides a more user-friendly interface for running tests:
+To run all tests:
 
 ```bash
-# Run all tests
-python tests/run_tests.py
-
-# Run with verbose output
-python tests/run_tests.py -v
-
-# Run tests matching a specific pattern
-python tests/run_tests.py -t text
+python -m pytest
 ```
 
-### Using pytest Directly
-You can also run tests using pytest directly:
+To run tests with coverage:
 
 ```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific test category
-python -m pytest tests/test_selector.py tests/test_text_tools.py -v
-
-# Run end-to-end tests
-python -m pytest tests/test_e2e*.py tests/test_real_e2e.py -v
+python -m pytest --cov=word_docx_tools --cov-report=html
 ```
 
-### Run Individual Test Files
-```bash
-python -m pytest tests/test_selector.py -v
-```
-
-### Code Coverage
-The project includes coverage configuration to measure test coverage:
+To run specific test files:
 
 ```bash
-# Run tests with coverage
-coverage run -m pytest tests/
-
-# Generate coverage report
-coverage report
-
-# Generate HTML coverage report
-coverage html
+python -m pytest tests/test_main.py
 ```
 
-## Test Environment
+To run tests in verbose mode:
 
-Tests require:
-1. A working Microsoft Word installation
-2. Proper COM permissions
-3. Write access to the test directory for temporary files
+```bash
+python -m pytest -v
+```
 
-Some tests create temporary Word documents during execution. These files are automatically cleaned up after the tests complete.
+## Test Categories
 
-## Adding New Tests
+Tests are organized into the following categories:
 
-When adding new tests:
-1. Place them in the appropriate category file
-2. Follow the existing naming conventions
-3. Include both positive and negative test cases
-4. Ensure tests clean up any created resources
-5. Add descriptive test names and docstrings
+1. **Unit Tests** - Test individual functions and classes in isolation
+2. **Integration Tests** - Test interactions between components
+3. **Functional Tests** - Test complete features and user workflows
 
-## Continuous Integration
+## Writing Tests
 
-Tests are automatically run as part of the CI pipeline. All tests must pass before changes can be merged.
+When writing new tests:
 
-## Test Document Resources
+1. Use descriptive test function names that follow the pattern `test_what_is_being_tested_what_is_the_expected_result`
+2. Use pytest fixtures for setup and teardown
+3. Mock external dependencies (especially COM objects)
+4. Focus on testing one behavior per test
+5. Use assertions to verify expected outcomes
 
-The `test_docs` directory contains sample Word documents used in testing:
-- `valid_test_document_v2.docx` - Standard test document with various elements
-- `additional_test_document.docx` - Additional test document with complex formatting
+## Fixtures
+
+Common fixtures are defined in [conftest.py](file:///C:/Users/lichao/Office-Word-MCP-Server/tests/conftest.py):
+
+- `mock_word_app` - Mock Word application COM object
+- `mock_document` - Mock Word document COM object
+- `mock_app_context` - Mock AppContext instance
+
+## Test Dependencies
+
+Test dependencies are defined in [pyproject.toml](file:///C:/Users/lichao/Office-Word-MCP-Server/pyproject.toml):
+
+- `pytest` - Testing framework
+- `pytest-asyncio` - Async support for pytest
+- `pytest-cov` - Coverage reporting (if added)
+
+Install test dependencies with:
+
+```bash
+pip install -e .[test]
+```
+
+Or for development:
+
+```bash
+pip install -e .[dev]
+```

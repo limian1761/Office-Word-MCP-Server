@@ -10,11 +10,44 @@ from typing import Any, Dict, List, Optional, Union
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error, iter_com_collection
+from ..com_backend.selector_utils import get_selection_range
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
-                                      log_info)
-from ..selector.selector import SelectorEngine
+                                      log_info, AppContext, DocumentContext)
+
 
 logger = logging.getLogger(__name__)
+
+def _update_document_context_for_table(table: Any, operation: str = "modify") -> None:
+    """
+    更新表格对应的DocumentContext
+    
+    Args:
+        table: 表格COM对象
+        operation: 操作类型（"modify", "create", "delete"等）
+    """
+    try:
+        app_context = AppContext.get_instance()
+        document = table.Document
+        
+        # 查找表格对应的DocumentContext
+        # 基于表格的Range.Start和Range.End查找对应的上下文
+        context = app_context.find_context_by_range(
+            document=document,
+            start=table.Range.Start,
+            end=table.Range.End,
+            object_type="table"
+        )
+        
+        if context:
+            # 更新上下文信息
+            if operation == "delete":
+                app_context.remove_context_from_tree(context)
+            else:
+                app_context.update_table_context(context, table)
+                # 通知上下文更新处理器
+                app_context.notify_context_update(context, operation)
+    except Exception as e:
+        log_error(f"Failed to update DocumentContext for table operation {operation}: {str(e)}")
 
 
 @handle_com_error(ErrorCode.TABLE_ERROR, "create table")
@@ -22,9 +55,9 @@ def create_table(
     document: win32com.client.CDispatch,
     rows: int,
     cols: int,
-    locator: Dict[str, Any],
-    position: str = "after",
-    is_independent_paragraph: bool = False,
+    locator: Optional[Dict[str, Any]] = None,
+    position: str = "replace",
+    is_independent_paragraph: bool = True,
 ) -> str:
     """创建新表格
 
@@ -32,117 +65,97 @@ def create_table(
         document: Word文档COM对象
         rows: 表格行数
         cols: 表格列数
-        locator: 定位器对象，用于指定创建位置
-        position: 插入位置，可选值：'before', 'after'
-        is_independent_paragraph: 表格是否作为独立段落插入，默认为False
+        locator: 定位器，用于指定表格插入位置
+        position: 插入位置相对于定位点的位置，可选值："replace"、"before"、"after"
+        is_independent_paragraph: 是否作为独立段落插入
 
     Returns:
-        创建表格成功的消息
+        包含表格信息的JSON字符串
 
     Raises:
         ValueError: 当参数无效时抛出
         WordDocumentError: 当创建表格失败时抛出
     """
-    if not document:
-        raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+    if not document: raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
+    if not hasattr(document, "Tables") or document.Tables is None: raise WordDocumentError(
+        ErrorCode.DOCUMENT_ERROR, "Document does not support tables"
+    )
 
-    if not hasattr(document, "Tables") or document.Tables is None:
-        raise WordDocumentError(
-            ErrorCode.DOCUMENT_ERROR, "Document does not support tables"
-        )
+    # 验证参数
+    if rows <= 0: raise ValueError("Row count must be a positive integer")
+    if cols <= 0: raise ValueError("Column count must be a positive integer")
+    if position not in ["replace", "before", "after"]: raise ValueError(
+        "Position must be one of: 'replace', 'before', 'after'"
+    )
 
-    selector = SelectorEngine()
+    # 处理定位器，获取插入位置的Range对象
+    range_obj = get_selection_range(document, locator)
 
-    # 验证行数和列数参数
-    if rows <= 0 or cols <= 0:
-        raise ValueError("Rows and columns must be positive integers")
+    # 处理位置参数
+    if position == "before":
+        # 在定位点之前插入
+        temp_range = range_obj.Duplicate
+        temp_range.Collapse(Direction=1)  # wdCollapseStart
+        range_obj = temp_range
+    elif position == "after":
+        # 在定位点之后插入
+        temp_range = range_obj.Duplicate
+        temp_range.Collapse(Direction=0)  # wdCollapseEnd
+        range_obj = temp_range
+    # 对于"replace"，直接使用定位点的Range
 
-    range_obj = None
-
-    # 使用定位器获取范围
-    try:
-        selection = selector.select(document, locator)
-        if hasattr(selection, "_com_ranges") and selection._com_ranges:
-            # 所有传入的对象都是Range对象，可以直接使用
-            range_obj = selection._com_ranges[0]
-
-            # 根据位置参数调整范围
-            if position == "before":
-                range_obj.Collapse(True)  # wdCollapseStart
-            elif position == "after":
-                range_obj.Collapse(False)  # wdCollapseEnd
-            # 如果是"replace"，则不折叠范围，直接替换
-
-            # 如果需要作为独立段落插入
-            if is_independent_paragraph:
-                try:
-                    # 检查当前范围是否已经在段落末尾
-                    if (
-                        hasattr(range_obj, "Paragraphs")
-                        and range_obj.Paragraphs.Count > 0
-                    ):
-                        current_paragraph = range_obj.Paragraphs(1)
-                        # 如果范围不在段落末尾，创建新段落
-                        if range_obj.Start != current_paragraph.Range.End - 1:
-                            # 在当前范围前插入段落标记创建新段落
-                            range_obj.InsertBefore("\n")
-                            # 更新范围到新段落
-                            range_obj.Start = range_obj.Start
-                            range_obj.End = range_obj.Start
-                except Exception as e:
-                    log_error(f"Failed to prepare independent paragraph: {str(e)}")
-        else:
-            raise WordDocumentError(
-                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
-            )
-    except Exception as e:
-        raise WordDocumentError(
-            ErrorCode.TABLE_ERROR, f"Failed to locate position for table: {str(e)}"
-        )
+    # 如果需要作为独立段落插入，确保在段落末尾插入
+    if is_independent_paragraph:
+        if position == "after":
+            # 如果是在定位点之后插入，先移动到段落末尾
+            range_obj.MoveEnd(Unit=12, Count=1)  # wdParagraph
+        elif position == "before" or position == "replace":
+            # 如果是在定位点之前或替换定位点，先移动到段落开头
+            range_obj.Collapse(Direction=1)  # wdCollapseStart
+            range_obj.MoveStart(Unit=12, Count=-1)  # wdParagraph
+            range_obj.Collapse(Direction=0)  # wdCollapseEnd
 
     try:
         # 创建表格
         table = document.Tables.Add(Range=range_obj, NumRows=rows, NumColumns=cols)
 
-        # 添加默认样式并确保表格有边框
+        # 应用表格样式
         try:
-            # 尝试应用Table Grid样式（通常包含边框）
-            if hasattr(document, "Styles") and document.Styles is not None:
-                table.Style = "Table Grid"
-            else:
-                log_error("Document does not support styles")
-        except Exception:
-            # 如果默认样式不可用，手动设置表格边框
-            try:
-                # 遍历表格中的所有单元格，手动设置边框
-                for row in iter_com_collection(table.Rows):
-                    for cell in iter_com_collection(row.Cells):
-                        # 设置所有边框为单实线
-                        cell.Borders.OutsideLineStyle = 1  # wdLineStyleSingle
-                        cell.Borders.InsideLineStyle = 1  # wdLineStyleSingle
-            except Exception:
-                log_error("Failed to set table borders manually")
+            # 尝试应用默认的表格样式
+            table.set_Style("Table Grid")
+        except Exception as e:
+            # 如果样式不存在，不抛出错误
+            log_error(f"Failed to apply table style: {str(e)}")
 
-        # 添加成功日志
-        log_info(
-            "Successfully created table with {} rows and {} columns".format(rows, cols)
-        )
+        # 设置表格边框（确保所有边框都可见）
+        for cell in iter_com_collection(table.Range.Cells):
+            for border in iter_com_collection(cell.Borders):
+                border.LineStyle = 1  # wdLineStyleSingle
+                border.LineWidth = 1  # wdLineWidth025pt
+                border.ColorIndex = 0  # wdColorBlack
 
+        log_info(f"Successfully created a table with {rows} rows and {cols} columns")
+        # 更新DocumentContext
+        try:
+            _update_document_context_for_table(table, "create")
+        except Exception as e:
+            log_error(f"Failed to update context after creating table: {str(e)}")
+        
         return json.dumps(
             {
                 "success": True,
-                "message": "Table with {} rows and {} columns created successfully".format(
-                    rows, cols
-                ),
+                "message": "Successfully created table",
+                "table_index": table.Index,
+                "rows": rows,
+                "columns": cols,
             },
             ensure_ascii=False,
         )
-
     except Exception as e:
-        log_error("Failed to create table: {}".format(str(e)), exc_info=True)
-        raise WordDocumentError(
-            ErrorCode.TABLE_ERROR, "Failed to create table: {}".format(str(e))
-        )
+        raise WordDocumentError(ErrorCode.TABLE_ERROR, f"Failed to create table: {str(e)}")
+
+
+
 
 
 def add_object_caption(
@@ -388,7 +401,13 @@ def set_cell_text(
             log_error(f"Failed to apply formatting to cell: {str(e)}")
             # 格式化应用失败不影响文本设置的成功状态
 
-    log_info(f"Successfully set text in table {table_index}, cell ({row},{col})")
+    # 更新DocumentContext
+    try:
+        _update_document_context_for_table(table, "modify")
+    except Exception as e:
+        log_error(f"Failed to update context after setting cell text: {str(e)}")
+    
+    log_info(f"Successfully set text in table {table_index}, cell ({row},{col})" )
     return json.dumps(
         {
             "success": True,
@@ -581,6 +600,12 @@ def insert_row(
             ErrorCode.TABLE_ERROR, f"Failed to insert row(s): {str(e)}"
         )
 
+    # 更新DocumentContext
+    try:
+        _update_document_context_for_table(table, "modify")
+    except Exception as e:
+        log_error(f"Failed to update context after inserting rows: {str(e)}")
+    
     log_info(
         f"Successfully inserted {count} row(s) at position {position} in table {table_index}"
     )
@@ -684,6 +709,12 @@ def insert_column(
             ErrorCode.TABLE_ERROR, f"Failed to insert column(s): {str(e)}"
         )
 
+    # 更新DocumentContext
+    try:
+        _update_document_context_for_table(table, "modify")
+    except Exception as e:
+        log_error(f"Failed to update context after inserting columns: {str(e)}")
+    
     log_info(
         f"Successfully inserted {count} column(s) at position {actual_position - count} in table {table_index}"
     )

@@ -1,0 +1,11 @@
+{
+  "name": "word_docx_tools",
+  "scripts": {
+    "test": "python -m pytest",
+    "test:verbose": "python -m pytest -v",
+    "test:coverage": "python -m pytest --cov=word_docx_tools --cov-report=html --cov-report=term",
+    "test:watch": "python -m pytest -v --color=yes --tb=short",
+    "lint": "black word_docx_tools && isort word_docx_tools",
+    "type-check": "mypy word_docx_tools"
+  }
+}

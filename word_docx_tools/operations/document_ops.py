@@ -14,7 +14,7 @@ import win32com.client
 from win32com.client import CDispatch
 
 from ..com_backend.com_utils import handle_com_error, safe_com_call
-from ..mcp_service.core_utils import ErrorCode, WordDocumentError
+from ..mcp_service.core_utils import ErrorCode, WordDocumentError, AppContext
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,15 @@ def create_document(
             doc = word_app.Documents.Add()
 
         logger.info("Successfully created new document")
+        
+        # 触发DocumentContext的更新，实现文档与DocumentContext的实时映射
+        try:
+            app_context = AppContext.get_instance()
+            app_context.set_active_document(doc)
+            app_context.on_document_opened()
+        except Exception as e:
+            logger.warning(f"Failed to update DocumentContext after creating document: {str(e)}")
+            
         return doc
 
     except Exception as e:
@@ -111,6 +120,14 @@ def open_document(
         doc = word_app.Documents.Open(file_path, PasswordDocument=password)
     else:
         doc = word_app.Documents.Open(file_path)
+    
+    # 触发DocumentContext的更新，实现文档与DocumentContext的实时映射
+    try:
+        app_context = AppContext.get_instance()
+        app_context.set_active_document(doc)
+        app_context.on_document_opened()
+    except Exception as e:
+        logger.warning(f"Failed to update DocumentContext after opening document: {str(e)}")
 
     return doc
 

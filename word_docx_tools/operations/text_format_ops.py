@@ -9,11 +9,60 @@ from typing import Any, Dict, List, Optional, Union
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error
-from ..mcp_service.core_utils import (ErrorCode, ObjectNotFoundError,
-                                      WordDocumentError, log_error, log_info)
-from ..selector.selector import SelectorEngine
+from ..com_backend.selector_utils import get_selection_range
+from ..mcp_service.core_utils import (
+    ErrorCode, 
+    ObjectNotFoundError,
+    WordDocumentError, 
+    log_error, 
+    log_info,
+    DocumentContext
+)
 
 logger = logging.getLogger(__name__)
+
+
+from ..mcp_service.app_context import AppContext
+
+
+def _update_document_context_for_style(range_obj: Any, operation_type: str) -> bool:
+    """更新文档上下文的样式信息
+
+    Args:
+        range_obj: Word文本范围对象
+        operation_type: 操作类型 ('create', 'modify', 'delete')
+
+    Returns:
+        操作是否成功
+    """
+    try:
+        # 获取应用上下文
+        app_context = AppContext.get_instance()
+        if not app_context:
+            log_error("AppContext not found")
+            return False
+
+        # 获取活动文档上下文
+        doc_context = app_context.get_active_document_context()
+        if not doc_context:
+            log_error("DocumentContext not found")
+            return False
+
+        # 验证range_obj是否有必要的属性
+        if not (hasattr(range_obj, "Start") and hasattr(range_obj, "End")):
+            log_error("Range object missing Start/End properties")
+            return False
+
+        start_pos = range_obj.Start
+        end_pos = range_obj.End
+
+        # 执行上下文更新
+        doc_context.update_content(start_pos, end_pos, operation_type)
+        log_info(f"DocumentContext updated for style operation: {operation_type}")
+        return True
+    except Exception as e:
+        log_error(f"Failed to update DocumentContext: {e}")
+        return False
 
 
 @handle_com_error(ErrorCode.FORMATTING_ERROR, "set bold")
@@ -30,6 +79,13 @@ def set_bold_for_range(range_obj: Any, is_bold: bool) -> bool:
     try:
         if hasattr(range_obj, "Font"):
             range_obj.Font.Bold = is_bold
+            
+            # 更新DocumentContext
+            try:
+                _update_document_context_for_style(range_obj, "modify")
+            except Exception as ctx_err:
+                log_error(f"Failed to update DocumentContext after setting bold: {ctx_err}")
+                
             return True
         return False
     except Exception as e:
@@ -51,6 +107,13 @@ def set_italic_for_range(range_obj: Any, is_italic: bool) -> bool:
     try:
         if hasattr(range_obj, "Font"):
             range_obj.Font.Italic = is_italic
+            
+            # 更新DocumentContext
+            try:
+                _update_document_context_for_style(range_obj, "modify")
+            except Exception as ctx_err:
+                log_error(f"Failed to update DocumentContext after setting italic: {ctx_err}")
+                
             return True
         return False
     except Exception as e:
@@ -72,6 +135,13 @@ def set_font_size_for_range(range_obj: Any, font_size: float) -> bool:
     try:
         if hasattr(range_obj, "Font"):
             range_obj.Font.Size = font_size
+            
+            # 更新DocumentContext
+            try:
+                _update_document_context_for_style(range_obj, "modify")
+            except Exception as ctx_err:
+                log_error(f"Failed to update DocumentContext after setting font size: {ctx_err}")
+                
             return True
         return False
     except Exception as e:
@@ -93,6 +163,13 @@ def set_font_name_for_range(range_obj: Any, font_name: str) -> bool:
     try:
         if hasattr(range_obj, "Font"):
             range_obj.Font.Name = font_name
+            
+            # 更新DocumentContext
+            try:
+                _update_document_context_for_style(range_obj, "modify")
+            except Exception as ctx_err:
+                log_error(f"Failed to update DocumentContext after setting font name: {ctx_err}")
+                
             return True
         return False
     except Exception as e:
@@ -125,6 +202,13 @@ def set_font_color_for_range(document: Any, range_obj: Any, color: str) -> bool:
             else:
                 # 默认使用黑色
                 range_obj.Font.ColorIndex = 1  # wdBlack = 1
+                
+            # 更新DocumentContext
+            try:
+                _update_document_context_for_style(range_obj, "modify")
+            except Exception as ctx_err:
+                log_error(f"Failed to update DocumentContext after setting font color: {ctx_err}")
+                
             return True
         return False
     except Exception as e:
@@ -161,6 +245,13 @@ def set_alignment_for_range(document: Any, range_obj: Any, alignment: str) -> bo
             else:
                 # 默认左对齐
                 range_obj.ParagraphFormat.Alignment = wdAlignParagraphLeft
+                
+            # 更新DocumentContext
+            try:
+                _update_document_context_for_style(range_obj, "modify")
+            except Exception as ctx_err:
+                log_error(f"Failed to update DocumentContext after setting alignment: {ctx_err}")
+                
             return True
         return False
     except Exception as e:
@@ -184,6 +275,13 @@ def set_paragraph_style(object: Any, style_name: str) -> bool:
             # 尝试直接设置样式
             try:
                 object.Style = style_name
+                
+                # 更新DocumentContext
+                try:
+                    _update_document_context_for_style(object, "modify")
+                except Exception as ctx_err:
+                    log_error(f"Failed to update DocumentContext after setting paragraph style: {ctx_err}")
+                    
                 return True
             except Exception:
                 # 如果失败，尝试在文档中查找样式
@@ -193,6 +291,13 @@ def set_paragraph_style(object: Any, style_name: str) -> bool:
                         try:
                             if styles(i).NameLocal.lower() == style_name.lower():
                                 object.Style = styles(i)
+                                
+                                # 更新DocumentContext
+                                try:
+                                    _update_document_context_for_style(object, "modify")
+                                except Exception as ctx_err:
+                                    log_error(f"Failed to update DocumentContext after setting paragraph style: {ctx_err}")
+                                    
                                 return True
                         except Exception:
                             continue
@@ -263,6 +368,12 @@ def create_bulleted_list_relative_to(
 
         # 应用项目符号列表
         list_range.ParagraphFormat.Bullet.Enabled = True
+        
+        # 更新DocumentContext
+        try:
+            _update_document_context_for_style(list_range, "create")
+        except Exception as ctx_err:
+            log_error(f"Failed to update DocumentContext after creating bulleted list: {ctx_err}")
 
         return True
     except Exception as e:
@@ -290,8 +401,6 @@ def create_bulleted_list(
     Returns:
         操作是否成功
     """
-    from .selector.selector import SelectorEngine
-
     try:
         if not document:
             raise RuntimeError("No document open.")
@@ -299,28 +408,30 @@ def create_bulleted_list(
         if not items:
             raise ValueError("Items list cannot be empty.")
 
-        # 使用选择器引擎选择元素
-        selector = SelectorEngine()
-        selection = selector.select(document, locator, expect_single=True)
-
-        # Selection._com_ranges中只包含Range对象
-        for object in selection._com_ranges:
+        # 使用_get_selection_range获取选择范围
+        insertion_range = None
+        if locator:
+            range_obj = get_selection_range(document, locator, "create bulleted list")
+            
             if position == "replace":
                 # 删除元素首先
-                object.Range.Delete()
+                range_obj.Delete()
                 # 使用元素的范围作为插入点
-                insertion_range = object.Range
+                insertion_range = document.Range(range_obj.Start, range_obj.Start)
             elif position == "before":
                 # 折叠范围到开始
-                insertion_range = object.Range.Duplicate
-                insertion_range.Collapse(True)  # wdCollapseStart
+                insertion_range = range_obj.Duplicate
+                insertion_range.Collapse(1)  # wdCollapseStart = 1
             else:  # position == "after"
                 # 折叠范围到结束
-                insertion_range = object.Range.Duplicate
-                insertion_range.Collapse(False)  # wdCollapseEnd
+                insertion_range = range_obj.Duplicate
+                insertion_range.Collapse(0)  # wdCollapseEnd = 0
+        else:
+            # 如果没有提供定位器，使用当前选择的位置
+            insertion_range = document.Application.Selection.Range
 
-            # 在插入点创建项目符号列表
-            create_bulleted_list_relative_to(document, insertion_range, items, "after")
+        # 在插入点创建项目符号列表
+        create_bulleted_list_relative_to(document, insertion_range, items, "after")
 
         return True
     except Exception as e:

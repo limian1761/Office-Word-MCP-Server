@@ -10,12 +10,72 @@ from typing import Any, Dict, List, Optional, Union
 import win32com.client
 
 from ..com_backend.com_utils import handle_com_error, iter_com_collection
-from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
-                                      log_info)
-from ..selector.selector import SelectorEngine
+from ..com_backend.selector_utils import get_selection_range
+from ..mcp_service.core_utils import (
+    ErrorCode, 
+    WordDocumentError, 
+    log_error,
+    log_info,
+)
+from ..contexts.context_control import DocumentContext
+from ..mcp_service.app_context import AppContext
 from . import text_format_ops
+from . import range_ops
 
 logger = logging.getLogger(__name__)
+
+def _update_document_context_for_style(range_obj, operation_type):
+    """
+    为样式操作更新DocumentContext
+    
+    Args:
+        range_obj: 应用样式的范围对象
+        operation_type: 操作类型（"create", "modify", "delete"）
+    """
+    try:
+        # 获取AppContext实例
+        app_context = AppContext.get_instance()
+        
+        # 获取活动文档的上下文
+        active_doc_context = app_context.get_active_document_context()
+        if not active_doc_context:
+            log_error("No active document context found")
+            return
+        
+        # 获取范围的起始和结束位置
+        start = range_obj.Start
+        end = range_obj.End
+        
+        # 查找包含此范围的节点
+        node = active_doc_context.find_node_by_range(start, end)
+        if not node:
+            log_error(f"No node found for range {start}-{end}")
+            return
+        
+        # 更新节点的样式信息
+        node["style_modified"] = True
+        
+        # 添加操作记录
+        app_context.add_operation_history({
+            "type": "style",
+            "operation": operation_type,
+            "range": {"start": start, "end": end},
+            "timestamp": app_context.get_current_timestamp()
+        })
+        
+        # 通知上下文更新
+        app_context.notify_context_updated(
+            "style_updated", 
+            {"node_id": node["id"], "range": {"start": start, "end": end}}
+        )
+        
+        log_info(f"Successfully updated DocumentContext for style operation: {operation_type}")
+        
+    except Exception as e:
+        log_error(f"Failed to update DocumentContext for style operation: {str(e)}")
+
+
+
 
 
 def set_paragraph_alignment(
@@ -42,32 +102,17 @@ def set_paragraph_alignment(
             ErrorCode.DOCUMENT_ERROR, "Document Application object not available"
         )
 
-    selector = SelectorEngine()
-
     # 获取要设置对齐方式的范围
     aligned_count = 0
 
     if locator:
         # 使用定位器找到要设置对齐方式的元素
-        selection = selector.select(document, locator)
-
-        if (
-            not selection
-            or not hasattr(selection, "_com_ranges")
-            or not selection._com_ranges
-        ):
-            raise WordDocumentError(
-                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
-            )
-
-        # 对每个元素设置对齐方式
-        # Selection._com_ranges中只包含Range对象
-        for range_obj in selection._com_ranges:
-            try:
-                text_format_ops.set_alignment_for_range(document, range_obj, alignment)
-                aligned_count += 1
-            except Exception as e:
-                log_error(f"Failed to apply alignment to object: {str(e)}")
+        try:
+            range_obj = get_selection_range(document, locator, "paragraph alignment")
+            text_format_ops.set_alignment_for_range(document, range_obj, alignment)
+            aligned_count += 1
+        except Exception as e:
+            log_error(f"Failed to apply alignment to object: {str(e)}")
     else:
         # 如果没有定位器，使用当前选区
         try:
@@ -83,6 +128,14 @@ def set_paragraph_alignment(
     log_info(
         f"Successfully applied alignment '{alignment}' to {aligned_count} paragraph(s)"
     )
+    
+    # Update DocumentContext
+    if aligned_count > 0 and range_obj:
+        try:
+            _update_document_context_for_style(range_obj, "modify")
+        except Exception as e:
+            log_error(f"Failed to update DocumentContext after setting paragraph alignment: {str(e)}")
+            
     return json.dumps(
         {
             "success": True,
@@ -117,8 +170,6 @@ def apply_formatting(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    selector = SelectorEngine()
-
     # 验证格式化参数
     if not formatting or not isinstance(formatting, dict):
         raise ValueError("Formatting parameter must be a non-empty dictionary")
@@ -129,14 +180,8 @@ def apply_formatting(
     if locator:
         # 使用定位器获取范围
         try:
-            selection = selector.select(document, locator)
-            if hasattr(selection, "_com_ranges") and selection._com_ranges:
-                # 获取所有匹配的Range对象
-                ranges_to_format = selection._com_ranges
-            else:
-                raise WordDocumentError(
-                    ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
-                )
+            range_obj = get_selection_range(document, locator, "apply formatting")
+            ranges_to_format = [range_obj]
         except Exception as e:
             raise WordDocumentError(
                 ErrorCode.FORMATTING_ERROR,
@@ -243,8 +288,6 @@ def set_font(
     if not document:
         raise WordDocumentError(ErrorCode.DOCUMENT_ERROR, "No active document found")
 
-    selector = SelectorEngine()
-
     if not font_name:
         raise ValueError("Font name parameter must be provided")
 
@@ -274,14 +317,8 @@ def set_font(
     object_count = 0
 
     if locator:
-        selection = selector.select(document, locator)
-        if not selection._com_ranges:
-            raise WordDocumentError(
-                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
-            )
-
-        # Selection._com_ranges中只包含Range对象
-        for range_obj in selection._com_ranges:
+        try:
+            range_obj = get_selection_range(document, locator, "set font")
             text_format_ops.set_font_name_for_range(range_obj, font_name)
             if font_size is not None:
                 text_format_ops.set_font_size_for_range(range_obj, font_size)
@@ -296,18 +333,22 @@ def set_font(
                 # Check if range_obj has Font property
                 if not hasattr(range_obj, "Font"):
                     log_error("Range object does not have Font property")
-                    continue
-                font = range_obj.Font
-                underline_map = {
-                    "none": 0,
-                    "single": 1,
-                    "double": 2,
-                    "dotted": 4,
-                    "dashed": 5,
-                    "wave": 16,
-                }
-                font.Underline = underline_map.get(underline, 0)
-        object_count = len(selection._com_ranges)
+                else:
+                    font = range_obj.Font
+                    underline_map = {
+                        "none": 0,
+                        "single": 1,
+                        "double": 2,
+                        "dotted": 4,
+                        "dashed": 5,
+                        "wave": 16,
+                    }
+                    font.Underline = underline_map.get(underline, 0)
+            object_count = 1
+        except Exception as e:
+            raise WordDocumentError(
+                ErrorCode.OBJECT_NOT_FOUND, f"No object found matching the locator: {str(e)}"
+            )
     else:
         try:
             range_obj = document.Application.Selection.Range
@@ -339,6 +380,14 @@ def set_font(
         object_count = 1
 
     log_info(f"Successfully set font properties for {object_count} object(s)")
+
+    # 更新DocumentContext
+    if object_count > 0 and range_obj:
+        try:
+            _update_document_context_for_style(range_obj, "modify")
+        except Exception as e:
+            log_error(f"Failed to update DocumentContext after setting font properties: {str(e)}")
+
     return {
         "success": True,
         "message": f"Successfully set font properties for {object_count} object(s)",
@@ -375,8 +424,6 @@ def set_paragraph_style(
         raise WordDocumentError(
             ErrorCode.DOCUMENT_ERROR, "Document Styles collection not available"
         )
-
-    selector = SelectorEngine()
 
     # 验证样式名称参数
     if not style_name:
@@ -423,31 +470,18 @@ def set_paragraph_style(
 
     if locator:
         # 使用定位器找到要设置样式的元素
-        selection = selector.select(document, locator)
-
-        if (
-            not selection
-            or not hasattr(selection, "_com_ranges")
-            or not selection._com_ranges
-        ):
-            raise WordDocumentError(
-                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
-            )
-
-        # 对每个元素设置样式
-        # Selection._com_ranges中只包含Range对象
-        for range_obj in selection._com_ranges:
-            try:
-                # 首先尝试使用样式对象
-                if target_style:
-                    range_obj.Paragraphs(1).Style = target_style
-                    styled_count += 1
-                else:
-                    # 如果没有找到样式对象，尝试直接使用样式名称
-                    range_obj.Paragraphs(1).Style = style_name
-                    styled_count += 1
-            except Exception as e:
-                log_error(f"Failed to apply style to object: {str(e)}")
+        try:
+            range_obj = get_selection_range(document, locator, "set paragraph style")
+            # 首先尝试使用样式对象
+            if target_style:
+                range_obj.Paragraphs(1).Style = target_style
+                styled_count += 1
+            else:
+                # 如果没有找到样式对象，尝试直接使用样式名称
+                range_obj.Paragraphs(1).Style = style_name
+                styled_count += 1
+        except Exception as e:
+            log_error(f"Failed to apply style to object: {str(e)}")
     else:
         # 如果没有定位器，使用当前选区
         try:
@@ -469,6 +503,14 @@ def set_paragraph_style(
     log_info(
         f"Successfully applied style '{style_name}' to {styled_count} paragraph(s)"
     )
+
+    # 更新DocumentContext
+    if styled_count > 0 and 'range_obj' in locals() and range_obj:
+        try:
+            _update_document_context_for_style(range_obj, "modify")
+        except Exception as e:
+            log_error(f"Failed to update DocumentContext after setting paragraph style: {str(e)}")
+
     return json.dumps(
         {
             "success": True,
@@ -523,27 +565,23 @@ def set_paragraph_formatting(
             ErrorCode.DOCUMENT_ERROR, "Document Application object not available"
         )
 
-    selector = SelectorEngine()
     formatting_count = 0
     successfully_applied = {}
 
     # 获取要设置格式的范围
     if locator:
-        # 使用定位器找到要设置格式的元素
-        selection = selector.select(document, locator)
+        # 使用range_ops获取选择范围
+        try:
+            # 获取Range对象
+            range_obj = get_selection_range(document, locator, "set paragraph formatting")
 
-        if (
-            not selection
-            or not hasattr(selection, "_com_ranges")
-            or not selection._com_ranges
-        ):
-            raise WordDocumentError(
-                ErrorCode.OBJECT_NOT_FOUND, "No object found matching the locator"
-            )
+            # 验证range_obj是否有效
+            if not hasattr(range_obj, "Start") or not hasattr(range_obj, "End"):
+                raise WordDocumentError(
+                    ErrorCode.OBJECT_NOT_FOUND, "No valid object found matching the locator"
+                )
 
-        # 对每个元素设置格式
-        # Selection._com_ranges中只包含Range对象
-        for range_obj in selection._com_ranges:
+            # 对元素设置格式
             try:
                 # 获取段落对象
                 paragraphs = range_obj.Paragraphs
@@ -573,17 +611,15 @@ def set_paragraph_formatting(
                                 # 根据line_spacing_type决定如何设置行距
                                 if line_spacing_type == "exact":
                                     # 设置为精确磅值
-                                    para.LineSpacingRule = 4  # wdLineSpaceExactly = 6
+                                    para.LineSpacingRule = 4  # wdLineSpaceExactly = 4
                                 else:
                                     # 默认设置为倍数
-                                    para.LineSpacingRule = 5  # wdLineSpaceMultiple = 4
+                                    para.LineSpacingRule = 5  # wdLineSpaceMultiple = 5
 
                                 para.LineSpacing = line_spacing
                                 para_applied["line_spacing"] = line_spacing
                                 if line_spacing_type:
-                                    para_applied["line_spacing_type"] = (
-                                        line_spacing_type
-                                    )
+                                    para_applied["line_spacing_type"] = line_spacing_type
                         except Exception as e:
                             log_error(f"Failed to set line spacing: {str(e)}")
 
@@ -644,6 +680,8 @@ def set_paragraph_formatting(
                                 successfully_applied[key] = value
             except Exception as e:
                 log_error(f"Failed to apply formatting to object: {str(e)}")
+        except Exception as e:
+            raise WordDocumentError(ErrorCode.SELECTION_ERROR, f"Failed to get selection range: {str(e)}")
     else:
         # 如果没有定位器，使用当前选区
         try:
@@ -678,10 +716,10 @@ def set_paragraph_formatting(
                             # 根据line_spacing_type决定如何设置行距
                             if line_spacing_type == "exact":
                                 # 设置为精确磅值
-                                para.LineSpacingRule = 4  # wdLineSpaceExactly = 6
+                                para.LineSpacingRule = 4  # wdLineSpaceExactly = 4
                             else:
                                 # 默认设置为倍数
-                                para.LineSpacingRule = 5  # wdLineSpaceMultiple = 4
+                                para.LineSpacingRule = 5  # wdLineSpaceMultiple = 5
 
                             para.LineSpacing = line_spacing
                             para_applied["line_spacing"] = line_spacing
@@ -761,8 +799,15 @@ def set_paragraph_formatting(
 
     settings_str = ", ".join(applied_settings)
     log_info(
-        f"Successfully applied paragraph formatting ({settings_str}) to {formatting_count} object(s)"
+        f"Successfully applied formatting ({settings_str}) to {formatting_count} object(s)"
     )
+
+    # 更新DocumentContext
+    if formatting_count > 0 and 'range_obj' in locals() and range_obj:
+        try:
+            _update_document_context_for_style(range_obj, "modify")
+        except Exception as e:
+            log_error(f"Failed to update DocumentContext after applying formatting: {str(e)}")
 
     return json.dumps(
         {

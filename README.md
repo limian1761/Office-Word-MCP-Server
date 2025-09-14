@@ -18,13 +18,13 @@
   - Reduced randomness in object targeting
   - Improved reliability for repeated document operations
 
-## Installation
-
-### Prerequisites
+## Prerequisites
 
 - Windows 10/11
 - Microsoft Word (2016 or later)
 - Python 3.11+
+
+## Installation
 
 ### Install from PyPI
 
@@ -91,7 +91,7 @@ docker run -it --rm word_docx_tools
 word_docx_tools/
 ├── main.py              # Entry point
 ├── mcp_service/         # MCP service integration
-├── selector/            # Document selector engine
+├── contexts/            # Document context management
 ├── operations/          # Low-level document operations
 ├── tools/               # MCP tools exposed to clients
 ├── com_backend/         # COM interface handling
@@ -110,6 +110,15 @@ mypy word_docx_tools
 
 ```bash
 python -m pytest tests/
+```
+
+Or using npm scripts (if you have npm installed):
+
+```bash
+npm test                    # Run tests
+npm run test:verbose        # Run tests with verbose output
+npm run test:coverage       # Run tests with coverage report
+npm run test:watch          # Run tests in watch mode
 ```
 
 ## Configuration
@@ -157,6 +166,15 @@ Once configured, you can ask your AI assistant to perform operations like:
 - "Add a comment to the first paragraph and directly manage Office comment objects"
 - "Insert an image after paragraph 3 and directly control Office image properties with full object access"
 
+## Documentation
+
+For detailed usage instructions, please refer to the following documentation:
+
+- [Agent Guide](docs/agent_guide.md) - Complete guide for AI agents on how to use the tools
+- [Deployment Guide](DEPLOYMENT.md) - Instructions for deploying in various environments
+- [Architecture Documentation](docs/Architecture.md) - Technical architecture overview
+- [Comprehensive Tools Guide](docs/README_COMPREHENSIVE_TOOLS.md) - Detailed documentation of all available tools
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -167,4 +185,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [pywin32](https://pypi.org/project/pywin32/) for COM integration with Word
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) for the Python MCP implementation
 - [Office-Word-MCP-Server](https://github.com/GongRzhe/Office-Word-MCP-Server.git) as a reference project
-

@@ -16,6 +16,7 @@ from pydantic import Field
 
 # Local imports
 from ..mcp_service.core import mcp_server
+from ..mcp_service.app_context import AppContext
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
                                       format_error_response,
                                       get_active_document, handle_tool_errors,
@@ -24,10 +25,10 @@ from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
 from ..operations.table_ops import (create_table, get_cell_text,
                                     get_table_info, insert_column, insert_row,
                                     set_cell_text)
-from ..selector.selector import SelectorEngine
-from ..selector.locator_parser import LocatorParser, LocatorSyntaxError
-# 工具模块
-from ..mcp_service.app_context import AppContext
+
+# 自定义定位器异常类
+class LocatorSyntaxError(Exception):
+    """定位器语法错误异常。"""
 
 
 @mcp_server.tool()
@@ -113,20 +114,102 @@ def table_tools(
                 ErrorCode.PARAMETER_ERROR,
                 f"locator parameter must be a dictionary, got {type(locator).__name__}"
             )
+        
+        # 基本验证 - 确保position存在且有效
+        if 'position' in locator:
+            position = locator['position']
+            if not isinstance(position, str) or position.lower() not in ['before', 'after', 'inside']:
+                raise WordDocumentError(
+                    ErrorCode.PARAMETER_ERROR,
+                    "position must be one of: 'before', 'after', 'inside'"
+                )
+        
+        # 验证表格相关定位参数
+        if 'table_index' in locator:
+            table_index = locator['table_index']
+            if not isinstance(table_index, int) or table_index <= 0:
+                raise WordDocumentError(
+                    ErrorCode.PARAMETER_ERROR,
+                    "table_index must be a positive integer"
+                )
+        
+        # 如果有row和col参数，则必须同时存在且为正整数
+        if 'row' in locator or 'col' in locator:
+            if 'row' not in locator or 'col' not in locator:
+                raise WordDocumentError(
+                    ErrorCode.PARAMETER_ERROR,
+                    "Both row and col must be provided when specifying cell location"
+                )
             
-        try:
-            # 使用LocatorParser验证locator格式
-            parser = LocatorParser(locator)
-            parser.parse()
-        except LocatorSyntaxError as e:
-            raise WordDocumentError(
-                ErrorCode.PARAMETER_ERROR,
-                f"Invalid locator syntax: {str(e)}"
-            )
+            if not isinstance(locator['row'], int) or locator['row'] <= 0:
+                raise WordDocumentError(
+                    ErrorCode.PARAMETER_ERROR,
+                    "row must be a positive integer"
+                )
+            
+            if not isinstance(locator['col'], int) or locator['col'] <= 0:
+                raise WordDocumentError(
+                    ErrorCode.PARAMETER_ERROR,
+                    "col must be a positive integer"
+                )
     
     try:
         # 获取活动文档
         active_doc = ctx.request_context.lifespan_context.get_active_document()
+        
+        def _get_target_object_for_locator(locator: Dict[str, Any], document):
+            """
+            根据定位器信息获取目标对象。
+            
+            Args:
+                locator: 定位器对象，包含position和可能的table_index/row/col等信息
+                document: Word文档对象
+            
+            Returns:
+                定位到的对象
+            
+            Raises:
+                LocatorSyntaxError: 定位器语法错误
+                WordDocumentError: 定位失败
+            """
+            try:
+                # 获取当前选择范围作为默认定位点
+                word_app = document.Application
+                selection_range = word_app.Selection.Range
+                
+                # 处理定位器中的position参数
+                position = locator.get('position', 'after')
+                
+                # 支持基于表格索引的定位
+                if 'table_index' in locator:
+                    table_index = locator['table_index']
+                    if table_index < 1 or table_index > document.Tables.Count:
+                        raise WordDocumentError(ErrorCode.OBJECT_ERROR, f"表格索引{table_index}超出范围")
+                    
+                    target_table = document.Tables(table_index)
+                    
+                    # 支持基于行列的精确定位
+                    if 'row' in locator and 'col' in locator:
+                        row = locator['row']
+                        col = locator['col']
+                        
+                        if row < 1 or row > target_table.Rows.Count:
+                            raise WordDocumentError(ErrorCode.OBJECT_ERROR, f"行索引{row}超出范围")
+                        if col < 1 or col > target_table.Columns.Count:
+                            raise WordDocumentError(ErrorCode.OBJECT_ERROR, f"列索引{col}超出范围")
+                        
+                        # 返回单元格
+                        return target_table.Cell(row, col).Range
+                    else:
+                        # 返回表格范围
+                        return target_table.Range
+                
+                # 默认为当前选择范围
+                return selection_range
+            except Exception as e:
+                if isinstance(e, (LocatorSyntaxError, WordDocumentError)):
+                    raise
+                raise WordDocumentError(ErrorCode.LOCATOR_ERROR, f"定位失败: {str(e)}")
 
         # 根据操作类型执行相应的操作
         if operation_type and operation_type.lower() == "create":
