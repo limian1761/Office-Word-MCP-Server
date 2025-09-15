@@ -11,8 +11,9 @@ import win32com.client
 from ..com_backend.com_utils import handle_com_error, safe_com_call
 from ..mcp_service.core_utils import (
     ErrorCode, WordDocumentError, log_error,
-    log_info, DocumentContext, AppContext
+    log_info, AppContext
 )
+from ..models.context import DocumentContext
 
 if TYPE_CHECKING:
     from win32com.client import CDispatch

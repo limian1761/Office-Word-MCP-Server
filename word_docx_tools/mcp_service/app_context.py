@@ -15,8 +15,8 @@ from pythoncom import com_error
 from win32com.client.dynamic import CDispatch
 from win32com.client import constants as wd_constants
 
-from .errors import ErrorCode, WordDocumentError, DocumentContextError
-from ..contexts.context_control import DocumentContext
+from .errors import ErrorCode, WordDocumentError
+from ..common.exceptions import DocumentContextError
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -326,7 +326,7 @@ class AppContext:
             logger.error(f"Error quitting Word application: {e}")
             return False
 
-    def create_document_context_tree(self) -> Optional[DocumentContext]:
+    def create_document_context_tree(self) -> Optional['DocumentContext']:
         """
         创建当前活动文档的上下文树
         优化版：使用增强的DocumentContext.create_root_context方法，提升创建效率和错误处理
@@ -337,6 +337,8 @@ class AppContext:
         Raises:
             DocumentContextError: 当创建上下文树失败时
         """
+        from ..models.context import DocumentContext
+        
         start_time = time.time()
         
         if not self._active_document:
@@ -384,7 +386,7 @@ class AppContext:
                 message=f"Failed to create document context tree: {str(e)}"
             )
     
-    def _build_document_structure_optimized(self, root_context: DocumentContext) -> None:
+    def _build_document_structure_optimized(self, root_context: 'DocumentContext') -> None:
         """
         构建文档结构的上下文树（优化版）
         使用批量添加和异步处理提高性能
@@ -392,6 +394,8 @@ class AppContext:
         Args:
             root_context: 根上下文节点
         """
+        from ..models.context import DocumentContext
+        
         if not self._active_document:
             return
         
@@ -439,7 +443,7 @@ class AppContext:
         except Exception as e:
             self._logger.error(f"Failed to build document structure: {e}")
     
-    def _build_section_content_optimized(self, parent_context: DocumentContext, section: CDispatch) -> None:
+    def _build_section_content_optimized(self, parent_context: 'DocumentContext', section: CDispatch) -> None:
         """
         构建节内容的上下文树（优化版）
         批量处理段落、表格和图片，减少重复操作
@@ -448,6 +452,8 @@ class AppContext:
             parent_context: 父上下文节点
             section: Word节对象
         """
+        from ..models.context import DocumentContext
+        
         start_time = time.time()
         
         try:
@@ -570,31 +576,37 @@ class AppContext:
             self._logger.error(f"Failed to build section content: {e}")
             self._logger.error(f"Traceback: {traceback.format_exc()}")
     
-    def get_document_context_tree(self) -> Optional[DocumentContext]:
+    def get_document_context_tree(self) -> Optional['DocumentContext']:
         """
         获取文档的上下文树
         
         返回:
             文档上下文树的根节点，如果没有则返回None
         """
+        from ..models.context import DocumentContext
+        
         return self._document_context_tree
     
-    def get_active_context(self) -> Optional[DocumentContext]:
+    def get_active_context(self) -> Optional['DocumentContext']:
         """
         获取当前活动上下文
         
         返回:
             当前活动上下文对象，如果没有则返回None
         """
+        from ..models.context import DocumentContext
+        
         return self._active_context
     
-    def set_active_context(self, context: Optional[DocumentContext]) -> None:
+    def set_active_context(self, context: Optional['DocumentContext']) -> None:
         """
         设置当前活动上下文
         
         参数:
             context: 要设置为活动的上下文对象
         """
+        from ..models.context import DocumentContext
+        
         self._active_context = context
         
         # 如果设置了活动上下文且有Range对象，可以滚动到该位置
@@ -607,7 +619,7 @@ class AppContext:
             except Exception as e:
                 logger.error(f"Failed to select context range: {e}")
     
-    def get_context_by_id(self, context_id: str) -> Optional[DocumentContext]:
+    def get_context_by_id(self, context_id: str) -> Optional['DocumentContext']:
         """
         通过ID获取上下文对象
         
@@ -617,9 +629,11 @@ class AppContext:
         返回:
             上下文对象，如果未找到则返回None
         """
+        from ..models.context import DocumentContext
+        
         return self._context_map.get(context_id)
     
-    def add_context_to_tree(self, context: DocumentContext, parent_context: Optional[DocumentContext] = None) -> bool:
+    def add_context_to_tree(self, context: 'DocumentContext', parent_context: Optional['DocumentContext'] = None) -> bool:
         """
         向上下文树添加新的上下文（优化版）
         使用增强的DocumentContext功能和事务支持
@@ -634,6 +648,8 @@ class AppContext:
         Raises:
             DocumentContextError: 当添加上下文失败时（在事务模式下）
         """
+        from ..models.context import DocumentContext
+        
         try:
             # 在事务模式下记录操作以便回滚
             if self._in_transaction:
@@ -817,13 +833,15 @@ class AppContext:
                 "message": str(e)
             }
     
-    def refresh_document_context_tree(self) -> Optional[DocumentContext]:
+    def refresh_document_context_tree(self) -> Optional['DocumentContext']:
         """
         刷新文档上下文树，重新构建整个树结构
         
         返回:
             刷新后的文档上下文树的根节点，如果没有活动文档则返回None
         """
+        from ..models.context import DocumentContext
+        
         return self.create_document_context_tree()
     
     def register_update_handler(self, handler: Callable) -> None:
@@ -1537,7 +1555,7 @@ class AppContext:
             
             return None
     
-    def _context_to_dict(self, context: DocumentContext) -> Dict[str, Any]:
+    def _context_to_dict(self, context: 'DocumentContext') -> Dict[str, Any]:
         """
         将上下文对象转换为字典格式
         
@@ -1547,6 +1565,8 @@ class AppContext:
         Returns:
             上下文的字典表示
         """
+        from ..models.context import DocumentContext
+        
         try:
             context_dict = {
                 'id': context.context_id,

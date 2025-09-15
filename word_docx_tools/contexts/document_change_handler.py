@@ -2,7 +2,7 @@ import time
 import traceback
 from typing import Dict, List, Optional, Any, Callable, Set
 from win32com.client import CDispatch
-from ..common.logger import logger
+from ..mcp_service.core_utils import logger
 from ..common.exceptions import DocumentContextError, ErrorCode
 from ..com_backend.com_utils import handle_com_error
 from .context_control import DocumentContext

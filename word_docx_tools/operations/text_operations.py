@@ -11,11 +11,11 @@ from typing import Any, Dict, Optional
 from ..mcp_service.core_utils import (
     ErrorCode,
     WordDocumentError,
-    log_info,
     log_error,
-    AppContext,
-    DocumentContext
+    log_info,
+    AppContext
 )
+from ..models.context import DocumentContext
 
 # Import text_format_ops for formatting functions
 from ..com_backend.selector_utils import get_selection_range

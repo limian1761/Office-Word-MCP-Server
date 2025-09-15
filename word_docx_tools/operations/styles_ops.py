@@ -586,7 +586,7 @@ def set_paragraph_formatting(
                 # 获取段落对象
                 paragraphs = range_obj.Paragraphs
                 if not paragraphs:
-                    continue
+                    pass  # 没有段落对象，跳过后续处理
 
                 for para in iter_com_collection(paragraphs):
                     # 为每个段落创建一个记录字典

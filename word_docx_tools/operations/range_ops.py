@@ -169,7 +169,7 @@ def batch_select_objects(
         for i, locator in enumerate(locators):
             try:
                 # 获取选择范围
-        range_obj = get_selection_range(document, locator, "select text")
+                range_obj = get_selection_range(document, locator, "select text")
 
                 # 获取元素信息
                 objects_info = []
@@ -249,7 +249,7 @@ def batch_apply_formatting(
                 formatting = operation["formatting"]
 
                 # 获取选择范围
-        range_obj = get_selection_range(document, locator, "move selection")
+                range_obj = get_selection_range(document, locator, "move selection")
                 
                 # 初始化成功标志
                 all_success = True

@@ -11,7 +11,8 @@ import win32com.client
 
 from ..com_backend.com_utils import handle_com_error, iter_com_collection
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
-                                      log_info, AppContext, DocumentContext) 
+                                      log_info, AppContext)
+from ..models.context import DocumentContext 
 from ..operations.text_operations import insert_text_after_range
 from ..operations.text_format_ops import set_paragraph_style
 

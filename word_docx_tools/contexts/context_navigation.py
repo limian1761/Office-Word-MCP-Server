@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, Union
 from win32com.client import CDispatch
 from ..utils.com_error_handler import handle_com_error
 from ..utils.logger import get_logger
-from .context_control import DocumentContext
+from ..models.context import DocumentContext
 
 # 获取日志记录器
 logger = get_logger(__name__)

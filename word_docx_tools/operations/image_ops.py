@@ -17,9 +17,9 @@ from ..mcp_service.core_utils import (
     WordDocumentError,
     log_error,
     log_info,
-    AppContext,
-    DocumentContext
+    AppContext
 )
+from ..models.context import DocumentContext
 
 logger = logging.getLogger(__name__)
 

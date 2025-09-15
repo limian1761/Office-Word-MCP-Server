@@ -20,7 +20,7 @@ from ..mcp_service.core_utils import (ErrorCode, WordDocumentError,
                                       get_active_document)
 
 from ..mcp_service.app_context import AppContext
-from ..operations.range_ops import _get_selection_range
+from ..com_backend.selector_utils import get_selection_range
 
 class LocatorValidationError(ValueError):
     """当locator验证失败时抛出的异常"""
@@ -283,7 +283,7 @@ async def comment_tools(
                     # 检查locator参数格式
                     check_locator_param(locator)
                     try:
-                        range_obj = _get_selection_range(document, locator)
+                        range_obj = get_selection_range(document, locator, "add comment")
                     except Exception as e:
                         # locator定位失败，使用文档末尾作为默认位置
                         if document and hasattr(document, "Content"):

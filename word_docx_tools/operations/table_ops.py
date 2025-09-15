@@ -12,7 +12,8 @@ import win32com.client
 from ..com_backend.com_utils import handle_com_error, iter_com_collection
 from ..com_backend.selector_utils import get_selection_range
 from ..mcp_service.core_utils import (ErrorCode, WordDocumentError, log_error,
-                                      log_info, AppContext, DocumentContext)
+                                      log_info, AppContext)
+from ..models.context import DocumentContext
 
 
 logger = logging.getLogger(__name__)

@@ -15,14 +15,14 @@ from ..mcp_service.core_utils import (
     ObjectNotFoundError,
     WordDocumentError, 
     log_error, 
-    log_info,
-    DocumentContext
+    log_info
 )
 
 logger = logging.getLogger(__name__)
 
 
 from ..mcp_service.app_context import AppContext
+from ..models.context import DocumentContext
 
 
 def _update_document_context_for_style(range_obj: Any, operation_type: str) -> bool:
