@@ -117,27 +117,27 @@ def text_tools(
         # 根据操作类型调用相应的处理函数
         if operation_type == "get_text":
             # 对于get_text，如果没有指定上下文，则获取整个文档的文本
-            return get_text_from_document(active_doc, locator)
+            return get_text_from_document(active_doc)
 
         elif operation_type == "insert_text":
             # 验证必需参数
             validate_required_params({"text": text}, "insert_text")
-            return insert_text_into_document(active_doc, text, locator, position)
+            return insert_text_into_document(active_doc, text, position)
 
         elif operation_type == "replace_text":
             # 验证必需参数
             validate_required_params({"text": text}, "replace_text")
-            return replace_text_in_document(active_doc, text, locator)
+            return replace_text_in_document(active_doc, text)
 
         elif operation_type == "get_char_count":
-            return get_character_count_from_document(active_doc, locator)
+            return get_character_count_from_document(active_doc)
 
         elif operation_type == "apply_formatting":
             # 验证必需参数
             validate_required_params({"formatting": formatting}, "apply_formatting")
             
             # 只使用formatting参数
-            return apply_formatting_to_document_text(active_doc, formatting, locator)
+            return apply_formatting_to_document_text(active_doc, formatting)
 
         else:
             raise ValueError(f"Unsupported operation type: {operation_type}")
