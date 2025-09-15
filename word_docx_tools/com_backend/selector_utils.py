@@ -6,7 +6,7 @@ location using locators. It provides a unified interface for selecting ranges
 in Word documents across different operation modules.
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
 from ..mcp_service.errors import ErrorCode, WordDocumentError
 

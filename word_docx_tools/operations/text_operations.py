@@ -442,28 +442,21 @@ def validate_required_params(params: Dict[str, Any], required_fields: list) -> D
     return {"success": True, "message": "All required parameters are present"}
 
 def get_text_from_document(
-    active_doc: Any, 
-    locator: Optional[Dict[str, Any]] = None
+    active_doc: Any
 ) -> str:
     """从文档中获取文本
 
     Args:
         active_doc: 活动文档对象
-        locator: 定位器对象，用于选择特定元素（可选）
 
     Returns:
-        包含获取文本结果的JSON字符串
+        包含文本内容的JSON字符串
     """
     log_info("Getting text from document")
 
     try:
-        if locator:
-            # 如果提供了定位器，获取特定元素的文本
-            range_obj = get_selection_range(active_doc, locator)
-            result = range_obj.Text
-        else:
-            # 如果没有提供定位器，获取整个文档的文本
-            result = active_doc.Content.Text
+        # 获取整个文档的文本
+        result = active_doc.Content.Text
         
         # 检查文本长度，如果超长则添加警告信息
         TEXT_LENGTH_WARNING_THRESHOLD = 10000
@@ -479,7 +472,6 @@ def get_text_from_document(
 def insert_text_into_document(
     active_doc: Any,
     text: str,
-    locator: Dict[str, Any],
     position: str = "after"
 ) -> str:
     """在文档中插入文本
@@ -487,15 +479,16 @@ def insert_text_into_document(
     Args:
         active_doc: 活动文档对象
         text: 要插入的文本
-        locator: 定位器对象，指定插入位置
-        position: 插入位置，"before"或"after"
+        position: 插入位置，可选值："before", "after"
 
     Returns:
         包含插入结果的JSON字符串
     """
     log_info(f"Inserting text: {text}")
 
-    range_obj = get_selection_range(active_doc, locator)
+    # 默认在文档末尾插入
+    range_obj = active_doc.Content
+    range_obj.Collapse(False)  # wdCollapseEnd
 
     # 插入文本
     if position.lower() == "before":
@@ -521,25 +514,39 @@ def insert_text_into_document(
 
 def replace_text_in_document(
     active_doc: Any,
-    text: str,
-    locator: Dict[str, Any]
+    text: str
 ) -> str:
-    """在文档中替换文本
+    """在文档中替换选中的文本
 
     Args:
         active_doc: 活动文档对象
         text: 替换后的新文本
-        locator: 定位器对象，指定要替换的文本位置
 
     Returns:
         包含替换结果的JSON字符串
     """
     log_info(f"Replacing text with: {text}")
 
-    range_obj = get_selection_range(active_doc, locator)
+    # 对选中文本应用格式
+    try:
+        range_obj = active_doc.Application.Selection.Range
+    except Exception as e:
+        log_error(f"Error selecting text for formatting: {str(e)}")
+        return json.dumps(
+            {"success": False, "error": f"Failed to select text for formatting: {str(e)}"},
+            ensure_ascii=False,
+        )
 
-    # 替换文本
-    result = replace_object_text(range_obj=range_obj, new_text=text)
+    # 替换选中文本
+    try:
+        range_obj = active_doc.Application.Selection.Range
+        result = replace_object_text(range_obj=range_obj, new_text=text)
+    except Exception as e:
+        log_error(f"Error replacing text: {str(e)}")
+        return json.dumps(
+            {"success": False, "error": f"Failed to replace text: {str(e)}"},
+            ensure_ascii=False,
+        )
 
     return json.dumps(
         {"success": True, "message": "Text replaced successfully"},
@@ -547,23 +554,25 @@ def replace_text_in_document(
     )
 
 def get_character_count_from_document(
-    active_doc: Any,
-    locator: Optional[Dict[str, Any]] = None
+    active_doc: Any
 ) -> str:
     """获取文档中的字符数
 
     Args:
         active_doc: 活动文档对象
-        locator: 定位器对象，用于选择特定元素
 
     Returns:
         包含字符数结果的JSON字符串
     """
-    if locator:
-        range_obj = get_selection_range(active_doc, locator)
-        text_content = range_obj.Text
-    else:
+    # 获取整个文档的文本
+    try:
         text_content = active_doc.Content.Text
+    except Exception as e:
+        log_error(f"Error getting character count: {str(e)}")
+        return json.dumps(
+            {"success": False, "error": f"Failed to get character count: {str(e)}"},
+            ensure_ascii=False,
+        )
     
     char_count = len(text_content)
     return json.dumps(
@@ -572,15 +581,13 @@ def get_character_count_from_document(
 
 def apply_formatting_to_document_text(
     active_doc: Any,
-    formatting: Dict[str, Any],
-    locator: Dict[str, Any]
+    formatting: Dict[str, Any]
 ) -> str:
-    """对文档中的文本应用格式化
+    """对文档中选中的文本应用格式化
 
     Args:
         active_doc: 活动文档对象
         formatting: 格式化参数字典
-        locator: 定位器对象，指定要格式化的文本位置
 
     Returns:
         包含格式化结果的JSON字符串
@@ -589,8 +596,16 @@ def apply_formatting_to_document_text(
 
     range_obj = get_selection_range(active_doc, locator)
 
-    # 应用格式
-    result = apply_formatting_to_object(range_obj=range_obj, formatting=formatting)
+    # 对选中文本应用格式
+    try:
+        range_obj = active_doc.Application.Selection.Range
+        result = apply_formatting_to_object(range_obj=range_obj, formatting=formatting)
+    except Exception as e:
+        log_error(f"Error applying formatting: {str(e)}")
+        return json.dumps(
+            {"success": False, "error": f"Failed to apply formatting: {str(e)}"},
+            ensure_ascii=False,
+        )
 
     return json.dumps(
         {"success": True, "message": "Formatting applied successfully"},
@@ -600,16 +615,14 @@ def apply_formatting_to_document_text(
 def format_document_text(
     active_doc: Any,
     format_type: str,
-    format_value: Any,
-    locator: Dict[str, Any]
+    format_value: Any
 ) -> str:
-    """对文档中的文本应用单一格式化选项
+    """对文档中选中的文本应用单一格式化选项
 
     Args:
         active_doc: 活动文档对象
         format_type: 格式化类型
         format_value: 格式化值
-        locator: 定位器对象，指定要格式化的文本位置
 
     Returns:
         包含格式化结果的JSON字符串
